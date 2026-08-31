@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-canvas: #f8f9f6;
+  --color-ink: #233c33;
+  --color-muted: #68776e;
+  --color-primary: #285b45;
+  --color-primary-soft: #eaf1e9;
+  --color-line: #e2e7df;
+  --color-sand: #f0ece2;
+  --color-danger: #a02e2e;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+button:not(:disabled),
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button:not(:disabled) {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+::selection {
+  background: #d5e6d8;
+  color: #233c33;
+}
+:focus-visible {
+  outline: 3px solid #7b9d56;
+  outline-offset: 4px;
+}
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  transform: translateY(-160%);
+  z-index: 50;
+  border-radius: 8px;
+  background: white;
+  padding: 12px;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+.button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 10px;
+  background: var(--color-primary);
+  padding: 13px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  transition: background-color 150ms;
+}
+.button-primary:hover {
+  background: #1e4936;
+}
+.button-primary:disabled {
+  opacity: 0.65;
+}
+.form-input {
+  width: 100%;
+  border: 1px solid #cbd4ca;
+  border-radius: 10px;
+  background: white;
+  padding: 13px 14px;
+  font-size: 16px;
+  color: var(--color-ink);
+}
+.form-input::placeholder {
+  color: #7b857d;
+}
+.form-input:focus {
+  border-color: var(--color-primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
