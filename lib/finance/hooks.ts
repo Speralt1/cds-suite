@@ -41,9 +41,12 @@ export function useCollection<T>(
         setState({
           key: constraints,
           data: s.docs.map((d) => ({ id: d.id, ...d.data() }) as T),
-          error: s.metadata.fromCache
-            ? "Sin conexión: la información puede estar desactualizada."
-            : "",
+          error:
+            s.metadata.fromCache &&
+            typeof navigator !== "undefined" &&
+            !navigator.onLine
+              ? "Sin conexión: la información puede estar desactualizada."
+              : "",
         });
       },
       (e) => setState({ key: constraints, data: [], error: errorMessage(e) }),
@@ -75,9 +78,12 @@ export function useDocument<T>(
         setState({
           key: `${name}/${id}`,
           data: s.exists() ? ({ id: s.id, ...s.data() } as T) : null,
-          error: s.metadata.fromCache
-            ? "Sin conexión: la información puede estar desactualizada."
-            : "",
+          error:
+            s.metadata.fromCache &&
+            typeof navigator !== "undefined" &&
+            !navigator.onLine
+              ? "Sin conexión: la información puede estar desactualizada."
+              : "",
         });
       },
       (e) =>

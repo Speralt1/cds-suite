@@ -40,7 +40,7 @@ export const MONTHS = [
 ];
 export const MAX_AMOUNT = 1_000_000_000_000;
 export const PAGE_SIZE = 30;
-export const MAX_PERIOD_RECORDS = 10000;
+export const MAX_PERIOD_RECORDS = 9999;
 
 // Twelve monthly totals can always be combined without losing a peso.
 export const MAX_MONTHLY_TOTAL = Math.floor(Number.MAX_SAFE_INTEGER / 12);
