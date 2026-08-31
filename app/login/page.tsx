@@ -193,7 +193,7 @@ export default function LoginPage() {
         </div>
         <p className="mt-10 text-center text-xs text-muted">
           Casa de Salvación <span className="mx-2 text-line">/</span> CDS Suite
-          V0.1
+          V0.2
         </p>
       </section>
     </main>

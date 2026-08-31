@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function member() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true; }
+    function role() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
+    function details() { return member() && role() in ['admin','pastor','finance']; }
+    function pastoral() { return member() && role() in ['admin','pastor']; }
+    function admin() { return member() && role() == 'admin'; }
+    function approved() { return member() && role() in ['admin','pastor','finance','leader']; }
+    function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function money(v) { return v is int && v > 0 && v <= 1000000000000; }
+    function total(v) { return v is int && v >= 0 && v <= 750599937895082; }
+    function period(date) { return string(date.year()) + '-' + (date.month() < 10 ? '0' : '') + string(date.month()); }
+    function validDate(date) { return date is timestamp && date.year() >= 2000 && date.year() <= 2100; }
+    function incomes() { return ['Ofrendas','Donaciones','Actividades y eventos','Ayudas / aportes especiales','Otros ingresos','Diezmos']; }
+    function expenses() { return ['Servicios básicos','Mantención','Compras y materiales','Administración','Ministerio Jóvenes','Ministerio Niños','Música y Producción','Evangelismo','Ayuda social','Eventos','Otros gastos']; }
+    function days() { return ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31']; }
+    function auditCreate(d) { return d.createdBy == request.auth.uid && d.createdAt == request.time && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
+    function auditUpdate(d, old) { return d.createdAt == old.createdAt && d.createdBy == old.createdBy && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || admin());
+      allow list: if admin();
+      allow create, update: if admin()
+        && request.resource.data.keys().hasOnly(['displayName','email','role','active','createdAt'])
+        && text(request.resource.data.displayName,1,120) && text(request.resource.data.email,3,160)
+        && request.resource.data.role in ['admin','pastor','finance','leader']
+        && request.resource.data.active is bool && request.resource.data.createdAt is timestamp;
+      allow delete: if false;
+    }
+
+    function validTransaction(d) {
+      return d.keys().hasAll(['type','amount','date','period','day','category','paymentMethod','description','note','source','status','revision','createdBy','createdAt','updatedBy','updatedAt'])
+        && d.keys().hasOnly(['type','amount','date','period','day','category','paymentMethod','description','note','source','status','revision','createdBy','createdAt','updatedBy','updatedAt','voidedBy','voidedAt','voidReason'])
+        && d.type in ['income','expense'] && money(d.amount) && validDate(d.date)
+        && d.period == period(d.date) && d.day == string(d.date.day())
+        && d.paymentMethod in ['cash','transfer','card','other']
+        && text(d.description,1,200) && text(d.note,0,1000)
+        && d.source in ['general','tithe'] && d.status in ['active','voided'] && d.revision is int
+        && ((d.source == 'tithe' && d.type == 'income' && d.category == 'Diezmos' && d.description == 'Diezmo' && d.note == '')
+          || (d.source == 'general' && ((d.type == 'income' && d.category in incomes() && d.category != 'Diezmos') || (d.type == 'expense' && d.category in expenses()))));
+    }
+    function summaryLinked(p,id) {
+      let s = getAfter(/databases/$(database)/documents/financeMonthlySummaries/$(p)).data;
+      return s.updatedAt == request.time && s.lastTransactionId == id;
+    }
+    function attributionLinked(d,id) {
+      let a = getAfter(/databases/$(database)/documents/titheAttributions/$(id)).data;
+      return a.transactionId == id && a.amount == d.amount && a.date == d.date && a.period == d.period && a.status == d.status && a.updatedAt == request.time;
+    }
+    match /financeTransactions/{id} {
+      allow read: if details();
+      allow create: if details() && validTransaction(request.resource.data)
+        && auditCreate(request.resource.data) && request.resource.data.revision == 1 && request.resource.data.status == 'active'
+        && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason'])
+        && summaryLinked(request.resource.data.period,id)
+        && (request.resource.data.source != 'tithe' || attributionLinked(request.resource.data,id));
+      allow update: if details() && validTransaction(request.resource.data) && resource.data.status == 'active'
+        && request.resource.data.source == resource.data.source && request.resource.data.revision == resource.data.revision + 1
+        && auditUpdate(request.resource.data,resource.data)
+        && ((request.resource.data.status == 'active' && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason']))
+          || (request.resource.data.status == 'voided' && request.resource.data.voidedBy == request.auth.uid && request.resource.data.voidedAt == request.time && text(request.resource.data.voidReason,3,300)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedBy','updatedAt','voidedBy','voidedAt','voidReason'])))
+        && summaryLinked(resource.data.period,id) && summaryLinked(request.resource.data.period,id)
+        && (request.resource.data.source != 'tithe' || attributionLinked(request.resource.data,id));
+      allow delete: if false;
+    }
+
+    function amounts(t,p) {
+      let active=t.get('period','') == p && t.get('status','') == 'active';
+      let amount=active ? t.amount : 0;
+      return {'income':t.get('type','') == 'income' ? amount : 0, 'expense':t.get('type','') == 'expense' ? amount : 0,
+        'tithe':t.get('source','') == 'tithe' ? amount : 0, 'count':active ? 1 : 0,
+        'category':t.get('category',''), 'day':t.get('day','')};
+    }
+    function mapValid(before,after,change,kind,field,allowed) {
+      let a=change.old[field]; let b=change.next[field];
+      let removed=change.old[kind]; let added=change.next[kind];
+      return after is map && after.keys().hasOnly(allowed)
+        && after.diff(before).affectedKeys().hasOnly([a,b])
+        && after.get(a,0) == before.get(a,0) - removed + (a == b ? added : 0)
+        && (a == b || after.get(b,0) == before.get(b,0) + added);
+    }
+    function validSummary(p) {
+      let n=request.resource.data;
+      let id=n.lastTransactionId;
+      let path=/databases/$(database)/documents/financeTransactions/$(id);
+      let old=exists(path) ? get(path).data : {};
+      let next=getAfter(path).data;
+      let prior=exists(/databases/$(database)/documents/financeMonthlySummaries/$(p)) ? get(/databases/$(database)/documents/financeMonthlySummaries/$(p)).data : {};
+      let change={'old':amounts(old,p),'next':amounts(next,p)};
+      return n.keys().hasOnly(['incomeTotal','expenseTotal','result','titheTotal','transactionCount','incomeByCategory','expenseByCategory','dailyIncome','dailyExpense','updatedAt','lastTransactionId'])
+        && text(id,1,128) && (p == old.get('period','') || p == next.period)
+        && next.updatedAt == request.time && n.updatedAt == request.time
+        && next.revision == old.get('revision',0) + 1
+        && total(n.incomeTotal) && total(n.expenseTotal) && total(n.titheTotal) && total(n.transactionCount)
+        && n.result is int && n.result == n.incomeTotal - n.expenseTotal
+        && n.incomeTotal == prior.get('incomeTotal',0) - change.old.income + change.next.income
+        && n.expenseTotal == prior.get('expenseTotal',0) - change.old.expense + change.next.expense
+        && n.titheTotal == prior.get('titheTotal',0) - change.old.tithe + change.next.tithe
+        && n.transactionCount == prior.get('transactionCount',0) - change.old.count + change.next.count
+        && mapValid(prior.get('incomeByCategory',{}),n.incomeByCategory,change,'income','category',incomes())
+        && mapValid(prior.get('expenseByCategory',{}),n.expenseByCategory,change,'expense','category',expenses())
+        && mapValid(prior.get('dailyIncome',{}),n.dailyIncome,change,'income','day',days())
+        && mapValid(prior.get('dailyExpense',{}),n.dailyExpense,change,'expense','day',days());
+    }
+    match /financeMonthlySummaries/{p} {
+      allow read: if approved();
+      allow create, update: if details() && validSummary(p);
+      allow delete: if false;
+    }
+
+    function validProfile(d) { return d.keys().hasOnly(['type','displayName','searchName','phone','email','members','active','pastoralContactAuthorized','createdAt','createdBy','updatedAt','updatedBy'])
+      && d.searchName == d.displayName.lower() && d.type in ['person','family'] && text(d.displayName,1,120) && text(d.phone,0,40) && text(d.email,0,160) && text(d.members,0,600)
+      && (d.type == 'family' || d.members == '') && d.active is bool && d.pastoralContactAuthorized is bool; }
+    match /titheProfiles/{id} {
+      allow read: if details();
+      allow create: if details() && validProfile(request.resource.data) && auditCreate(request.resource.data);
+      allow update: if details() && validProfile(request.resource.data) && auditUpdate(request.resource.data,resource.data);
+      allow delete: if false;
+    }
+    function validAttribution(d,id) {
+      let t=getAfter(/databases/$(database)/documents/financeTransactions/$(id)).data;
+      return d.keys().hasOnly(['transactionId','profileId','amount','date','period','status','note','createdBy','createdAt','updatedBy','updatedAt'])
+        && d.transactionId == id && text(d.profileId,1,128) && text(d.note,0,1000)
+        && t.source == 'tithe' && t.amount == d.amount && t.date == d.date && t.period == d.period && t.status == d.status
+        && t.updatedAt == request.time && d.updatedAt == request.time;
+    }
+    match /titheAttributions/{id} {
+      allow read: if details();
+      allow create: if details() && validAttribution(request.resource.data,id) && auditCreate(request.resource.data)
+        && get(/databases/$(database)/documents/titheProfiles/$(request.resource.data.profileId)).data.active == true
+        && !exists(/databases/$(database)/documents/financeTransactions/$(id));
+      allow update: if details() && validAttribution(request.resource.data,id) && auditUpdate(request.resource.data,resource.data)
+        && request.resource.data.profileId == resource.data.profileId && request.resource.data.note == resource.data.note
+        && getAfter(/databases/$(database)/documents/financeTransactions/$(id)).data.revision == get(/databases/$(database)/documents/financeTransactions/$(id)).data.revision + 1;
+      allow delete: if false;
+    }
+    function consent(profileId) { return getAfter(/databases/$(database)/documents/titheProfiles/$(profileId)).data.pastoralContactAuthorized == true; }
+    function validFollowup(d) { return d.keys().hasOnly(['profileId','date','note','status','nextFollowUpDate','createdBy','createdAt','updatedBy','updatedAt'])
+      && text(d.profileId,1,128) && validDate(d.date) && text(d.note,1,3000) && d.status in ['pending','completed'] && text(d.nextFollowUpDate,0,10); }
+    match /pastoralFollowups/{id} {
+      allow read: if pastoral();
+      allow create: if pastoral() && validFollowup(request.resource.data) && consent(request.resource.data.profileId) && auditCreate(request.resource.data);
+      allow update: if pastoral() && validFollowup(request.resource.data) && request.resource.data.profileId == resource.data.profileId && consent(request.resource.data.profileId) && auditUpdate(request.resource.data,resource.data);
+      allow delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

@@ -107,7 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <button
               type="button"
-              className="flex shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-xs font-medium text-muted hover:bg-canvas hover:text-ink disabled:opacity-60 lg:w-full"
+              className="flex shrink-0 items-center gap-2 rounded-lg min-h-11 px-2 py-2 text-xs font-medium text-muted hover:bg-canvas hover:text-ink disabled:opacity-60 lg:w-full"
               onClick={handleLogout}
               disabled={isSigningOut}
             >
@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </p>
           <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-medium tracking-wide text-muted">
-            CDS Suite · V0.1
+            CDS Suite · V0.2
           </span>
         </header>
         <main

@@ -1,82 +1,84 @@
-# CDS Suite · V0.1
+# CDS Suite · V0.2 — Finanzas V1
 
-Base de **CDS Administración**, para Casa de Salvación. Incluye acceso por correo y contraseña, sesión persistente, navegación privada, dashboard y estructura visual de Finanzas. No registra dinero ni consulta datos financieros.
+CDS Administración para Casa de Salvación. Continúa la base `feature/base-cds-suite`; el desarrollo está en **`feature/finanzas-v1`**, sin merge a main ni despliegue automático a Firebase.
 
-## Ejecutar localmente
+Incluye autorización por roles, movimientos reales en CLP, edición/anulación auditada, resumen mensual/anual, fichas privadas de diezmos, acompañamiento pastoral con consentimiento y PDF ejecutivo con texto seleccionable y gráficos vectoriales. Conserva Authentication y la identidad visual de V0.1.
 
-Requiere Node.js 22.12 o superior de la línea 22, o Node.js 24 LTS, y npm. El proyecto fija este mínimo para mantener compatibles las herramientas de pruebas y Next.js.
+## Empezar
+
+Si ya ejecutabas V0.1, conserva `.env.local`, cambia a esta rama y ejecuta `npm install`. **Antes de registrar dinero, completa [Activar Finanzas en Firebase](docs/firebase-setup.md)**: crear tu documento `users/{uid}` y publicar reglas/índices. No hay una contraseña de producción predeterminada.
+
+Para una instalación nueva, requiere Node 22.12+ de la línea 22 o Node 24+, y npm:
 
 ```bash
-git clone --branch feature/base-cds-suite https://github.com/Speralt1/cds-suite.git
+git clone --branch feature/finanzas-v1 https://github.com/Speralt1/cds-suite.git
 cd cds-suite
 npm install
 cp .env.example .env.local
 ```
 
-Completar las seis variables `NEXT_PUBLIC_FIREBASE_*` de `.env.local` con la configuración de la app web en Firebase Console → Configuración del proyecto. Luego:
+Completa las seis variables públicas Firebase de `.env.local` y sigue la guía de activación. Después:
 
 ```bash
 npm run dev
 ```
 
-Abrir http://localhost:3000. Reiniciar el servidor después de cambiar variables. `.env.local` y cualquier otro `.env*` están ignorados, salvo `.env.example`. No agregar claves privadas, credenciales de usuarios, tokens ni archivos de service account.
+Abre [CDS Suite](http://localhost:3000). Reinicia el servidor al cambiar variables. No agregues contraseñas, claves privadas, tokens ni service accounts al repositorio.
 
-## Firebase: preparación manual
+## Permisos y colecciones
 
-1. Verificar que la app web corresponda al proyecto `cds-administracion` y copiar sus seis valores al entorno local o al proveedor de hosting.
-2. Authentication → Sign-in method: Email/Password ya debe estar habilitado.
-3. Authentication → Users: disponer de una cuenta autorizada creada por el administrador. No existe registro público ni recuperación de contraseña en esta versión.
-4. Authentication → Settings → Authorized domains: revisar `localhost` para desarrollo y agregar el dominio final al publicar. Revisar también restricciones de API key si el proyecto las tiene.
-5. Firestore: **no dejar reglas de modo de prueba abiertas**. Esta versión no necesita acceso a documentos; puede usar reglas que denieguen lecturas y escrituras. No se han desplegado ni modificado reglas del proyecto existente.
-6. Mantener activada la protección contra enumeración de correos. Firebase puede devolver `auth/invalid-credential` tanto para correo inexistente como para contraseña incorrecta. En ese caso se muestra un mensaje combinado; no es un fallo del formulario.
+| Colección | Contenido | Lectura |
+|---|---|---|
+| `users/{uid}` | Nombre, correo, rol, activo, fecha de creación | Propio documento o admin |
+| `financeTransactions/{id}` | Libro financiero, sin identidad del diezmante | admin, pastor, finance |
+| `financeMonthlySummaries/{YYYY-MM}` | Totales, categorías y series diarias; sin datos personales | Cuatro roles activos |
+| `titheProfiles/{id}` | Personas/familias, contacto y consentimiento | admin, pastor, finance |
+| `titheAttributions/{transactionId}` | Relación privada entre diezmo y ficha | admin, pastor, finance |
+| `pastoralFollowups/{id}` | Acompañamiento pastoral privado | Solo admin y pastor |
 
-**Límite de seguridad:** omitir un formulario de registro no deshabilita por sí solo el endpoint público de alta de Firebase Email/Password. Esta versión no implementa roles ni autorización de datos. Antes de añadir datos privados, definir reglas Firestore que permitan únicamente a usuarios aprobados (no basta con `request.auth != null` si el alta de cuentas sigue abierta), o una política de altas administrada en el proveedor. No otorgar acceso financiero por el mero hecho de estar autenticado.
+Admin/pastor/finance registran, editan y anulan movimientos. Leader solo consulta agregados. Escribir acompañamiento requiere consentimiento vigente. Las reglas deniegan todos los borrados físicos y el acceso de cuentas no autorizadas/inactivas. El guard visual también desmonta los datos al revocar la autorización y exige una verificación de acceso del servidor.
 
-## Arquitectura
+## Integridad y límites deliberados
 
-- `app/layout.tsx`: metadata, idioma español y proveedor global de sesión.
-- `app/page.tsx`: espera la sesión y redirige a `/login` o `/dashboard`.
-- `app/login/page.tsx`: formulario con validación, estados de carga y errores en español; utiliza `signInWithEmailAndPassword` a través del proveedor.
-- `app/(private)/layout.tsx`: agrupa `/dashboard` y `/finanzas` bajo `AuthGuard` y `AppShell`, sin modificar sus URLs.
-- `components/layout/`: guard, navegación responsive, identidad visual reutilizable.
-- `components/ui/`: estado de carga accesible.
-- `components/finance/finance-workspace.tsx`: pestañas Resumen / Movimientos / Diezmos / Reportes con soporte de teclado y contenido placeholder.
-- `lib/firebase.ts`: inicialización diferida y reutilización del app Firebase; exporta `getFirebaseServices()` con `app`, `auth` y `db`. No usa Admin SDK ni hace lecturas/escrituras.
-- `lib/auth/`: proveedor basado en `onAuthStateChanged`, persistencia local mediante el SDK, inicio/cierre de sesión y traducción de errores.
-- `tests/`: pruebas de integración de componentes con el límite Firebase simulado y pruebas de navegación del módulo.
+- Montos enteros positivos en CLP, hasta $1.000.000.000.000 por movimiento; límite mensual de $750.599.937.895.082 por entradas/salidas para que también los 12 meses se sumen sin perder precisión.
+- Un movimiento y todos sus resúmenes afectados se confirman en una misma transacción. Los diezmos incluyen su atribución privada en esa transacción. Las reglas validan el impacto exacto en totales, categorías y días mediante `getAfter`; rechazan escrituras incompletas o agregados inventados.
+- Ediciones con revisión obsoleta se rechazan. IDs estables y bloqueo de envío evitan duplicados. Ante contención de resúmenes se reintenta de forma acotada solo si una lectura autorizada del servidor prueba que el resumen cambió. No se informa éxito antes de la confirmación.
+- Anulación conserva auditoría y motivo, excluye el importe de los totales y deja el registro inmutable. El resultado del período no es saldo bancario.
+- Fechas contables almacenadas al mediodía UTC para conservar el día ingresado independientemente de la zona del navegador. Las consultas usan períodos; no se descarga la historia completa para mostrar un mes.
+- Libro e informes: máximo 10.000 registros por período, con aviso si se excede; no se generan PDF parciales. Listas se muestran por bloques de 30; fichas usan paginación de Firestore con cursor y búsqueda por inicio del nombre, sin distinguir mayúsculas (conserva acentos).
+- Último registro por ficha usa una consulta de un documento. El contador anual de fichas usa agregación `count`, sin descargar todas las fichas. Los listeners se cancelan al abandonar la pantalla.
+- Firestore necesita conexión para confirmar transacciones. No se habilita persistencia offline del libro. No hay Functions, Storage, Admin SDK en el navegador ni servicios que requieran Blaze. Spark mantiene sus cuotas; vigila el uso real.
+- El PDF general solo admite campos financieros; los diezmos tienen descripción fija «Diezmo». No copia notas, IDs de fichas ni identidades. Los usuarios deben evitar información personal innecesaria en descripciones de movimientos generales.
+- Las categorías están en `lib/finance/constants.ts` y en la lista permitida de `firestore.rules`: modifica ambas y despliega las reglas al cambiar categorías.
 
-Las páginas privadas no se renderizan hasta que Firebase confirma la sesión, y desaparecen al cerrar sesión o fallar la inicialización. Es protección de interfaz en cliente: el HTML/JavaScript público de Next.js no es una barrera de autorización para datos. No existen Server Actions, endpoints privados ni consultas de datos en V0.1. Cuando se añadan, cada acceso deberá verificar autorización en servidor o con reglas Firestore. Nunca incluir datos confidenciales en Server Components confiando únicamente en este guard.
+## Archivos principales
 
-Para agregar un módulo, crear una ruta dentro de `app/(private)`, componentes específicos y su entrada en la navegación. Para incorporar el logo, añadir `public/logo-cds.png` y pasar `logoSrc="/logo-cds.png"` a `Brand` en el shell y el login; mientras tanto se muestra un monograma CDS.
+- `app/(private)/finanzas/`: rutas Resumen, Movimientos, Diezmos, Perfil y Reportes.
+- `components/finance/`: pantallas, formularios, gráficos y controles separados por función.
+- `lib/auth/access-provider.tsx`: autorización y revocación por `users/{uid}`.
+- `lib/finance/transactions.ts`, `profiles.ts`: operaciones confirmadas y auditadas.
+- `lib/finance/calculations.ts`, `hooks.ts`, `tithe-hooks.ts`: cálculos y consultas acotadas.
+- `lib/finance/reports.ts`, `report-pdf.ts`: datos seguros de reporte y PDF nativo A4.
+- `firestore.rules`, `firestore.indexes.json`, `firebase.json`: seguridad, índices y emuladores.
+- `tests/`: pruebas de sesión, autorización, navegación, cálculos, reportes y reglas reales.
 
-## Comandos de validación
+El logo del PDF es opcional: añade `public/logo-cds.png`. Sin archivo se utiliza el monograma CDS. La vista previa está dentro de Reportes; «Compartir» usa Web Share si admite archivos y descarga el PDF como alternativa.
+
+## Validar y probar sin producción
 
 ```bash
 npm run lint
 npm run typecheck
 npm run test
 npm run build
-npm run start
 ```
 
-`typecheck` genera tipos de rutas antes de ejecutar `tsc --noEmit`. Desarrollo y compilación usan Webpack, soportado por Next.js, para evitar un fallo de Turbopack con procesos/puertos internos en el entorno de ejecución. ESLint queda fijado en 9.39.5 porque los plugins React/import/accessibility incluidos por Next.js todavía no admiten ESLint 10. npm avisa que la línea 9 está deprecada: actualizar el conjunto cuando sus peer dependencies soporten ESLint 10. No se ignoraron errores de lint ni de tipos.
+No ejecutes `build` y `dev` simultáneamente sobre el mismo `.next`. Para reglas necesitas Java 21+:
 
-El build funciona sin variables Firebase, pero el login queda deshabilitado con un aviso hasta configurarlas. Las variables públicas se incorporan **durante el build**: en hosting deben estar definidas antes de `npm run build`, y requieren recompilar si cambian.
+```bash
+npm run test:rules
+```
 
-## Cómo probar el login real
+Todos los datos automatizados son ficticios y se limitan a `demo-cds-suite`. [Prueba local completa](docs/local-auth-testing.md) · [Resultados de validación](docs/validation.md) · [Activación manual Firebase](docs/firebase-setup.md).
 
-1. Con las variables configuradas, abrir `/dashboard` sin sesión: debe terminar en `/login`, sin mostrar contenido privado.
-2. Enviar el formulario vacío: debe pedir correo y contraseña.
-3. Introducir una cuenta existente en Firebase Authentication y su contraseña. Debe ir a `/dashboard`.
-4. Recargar y abrir otra pestaña del mismo origen: la sesión debe conservarse.
-5. Pulsar **Ingresar** en Finanzas y recorrer las cuatro secciones.
-6. Pulsar **Cerrar sesión**: debe volver a `/login`. Volver atrás o abrir `/finanzas` no debe mostrar la página privada.
-7. Repetir a ancho de móvil. Probar datos incorrectos y, desde DevTools, una conexión sin red.
-
-Usar siempre el mismo origen al verificar persistencia: `localhost` y `127.0.0.1` son distintos. En equipos compartidos, cerrar sesión al terminar; no se guardan contraseñas manualmente, pero el SDK sí conserva la sesión elegida.
-
-La cuenta de Firebase de producción no se prueba sin credenciales autorizadas. Ver [validación](docs/validation.md) para resultados y alcance exacto, y [pruebas con emulador](docs/local-auth-testing.md) para verificar el flujo sin tocar el proyecto real.
-
-## Alcance excluido
-
-Sin registro de dinero, estadísticas reales o ficticias, PDF, personas, familias, diezmos operativos ni roles. Servicios, Reuniones, Equipos y Objetivos son tarjetas sin funcionalidad, marcadas “Próximamente”.
+Nuevas dependencias de interfaz: Recharts, jsPDF y jsPDF-AutoTable. Herramientas de desarrollo: Firebase CLI, rules-unit-testing, tsx y Prettier. Mantiene React, Next.js, Firebase modular, Tailwind, Lucide y Vitest. ESLint 9 se conserva por compatibilidad con la configuración Next existente.

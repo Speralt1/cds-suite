@@ -1,49 +1,53 @@
-# Validación de CDS Suite V0.1
+# Validación — Finanzas V1
 
-Fecha: 31 de agosto de 2026. Entorno: macOS, Node.js 24.12.0, npm 11.6.2.
+Rama `feature/finanzas-v1`, creada desde `origin/feature/base-cds-suite`. Sin merge a main y sin despliegues ni escrituras en Firebase real.
+
+## Resultado final
+
+| Verificación | Resultado |
+|---|---|
+| `npm install` | Correcto |
+| `npm run lint` | Correcto, sin advertencias |
+| `npm run typecheck` | Correcto |
+| `npm run test` | 40 pruebas aprobadas |
+| `npm run test:rules` | 13 pruebas aprobadas en emulador |
+| `npm run build` | Correcto, nueve rutas generadas |
+| `npm audit --omit=dev` | Sin vulnerabilidades conocidas |
+
+## Cobertura
+
+- Pruebas de aplicación: sesión persistente, errores, cierre de sesión, autorización inicial, cuenta sin documento/inactiva, revocación, navegación por rol, cálculos CLP, fechas, resúmenes, edición, anulación y datos seguros de reportes.
+- Reglas verificadas contra Firestore Emulator con `@firebase/rules-unit-testing`, no mediante mocks: entrada/salida, cambio de mes, auditoría, diezmo y atribución, eliminación denegada, roles, notas privadas, consentimiento revocado en el mismo lote, agregados manipulados, importes inválidos mediante cliente directo, doble envío, edición obsoleta y concurrencia.
+- El contador de expresiones del emulador admite las reglas y sus transacciones completas, incluidos diezmos y ediciones entre períodos. Los reintentos por contención mantienen todas las validaciones.
+- PDF mensual, anual y vacío generados con fixtures: texto extraíble, A4, encabezados, numeración total, tablas paginadas sin dividir filas, monograma de respaldo y gráficos vectoriales. Revisión visual con Poppler; comprobación de privacidad con extracción de texto. Informe anual de prueba: 16 páginas con 180 movimientos, incluidos 10 anulados.
+- Revisión de navegador local con cuentas ficticias: ingreso, edición, anulación, búsqueda, registro de diezmo, ficha privada, edición de contacto, reportes mensual/anual y autorización por rol.
+- Revisión responsive de Resumen, Movimientos, Diezmos, Perfil y Reportes a 320/375/390/430/1440 px. Se compara `documentElement.scrollWidth` con `clientWidth`; sin desplazamiento horizontal de página. Formularios con controles grandes, teclado numérico, foco inicial y diálogo nativo para Escape/ciclo de foco.
 
 ## Comandos
 
-| Comando | Resultado |
-| --- | --- |
-| `npm install` | Correcto; 0 vulnerabilidades reportadas por npm |
-| `npm run lint` | Correcto; sin errores ni advertencias |
-| `npm run typecheck` | Correcto; generación de rutas y `tsc --noEmit` |
-| `npm run test` | 20 pruebas aprobadas, 2 archivos |
-| `npm run build` | Correcto, usando `next build --webpack` |
-| `git diff --check` | Sin errores de espacios |
-| `git check-ignore .env.local .env.development.local` | Ambos ignorados |
+```bash
+npm install
+npm run lint
+npm run typecheck
+npm run test
+npm run test:rules
+npm run build
+npm audit --omit=dev
+```
 
-El build genera `/`, `/login`, `/dashboard` y `/finanzas`. El HTML inicial de rutas privadas solo muestra la verificación de sesión. No incluye datos financieros.
+La compilación usa Webpack como la base existente. Pruebas de reglas requieren Java 21+. Nunca ejecutar reglas automatizadas contra producción: el script fija `demo-cds-suite` y localhost.
 
-## Pruebas automatizadas
+## Límites y operación
 
-Las pruebas de componentes simulan únicamente la frontera del SDK Firebase; ejercitan el proveedor, los guards, el formulario, el shell y las pestañas reales. Verifican: ausencia de contenido privado durante carga y sin sesión; restauración/cierre de sesión; redirecciones desde raíz; fallos de persistencia y del observador; limpieza de suscripción; campos vacíos; llamada a Firebase con correo/contraseña; errores de red y reintento; configuración ausente; fallo del cierre de sesión; errores específicos y mensaje combinado; enlace a Finanzas; módulos futuros no interactivos; navegación por teclado entre pestañas.
+- La seguridad depende de **desplegar** `firestore.rules` antes de utilizar Firestore real. No basta con los guards de React.
+- La consola Firebase y cuentas administrativas del proyecto omiten estas reglas; no editar movimientos o resúmenes manualmente allí. Mantener acceso a consola limitado y copias de respaldo según la operación de la iglesia.
+- La aplicación no ofrece contabilidad formal, conciliación bancaria ni comprobantes/Storage.
+- Una consulta de libro/reporte admite hasta 10.000 movimientos del período; si se excede se informa, y el reporte no se genera parcial. Historial y listas se presentan por bloques. Las fichas usan cursor de Firestore, no descarga completa.
+- Las fechas del libro son días contables normalizados al mediodía UTC. `createdAt`, `updatedAt` y anulaciones son timestamps del servidor.
+- Los reportes no incorporan notas, atributos privados o nombres de diezmantes. El nombre de quien genera el informe sí aparece, como parte de la auditoría solicitada.
+- Sin conexión no se confirma ninguna transacción. La autorización se verifica con el servidor antes de mostrar datos.
+- Dependencias de producción: auditoría sin vulnerabilidades conocidas al revisar esta entrega. Firebase CLI, solo de desarrollo, conserva avisos moderados transitivos de `@opentelemetry/core` y `uuid` (5 entradas contando paquetes dependientes). `npm audit fix` compatible se aplicó; no se forzó un downgrade mayor de la CLI. No forman parte del código enviado al navegador. Revisar actualizaciones upstream antes de exponer herramientas de desarrollo a redes no confiables.
 
-## Verificación en navegador
+## Pendiente exclusivamente del administrador
 
-Se usó el SDK real de Firebase con Authentication Emulator, un proyecto `demo-cds-suite` y una cuenta ficticia. No se crearon ni modificaron usuarios en Firebase de producción.
-
-- Ingreso mediante correo/contraseña → dashboard.
-- Recarga autenticada → sesión restaurada y dashboard visible.
-- Segunda pestaña en `/` → dashboard con la sesión existente.
-- Enlace Finanzas → cuatro secciones seleccionables, con placeholders diferentes.
-- Diseño revisado en escritorio (1280 px y login a 1440 px) y móvil (390 px), sin desborde horizontal a 390 px.
-- Cierre de sesión → login; acceso directo a `/finanzas` después de cerrar sesión → login.
-- Login sin registro público; el envío vacío muestra un mensaje claro.
-
-El aviso rojo de “emulator mode” de Firebase aparece solo en las pruebas locales; no forma parte de producción.
-
-## Alcance y límites
-
-- No se realizó inicio de sesión con una cuenta de `cds-administracion`: requiere que el administrador pruebe una cuenta existente. La configuración local real usa los valores suministrados, fuera de Git.
-- No se accedió a documentos Firestore ni se modificaron sus reglas; deben revisarse en Firebase Console antes de publicar.
-- No se desplegó un sitio ni se modificó `main`. El repositorio estaba vacío al iniciar.
-- Turbopack falló por permisos al abrir puertos internos en el entorno. Se corrigió usando Webpack, y el comando final de build terminó sin errores.
-- Se probó ESLint 10 y resultó incompatible con los plugins incluidos por Next.js; se fijó ESLint 9.39.5. Esa línea muestra un aviso de deprecación en una instalación limpia; el árbol final es compatible y el lint pasa sin omitir reglas.
-
-## Entrega y publicación
-
-El código y la documentación se entregan en `feature/base-cds-suite`, con autorización explícita del usuario para publicar en `Speralt1/cds-suite`. La credencial Git local rechazó el push; la conexión GitHub permitió la escritura después de actualizar el acceso. No se modifica `main`. El ZIP es una copia opcional de respaldo del código, sin `.env.local`, dependencias instaladas ni artefactos de build. Para quien solo desea usar la aplicación, no es necesario trabajar con ese ZIP: falta configurar un hosting para disponer de una dirección web.
-
-En la revisión final se confirmó también la estructura compacta del formulario móvil y que la segunda pestaña vuelve a login al recargar después del cierre de sesión. No se considera verificada la sincronización inmediata en pestañas en segundo plano.
+Crear `users/{uid}` para las cuentas reales y publicar reglas/índices con los pasos de [firebase-setup.md](firebase-setup.md). No se efectuó prueba financiera en producción porque el encargo prohíbe insertar datos ficticios y desplegar cambios automáticamente.

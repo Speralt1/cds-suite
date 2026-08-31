@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 
 // Access each NEXT_PUBLIC value explicitly so Next.js can inline it at build time.
 const firebaseConfig = {
@@ -25,12 +25,14 @@ export function getFirebaseServices() {
     );
   }
 
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const isNew = !getApps().length;
+  const app = isNew ? initializeApp(firebaseConfig) : getApp();
   const auth = getAuth(app);
   // Opt-in local verification only. Never connects a production build to an emulator.
   if (
     process.env.NODE_ENV === "development" &&
-    process.env.NEXT_PUBLIC_USE_AUTH_EMULATOR === "true" &&
+    (process.env.NEXT_PUBLIC_USE_AUTH_EMULATOR === "true" ||
+      process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") &&
     !auth.emulatorConfig
   ) {
     if (!firebaseConfig.projectId?.startsWith("demo-")) {
@@ -38,5 +40,15 @@ export function getFirebaseServices() {
     }
     connectAuthEmulator(auth, "http://127.0.0.1:9099");
   }
-  return { app, auth, db: getFirestore(app) };
+  const db = getFirestore(app);
+  if (
+    isNew &&
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true"
+  ) {
+    if (!firebaseConfig.projectId?.startsWith("demo-"))
+      throw new Error("Firestore emulator requires a demo project.");
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  }
+  return { app, auth, db };
 }
