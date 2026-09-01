@@ -32,23 +32,35 @@ export function SummaryPage() {
       <FinancePageHeader
         title="Resumen financiero"
         subtitle="Información confirmada en Firestore."
-        aside={<PeriodViewControl value={period} onChange={setPeriod} />}
       />
-      <div className="finance-period-actions">
-        <PeriodPicker value={period} onChange={setPeriod} />
-        {details && (
-          <div className="finance-page-actions">
-            <button className="button-primary" onClick={() => setCreate(true)}>
-              + Registrar movimiento
-            </button>
-            <Link
-              className="button-secondary"
-              href="/finanzas/diezmos?registrar=1"
-            >
-              + Registrar diezmo
-            </Link>
+      <div className="summary-period-controls">
+        <div className="summary-period-toolbar">
+          <div className="summary-period-view">
+            <p className="finance-period-label">Período</p>
+            <PeriodViewControl value={period} onChange={setPeriod} />
           </div>
-        )}
+          {details && (
+            <div className="finance-page-actions">
+              <button
+                className="button-primary"
+                onClick={() => setCreate(true)}
+              >
+                + Registrar movimiento
+              </button>
+              <Link
+                className="button-secondary"
+                href="/finanzas/diezmos?registrar=1"
+              >
+                + Registrar diezmo
+              </Link>
+            </div>
+          )}
+        </div>
+        <PeriodPicker
+          value={period}
+          onChange={setPeriod}
+          showPeriodLabel={false}
+        />
       </div>
       <Notice error={summaries.error || previous.error} success={success} />
       {summaries.loading ? (

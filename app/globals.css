@@ -182,15 +182,20 @@ button:disabled {
   font-size: 12px;
   font-weight: 500;
 }
-.finance-period-actions {
+.summary-period-controls {
+  margin-bottom: 30px;
+}
+.summary-period-toolbar {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: clamp(40px, 7vw, 96px);
-  margin-bottom: 30px;
+  gap: 32px;
 }
-.finance-period-actions .finance-period {
-  margin-bottom: 0;
+.summary-period-view {
+  flex-shrink: 0;
+}
+.summary-period-controls .finance-period {
+  margin: 14px 0 0;
 }
 .finance-page-actions {
   display: flex;
@@ -671,16 +676,16 @@ button:disabled {
   .finance-page-header-aside > .button-primary {
     width: 100%;
   }
-  .finance-period-actions {
-    align-items: stretch;
+  .summary-period-toolbar {
     flex-direction: column;
+    align-items: stretch;
     gap: 18px;
   }
   .finance-page-actions {
     width: 100%;
     margin-left: 0;
   }
-  .finance-period-actions .finance-page-actions {
+  .summary-period-toolbar .finance-page-actions {
     order: -1;
   }
   .finance-page-actions > * {
@@ -822,11 +827,6 @@ button:disabled {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 @media (max-width: 900px) {
-  .finance-period-actions {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 18px;
-  }
   .tithe-kpis {
     grid-template-columns: 1fr 1fr;
   }

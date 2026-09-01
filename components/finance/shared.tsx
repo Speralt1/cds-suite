@@ -40,15 +40,17 @@ export function PeriodPicker({
   value,
   onChange,
   monthlyOnly = false,
+  showPeriodLabel = true,
 }: {
   value: PeriodSelection;
   onChange: (p: PeriodSelection) => void;
   monthlyOnly?: boolean;
+  showPeriodLabel?: boolean;
 }) {
   const view = monthlyOnly ? "month" : value.view;
   return (
     <div className="finance-period">
-      <p className="finance-period-label">Período</p>
+      {showPeriodLabel && <p className="finance-period-label">Período</p>}
       <div className="period-picker">
         {view === "month" && (
           <label>
