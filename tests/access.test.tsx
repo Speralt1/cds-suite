@@ -58,6 +58,7 @@ it("no muestra datos sin documento, con usuario inactivo ni desde caché", () =>
   expect(screen.queryByText("Finanzas privadas")).toBeNull();
   emit({ role: "admin", active: true }, true);
   expect(screen.queryByText("Finanzas privadas")).toBeNull();
+  expect(screen.queryByText(/Sin conexión/i)).toBeNull();
 });
 it("concede acceso confirmado y desmonta datos inmediatamente al revocarlo", () => {
   render(

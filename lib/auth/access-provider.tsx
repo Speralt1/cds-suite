@@ -6,13 +6,16 @@ import { getFirebaseServices } from "../firebase";
 import { isAuthorized } from "../finance/permissions";
 import type { AccessUser } from "../finance/types";
 import { SessionLoading } from "@/components/ui/session-loading";
+import { useOnlineStatus } from "@/lib/browser/online";
 const AccessContext = createContext<AccessUser | null>(null);
 export function AccessProvider({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const online = useOnlineStatus();
   const [access, setAccess] = useState<{
     uid: string;
     profile: AccessUser | null;
     error: string;
+    awaitingServer: boolean;
   } | null>(null);
   useEffect(() => {
     if (!user) return;
@@ -23,15 +26,20 @@ export function AccessProvider({ children }: { children: React.ReactNode }) {
         const profile = snapshot.exists()
           ? (snapshot.data() as AccessUser)
           : null;
+        if (snapshot.metadata.fromCache) {
+          setAccess((current) => ({
+            uid: user.uid,
+            profile: current?.uid === user.uid ? current.profile : null,
+            error: "",
+            awaitingServer: !(current?.uid === user.uid && current.profile),
+          }));
+          return;
+        }
         setAccess({
           uid: user.uid,
-          profile:
-            !snapshot.metadata.fromCache && isAuthorized(profile)
-              ? profile
-              : null,
-          error: snapshot.metadata.fromCache
-            ? "Se necesita conexión para verificar tu autorización."
-            : "",
+          profile: isAuthorized(profile) ? profile : null,
+          error: "",
+          awaitingServer: false,
         });
       },
       () =>
@@ -40,10 +48,17 @@ export function AccessProvider({ children }: { children: React.ReactNode }) {
           profile: null,
           error:
             "No pudimos verificar tu acceso. Revisa tu conexión y las reglas de Firestore.",
+          awaitingServer: false,
         }),
     );
   }, [user]);
-  if (!user || !access || access.uid !== user.uid) return <SessionLoading />;
+  if (
+    !user ||
+    !access ||
+    access.uid !== user.uid ||
+    (access.awaitingServer && online)
+  )
+    return <SessionLoading />;
   if (!access.profile)
     return (
       <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6">
@@ -55,9 +70,10 @@ export function AccessProvider({ children }: { children: React.ReactNode }) {
           Solicita al administrador que habilite tu cuenta. Tu correo es{" "}
           {user.email}.
         </p>
-        {access.error && (
+        {(access.error || (!online && access.awaitingServer)) && (
           <p role="alert" className="mt-4 text-danger">
-            {access.error}
+            {access.error ||
+              "Sin conexión: no pudimos confirmar tu autorización."}
           </p>
         )}
         <button
@@ -67,6 +83,7 @@ export function AccessProvider({ children }: { children: React.ReactNode }) {
               setAccess({
                 ...access,
                 error: "No se pudo cerrar la sesión. Intenta nuevamente.",
+                awaitingServer: false,
               }),
             )
           }

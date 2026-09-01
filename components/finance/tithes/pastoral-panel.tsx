@@ -3,7 +3,6 @@ import { useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
-  limit,
   orderBy,
   where,
   updateDoc,
@@ -13,6 +12,7 @@ import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
 import { useCollection } from "@/lib/finance/hooks";
 import { addFollowup } from "@/lib/finance/profiles";
+import { safeLimit } from "@/lib/finance/query-limit";
 import { today, dateLabel, errorMessage } from "@/lib/finance/formatters";
 import type { PastoralFollowup, TitheProfile } from "@/lib/finance/types";
 import { Notice, Loading, Empty, Modal } from "../shared";
@@ -22,7 +22,7 @@ export function PastoralPanel({ profile }: { profile: TitheProfile }) {
     () => [
       where("profileId", "==", profile.id),
       orderBy("date", "desc"),
-      limit(count + 1),
+      safeLimit(count + 1),
     ],
     [profile.id, count],
   );

@@ -6,7 +6,13 @@ import { canSeeDetails } from "@/lib/finance/permissions";
 import { usePeriod, useSummaries, useTransactions } from "@/lib/finance/hooks";
 import { combineSummaries } from "@/lib/finance/calculations";
 import { previousPeriod, periodLabel } from "@/lib/finance/formatters";
-import { PeriodPicker, Notice, Loading, Empty } from "../shared";
+import {
+  FinancePageHeader,
+  PeriodPicker,
+  Notice,
+  Loading,
+  Empty,
+} from "../shared";
 import { FinanceCharts } from "../charts/finance-charts";
 import { TransactionForm } from "../forms/transaction-form";
 import { TransactionList } from "../transactions/transaction-list";
@@ -22,26 +28,29 @@ export function SummaryPage() {
   const total = combineSummaries(summaries.data);
   return (
     <>
-      <div className="section-heading">
-        <div>
-          <h2>Resumen financiero</h2>
-          <p>{periodLabel(period)} · Información confirmada en Firestore.</p>
-        </div>
-        {details && (
-          <div className="flex flex-wrap gap-2">
-            <button className="button-primary" onClick={() => setCreate(true)}>
-              + Registrar movimiento
-            </button>
-            <Link
-              className="button-secondary"
-              href="/finanzas/diezmos?registrar=1"
-            >
-              + Registrar diezmo
-            </Link>
-          </div>
-        )}
-      </div>
-      <PeriodPicker value={period} onChange={setPeriod} />
+      <FinancePageHeader
+        title="Resumen financiero"
+        subtitle={`${periodLabel(period)} · Información confirmada en Firestore.`}
+        period={<PeriodPicker value={period} onChange={setPeriod} />}
+        actions={
+          details ? (
+            <>
+              <button
+                className="button-primary"
+                onClick={() => setCreate(true)}
+              >
+                + Registrar movimiento
+              </button>
+              <Link
+                className="button-secondary"
+                href="/finanzas/diezmos?registrar=1"
+              >
+                + Registrar diezmo
+              </Link>
+            </>
+          ) : undefined
+        }
+      />
       <Notice error={summaries.error || previous.error} success={success} />
       {summaries.loading ? (
         <Loading />

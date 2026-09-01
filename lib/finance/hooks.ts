@@ -4,7 +4,6 @@ import {
   collection,
   documentId,
   doc,
-  limit,
   onSnapshot,
   orderBy,
   query,
@@ -15,6 +14,8 @@ import {
 import { getFirebaseServices } from "../firebase";
 import { errorMessage, periodBounds, periodId, parseDate } from "./formatters";
 import { MAX_PERIOD_RECORDS } from "./constants";
+import { safeLimit } from "./query-limit";
+import { useOnlineStatus } from "../browser/online";
 import type {
   FinanceTransaction,
   MonthlySummary,
@@ -26,6 +27,7 @@ export function useCollection<T>(
   constraints: QueryConstraint[],
   enabled = true,
 ): DataState<T[]> {
+  const online = useOnlineStatus();
   const [state, setState] = useState<{
     key: QueryConstraint[];
     data: T[];
@@ -41,9 +43,7 @@ export function useCollection<T>(
         setState({
           key: constraints,
           data: s.docs.map((d) => ({ id: d.id, ...d.data() }) as T),
-          error: s.metadata.fromCache
-            ? "Sin conexión: la información puede estar desactualizada."
-            : "",
+          error: "",
         });
       },
       (e) => setState({ key: constraints, data: [], error: errorMessage(e) }),
@@ -52,7 +52,15 @@ export function useCollection<T>(
   return !enabled
     ? { data: [], loading: false, error: "" }
     : state?.key === constraints
-      ? { ...state, loading: false }
+      ? {
+          ...state,
+          loading: false,
+          error:
+            state.error ||
+            (!online
+              ? "Sin conexión: la información puede estar desactualizada."
+              : ""),
+        }
       : { data: [], loading: true, error: "" };
 }
 export function useDocument<T>(
@@ -60,6 +68,7 @@ export function useDocument<T>(
   id: string,
   enabled = true,
 ): DataState<T | null> {
+  const online = useOnlineStatus();
   const [state, setState] = useState<{
     key: string;
     data: T | null;
@@ -75,9 +84,7 @@ export function useDocument<T>(
         setState({
           key: `${name}/${id}`,
           data: s.exists() ? ({ id: s.id, ...s.data() } as T) : null,
-          error: s.metadata.fromCache
-            ? "Sin conexión: la información puede estar desactualizada."
-            : "",
+          error: "",
         });
       },
       (e) =>
@@ -87,7 +94,15 @@ export function useDocument<T>(
   return !enabled
     ? { data: null, loading: false, error: "" }
     : state?.key === `${name}/${id}`
-      ? { ...state, loading: false }
+      ? {
+          ...state,
+          loading: false,
+          error:
+            state.error ||
+            (!online
+              ? "Sin conexión: la información puede estar desactualizada."
+              : ""),
+        }
       : { data: null, loading: true, error: "" };
 }
 export function useSummaries(p: PeriodSelection) {
@@ -99,7 +114,7 @@ export function useSummaries(p: PeriodSelection) {
             where(documentId(), ">=", `${p.year}-01`),
             where(documentId(), "<=", `${p.year}-12`),
             orderBy(documentId()),
-            limit(12),
+            safeLimit(12),
           ],
     [p.year, p.month, p.view],
   );
@@ -108,7 +123,7 @@ export function useSummaries(p: PeriodSelection) {
 export function useTransactions(
   p: PeriodSelection,
   enabled = true,
-  max = MAX_PERIOD_RECORDS + 1,
+  max = MAX_PERIOD_RECORDS,
 ) {
   const constraints = useMemo(() => {
     const b = periodBounds({ year: p.year, month: p.month, view: p.view });
@@ -116,13 +131,13 @@ export function useTransactions(
       ? [
           where("period", "==", periodId(p.year, p.month)),
           orderBy("date", "desc"),
-          limit(max),
+          safeLimit(max),
         ]
       : [
           where("date", ">=", parseDate(b.start)),
           where("date", "<", parseDate(b.end)),
           orderBy("date", "desc"),
-          limit(max),
+          safeLimit(max),
         ];
   }, [p.year, p.month, p.view, max]);
   return useCollection<FinanceTransaction>(

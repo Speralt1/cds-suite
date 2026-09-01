@@ -4,7 +4,14 @@ import { useAccess } from "@/lib/auth/access-provider";
 import { usePeriod, useSummaries, useTransactions } from "@/lib/finance/hooks";
 import { buildReport, type FinanceReport } from "@/lib/finance/reports";
 import { clp, errorMessage } from "@/lib/finance/formatters";
-import { DetailGuard, PeriodPicker, Notice, Loading, Empty } from "../shared";
+import {
+  DetailGuard,
+  FinancePageHeader,
+  PeriodPicker,
+  Notice,
+  Loading,
+  Empty,
+} from "../shared";
 import { Kpis } from "../dashboard/kpis";
 import { FinanceCharts } from "../charts/finance-charts";
 export function ReportsPage() {
@@ -98,22 +105,19 @@ function Reports() {
   }
   return (
     <>
-      <div className="section-heading">
-        <div>
-          <h2>Reportes financieros</h2>
-          <p>
-            Revisa la vista previa y descarga un PDF con texto y gráficos
-            vectoriales.
-          </p>
-        </div>
-      </div>
-      <PeriodPicker
-        value={period}
-        onChange={(p) => {
-          setPeriod(p);
-          setSuccess("");
-          setError("");
-        }}
+      <FinancePageHeader
+        title="Reportes financieros"
+        subtitle="Revisa la vista previa y descarga un PDF con texto y gráficos vectoriales."
+        period={
+          <PeriodPicker
+            value={period}
+            onChange={(p) => {
+              setPeriod(p);
+              setSuccess("");
+              setError("");
+            }}
+          />
+        }
       />
       <div className="flex flex-wrap gap-3 mb-5">
         <button

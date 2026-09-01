@@ -53,7 +53,7 @@ it("bloquea informe parcial o aún desincronizado", () => {
     buildReport(
       monthly,
       [],
-      Array.from({ length: 10001 }, () => tithe),
+      Array.from({ length: 10000 }, () => tithe),
       "Admin",
     ),
   ).toThrow("10.000");

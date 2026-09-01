@@ -51,9 +51,9 @@ export function buildReport(
   generatedBy: string,
   generatedAt = new Date(),
 ): FinanceReport {
-  if (transactions.length > MAX_PERIOD_RECORDS)
+  if (transactions.length >= MAX_PERIOD_RECORDS)
     throw new Error(
-      "El período supera 10.000 movimientos. Esta versión no genera informes parciales; selecciona un mes con menos registros.",
+      "El período alcanzó el límite de 10.000 movimientos. Esta versión no genera informes potencialmente parciales; selecciona un período con menos registros.",
     );
   const ids =
     period.view === "year"

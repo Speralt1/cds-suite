@@ -4,7 +4,6 @@ import {
   collection,
   documentId,
   getCountFromServer,
-  limit,
   orderBy,
   query,
   startAfter,
@@ -15,6 +14,7 @@ import { getFirebaseServices } from "../firebase";
 import { useCollection } from "./hooks";
 import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "./constants";
 import { errorMessage, periodId } from "./formatters";
+import { safeLimit } from "./query-limit";
 import type { TitheProfile, TitheAttribution } from "./types";
 export function useProfiles(search: string, cursor = "") {
   const constraints = useMemo(() => {
@@ -31,7 +31,7 @@ export function useProfiles(search: string, cursor = "") {
       ...(cursor
         ? [startAfter(...(JSON.parse(cursor) as [string, string]))]
         : []),
-      limit(PAGE_SIZE + 1),
+      safeLimit(PAGE_SIZE + 1),
     ];
   }, [search, cursor]);
   return useCollection<TitheProfile>("titheProfiles", constraints);
@@ -42,7 +42,7 @@ export function useLatestAttribution(profileId: string) {
       where("profileId", "==", profileId),
       where("status", "==", "active"),
       orderBy("date", "desc"),
-      limit(1),
+      safeLimit(1),
     ],
     [profileId],
   );
@@ -53,7 +53,7 @@ export function useMonthlyAttributions(year: number, month: number) {
     () => [
       where("period", "==", periodId(year, month)),
       orderBy("date", "desc"),
-      limit(MAX_PERIOD_RECORDS + 1),
+      safeLimit(MAX_PERIOD_RECORDS),
     ],
     [year, month],
   );

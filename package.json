@@ -8,12 +8,14 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "firebase emulators:start --only hosting --project demo-cds-suite",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-cds-suite \"vitest run --config vitest.rules.config.mts\"",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-cds-suite"
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-cds-suite",
+    "preview": "firebase emulators:start --only hosting --project demo-cds-suite",
+    "deploy:hosting": "firebase deploy --only hosting --project cds-administracion"
   },
   "dependencies": {
     "firebase": "12.18.0",

@@ -97,6 +97,30 @@ export function PeriodPicker({
     </div>
   );
 }
+export function FinancePageHeader({
+  title,
+  subtitle,
+  period,
+  actions,
+}: {
+  title: string;
+  subtitle: string;
+  period: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="finance-page-header">
+      <div className="finance-page-title">
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
+      <div className="finance-page-controls">
+        {period}
+        {actions && <div className="finance-page-actions">{actions}</div>}
+      </div>
+    </div>
+  );
+}
 export function Notice({
   error,
   success,

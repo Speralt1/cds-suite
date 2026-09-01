@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { where, orderBy, limit } from "firebase/firestore";
+import { where, orderBy } from "firebase/firestore";
 import { useAccess } from "@/lib/auth/access-provider";
 import { canSeePastoral } from "@/lib/finance/permissions";
 import { useCollection, useDocument } from "@/lib/finance/hooks";
 import { useLatestAttribution } from "@/lib/finance/tithe-hooks";
 import { clp, dateLabel, parseDate, periodId } from "@/lib/finance/formatters";
 import { MAX_PERIOD_RECORDS, PAGE_SIZE } from "@/lib/finance/constants";
+import { safeLimit } from "@/lib/finance/query-limit";
 import type { TitheProfile, TitheAttribution } from "@/lib/finance/types";
 import { DetailGuard, Loading, Empty, Notice } from "../shared";
 import { ProfileForm } from "../forms/profile-form";
@@ -52,7 +53,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
       where("date", ">=", parseDate(`${year}-01-01`)),
       where("date", "<", parseDate(`${year + 1}-01-01`)),
       orderBy("date", "desc"),
-      limit(MAX_PERIOD_RECORDS + 1),
+      safeLimit(MAX_PERIOD_RECORDS),
     ],
     [profile.id, year],
   );
@@ -80,7 +81,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
         ),
       ),
       orderBy("date", "desc"),
-      limit(MAX_PERIOD_RECORDS + 1),
+      safeLimit(MAX_PERIOD_RECORDS),
     ],
     [profile.id, months],
   );
@@ -166,7 +167,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
         <h3>Registros de los últimos 12 meses</h3>
         {recent.loading ? (
           <Loading />
-        ) : recent.data.length > MAX_PERIOD_RECORDS ? (
+        ) : recent.data.length >= MAX_PERIOD_RECORDS ? (
           <Notice error="El período supera el límite de registros. No se muestran totales parciales." />
         ) : (
           <EvolutionChart data={graph} tithe />
@@ -179,7 +180,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
             Total de {year}:{" "}
             {history.loading
               ? "Consultando…"
-              : history.data.length > MAX_PERIOD_RECORDS
+              : history.data.length >= MAX_PERIOD_RECORDS
                 ? "No disponible"
                 : clp(total)}
           </p>

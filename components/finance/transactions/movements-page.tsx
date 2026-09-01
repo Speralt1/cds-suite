@@ -9,7 +9,14 @@ import {
   PAGE_SIZE,
 } from "@/lib/finance/constants";
 import { periodLabel } from "@/lib/finance/formatters";
-import { DetailGuard, PeriodPicker, Loading, Notice, Empty } from "../shared";
+import {
+  DetailGuard,
+  FinancePageHeader,
+  PeriodPicker,
+  Loading,
+  Notice,
+  Empty,
+} from "../shared";
 import { TransactionForm } from "../forms/transaction-form";
 import { TransactionList } from "./transaction-list";
 export function MovementsPage() {
@@ -42,22 +49,24 @@ function Movements() {
   );
   return (
     <>
-      <div className="section-heading">
-        <div>
-          <h2>Movimientos</h2>
-          <p>Entradas y salidas, con cada registro a la vista.</p>
-        </div>
-        <button className="button-primary" onClick={() => setCreate(true)}>
-          + Registrar movimiento
-        </button>
-      </div>
-      <PeriodPicker
-        monthlyOnly
-        value={period}
-        onChange={(p) => {
-          setPeriod(p);
-          setCount(PAGE_SIZE);
-        }}
+      <FinancePageHeader
+        title="Movimientos"
+        subtitle="Entradas y salidas, con cada registro a la vista."
+        period={
+          <PeriodPicker
+            monthlyOnly
+            value={period}
+            onChange={(p) => {
+              setPeriod(p);
+              setCount(PAGE_SIZE);
+            }}
+          />
+        }
+        actions={
+          <button className="button-primary" onClick={() => setCreate(true)}>
+            + Registrar movimiento
+          </button>
+        }
       />
       <div className="filters">
         <label>
@@ -112,8 +121,8 @@ function Movements() {
       <Notice
         error={
           state.error ||
-          (state.data.length > MAX_PERIOD_RECORDS
-            ? "El período supera 10.000 registros. Contacta al administrador antes de continuar; el listado no está completo."
+          (state.data.length >= MAX_PERIOD_RECORDS
+            ? "El período alcanzó el límite de 10.000 registros. Contacta al administrador antes de continuar; el listado podría estar incompleto."
             : "")
         }
         success={success}

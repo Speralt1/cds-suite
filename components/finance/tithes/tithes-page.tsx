@@ -13,9 +13,17 @@ import { clp, dateLabel, previousPeriod } from "@/lib/finance/formatters";
 import { combineSummaries, variation } from "@/lib/finance/calculations";
 import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
 import type { TitheProfile } from "@/lib/finance/types";
-import { DetailGuard, Empty, Loading, Notice, PeriodPicker } from "../shared";
+import {
+  DetailGuard,
+  Empty,
+  FinancePageHeader,
+  Loading,
+  Notice,
+  PeriodPicker,
+} from "../shared";
 import { ProfileForm } from "../forms/profile-form";
 import { TitheRegister } from "./tithe-register";
+import { profileHref } from "@/lib/finance/profile-route";
 export function TithesPage() {
   return (
     <DetailGuard>
@@ -26,7 +34,7 @@ export function TithesPage() {
 function ProfileCard({ profile }: { profile: TitheProfile }) {
   const latest = useLatestAttribution(profile.id);
   return (
-    <Link href={`/finanzas/diezmos/${profile.id}`} className="profile-card">
+    <Link href={profileHref(profile.id)} className="profile-card">
       <div className="flex justify-between gap-2">
         <h3>{profile.displayName}</h3>
         <span
@@ -74,16 +82,18 @@ function Tithes() {
   }
   return (
     <>
-      <div className="section-heading">
-        <div>
-          <h2>Diezmos</h2>
-          <p>Personas y familias, con cuidado y privacidad.</p>
-        </div>
-        <button className="button-primary" onClick={() => setRegister(true)}>
-          + Registrar diezmo
-        </button>
-      </div>
-      <PeriodPicker monthlyOnly value={period} onChange={setPeriod} />
+      <FinancePageHeader
+        title="Diezmos"
+        subtitle="Personas y familias, con cuidado y privacidad."
+        period={
+          <PeriodPicker monthlyOnly value={period} onChange={setPeriod} />
+        }
+        actions={
+          <button className="button-primary" onClick={() => setRegister(true)}>
+            + Registrar diezmo
+          </button>
+        }
+      />
       <Notice
         success={success}
         error={
@@ -112,7 +122,7 @@ function Tithes() {
               ? "…"
               : attributions.error
                 ? "—"
-                : attributions.data.length > MAX_PERIOD_RECORDS
+                : attributions.data.length >= MAX_PERIOD_RECORDS
                   ? "No disponible"
                   : new Set(
                       attributions.data
