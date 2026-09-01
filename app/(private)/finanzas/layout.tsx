@@ -1,11 +1,12 @@
 import { FinanceNav } from "@/components/finance/shared";
+import { FinanceDataCacheProvider } from "@/lib/finance/hooks";
 export default function FinanceLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <FinanceDataCacheProvider>
       <div className="mb-7">
         <p className="eyebrow">CASA DE SALVACIÓN</p>
         <h1 className="mt-2 text-3xl font-medium sm:text-4xl">Finanzas</h1>
@@ -15,6 +16,6 @@ export default function FinanceLayout({
       </div>
       <FinanceNav />
       <div className="mt-7">{children}</div>
-    </>
+    </FinanceDataCacheProvider>
   );
 }

@@ -20,7 +20,6 @@ import {
   Loading,
   Notice,
   PeriodPicker,
-  PeriodViewControl,
 } from "../shared";
 import { ProfileForm } from "../forms/profile-form";
 import { TitheRegister } from "./tithe-register";
@@ -86,18 +85,13 @@ function Tithes() {
       <FinancePageHeader
         title="Diezmos"
         subtitle="Personas y familias, con cuidado y privacidad."
-        view={
-          <PeriodViewControl monthlyOnly value={period} onChange={setPeriod} />
-        }
-        period={
-          <PeriodPicker monthlyOnly value={period} onChange={setPeriod} />
-        }
-        actions={
+        aside={
           <button className="button-primary" onClick={() => setRegister(true)}>
             + Registrar diezmo
           </button>
         }
       />
+      <PeriodPicker monthlyOnly value={period} onChange={setPeriod} />
       <Notice
         success={success}
         error={

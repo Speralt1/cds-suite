@@ -1,5 +1,13 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import {
+  createElement,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   collection,
   documentId,
@@ -22,12 +30,30 @@ import type {
   PeriodSelection,
 } from "./types";
 export type DataState<T> = { data: T; loading: boolean; error: string };
+const FinanceDataCacheContext = createContext<Map<string, unknown[]> | null>(
+  null,
+);
+export function FinanceDataCacheProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [cache] = useState(() => new Map<string, unknown[]>());
+  return createElement(
+    FinanceDataCacheContext.Provider,
+    { value: cache },
+    children,
+  );
+}
 export function useCollection<T>(
   name: string,
   constraints: QueryConstraint[],
   enabled = true,
+  cacheKey?: string,
 ): DataState<T[]> {
   const online = useOnlineStatus();
+  const cache = useContext(FinanceDataCacheContext);
+  const resolvedCacheKey = cacheKey ? `${name}:${cacheKey}` : "";
   const [state, setState] = useState<{
     key: QueryConstraint[];
     data: T[];
@@ -40,15 +66,27 @@ export function useCollection<T>(
       { includeMetadataChanges: true },
       (s) => {
         if (s.metadata.hasPendingWrites) return;
+        const data = s.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+        if (resolvedCacheKey) cache?.set(resolvedCacheKey, data);
         setState({
           key: constraints,
-          data: s.docs.map((d) => ({ id: d.id, ...d.data() }) as T),
+          data,
           error: "",
         });
       },
-      (e) => setState({ key: constraints, data: [], error: errorMessage(e) }),
+      (e) =>
+        setState({
+          key: constraints,
+          data: resolvedCacheKey
+            ? ((cache?.get(resolvedCacheKey) as T[] | undefined) ?? [])
+            : [],
+          error: errorMessage(e),
+        }),
     );
-  }, [name, constraints, enabled]);
+  }, [name, constraints, enabled, cache, resolvedCacheKey]);
+  const cached = resolvedCacheKey
+    ? (cache?.get(resolvedCacheKey) as T[] | undefined)
+    : undefined;
   return !enabled
     ? { data: [], loading: false, error: "" }
     : state?.key === constraints
@@ -61,7 +99,15 @@ export function useCollection<T>(
               ? "Sin conexión: la información puede estar desactualizada."
               : ""),
         }
-      : { data: [], loading: true, error: "" };
+      : cached
+        ? {
+            data: cached,
+            loading: false,
+            error: !online
+              ? "Sin conexión: la información puede estar desactualizada."
+              : "",
+          }
+        : { data: [], loading: true, error: "" };
 }
 export function useDocument<T>(
   name: string,
@@ -118,7 +164,12 @@ export function useSummaries(p: PeriodSelection) {
           ],
     [p.year, p.month, p.view],
   );
-  return useCollection<MonthlySummary>("financeMonthlySummaries", constraints);
+  return useCollection<MonthlySummary>(
+    "financeMonthlySummaries",
+    constraints,
+    true,
+    `summary:${p.view}:${p.year}:${p.view === "month" ? p.month : "all"}`,
+  );
 }
 export function useTransactions(
   p: PeriodSelection,
@@ -144,6 +195,7 @@ export function useTransactions(
     "financeTransactions",
     constraints,
     enabled,
+    `transactions:${p.view}:${p.year}:${p.view === "month" ? p.month : "all"}:${max}`,
   );
 }
 export function usePeriod() {

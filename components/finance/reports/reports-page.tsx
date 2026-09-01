@@ -114,27 +114,27 @@ function Reports() {
       <FinancePageHeader
         title="Reportes financieros"
         subtitle="Revisa la vista previa y descarga un PDF con texto y gráficos vectoriales."
-        view={<PeriodViewControl value={period} onChange={changePeriod} />}
-        period={<PeriodPicker value={period} onChange={changePeriod} />}
-        actions={
-          <>
-            <button
-              className="button-primary"
-              disabled={!preview.data || busy}
-              onClick={() => void generate()}
-            >
-              {busy ? "Preparando PDF…" : "Descargar PDF"}
-            </button>
-            <button
-              className="button-secondary"
-              disabled={!preview.data || busy}
-              onClick={() => void generate(true)}
-            >
-              Compartir
-            </button>
-          </>
-        }
+        aside={<PeriodViewControl value={period} onChange={changePeriod} />}
       />
+      <div className="report-period-controls">
+        <PeriodPicker value={period} onChange={changePeriod} />
+        <div className="report-actions">
+          <button
+            className="button-primary"
+            disabled={!preview.data || busy}
+            onClick={() => void generate()}
+          >
+            {busy ? "Preparando PDF…" : "Descargar PDF"}
+          </button>
+          <button
+            className="button-secondary"
+            disabled={!preview.data || busy}
+            onClick={() => void generate(true)}
+          >
+            Compartir
+          </button>
+        </div>
+      </div>
       <Notice
         error={summaries.error || transactions.error || preview.error || error}
         success={success}

@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useMemo } from "react";
-import { useCollection } from "@/lib/finance/hooks";
+import { FinanceDataCacheProvider, useCollection } from "@/lib/finance/hooks";
 
 const state = vi.hoisted(() => ({
   next: null as null | ((snapshot: unknown) => void),
@@ -40,6 +40,17 @@ function Probe() {
   );
 }
 
+function CachedProbe() {
+  const constraints = useMemo(() => [], []);
+  const result = useCollection<{ id: string }>(
+    "cached-items",
+    constraints,
+    true,
+    "navigation",
+  );
+  return <span>{result.loading ? "cargando" : result.data[0]?.id}</span>;
+}
+
 beforeEach(() => {
   state.next = null;
   state.error = null;
@@ -66,4 +77,28 @@ it("no confunde un snapshot inicial de caché con estar sin conexión", () => {
   });
   act(() => window.dispatchEvent(new Event("offline")));
   expect(screen.getByRole("alert")).toHaveTextContent("Sin conexión");
+});
+
+it("mantiene el último snapshot útil al volver a montar un módulo", () => {
+  function View({ visible }: { visible: boolean }) {
+    return (
+      <FinanceDataCacheProvider>
+        {visible ? <CachedProbe /> : null}
+      </FinanceDataCacheProvider>
+    );
+  }
+
+  const view = render(<View visible />);
+  act(() =>
+    state.next?.({
+      docs: [{ id: "conservado", data: () => ({}) }],
+      metadata: { fromCache: false, hasPendingWrites: false },
+    }),
+  );
+  expect(screen.getByText("conservado")).toBeVisible();
+
+  view.rerender(<View visible={false} />);
+  view.rerender(<View visible />);
+  expect(screen.getByText("conservado")).toBeVisible();
+  expect(screen.queryByText("cargando")).toBeNull();
 });

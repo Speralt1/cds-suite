@@ -13,7 +13,6 @@ import {
   DetailGuard,
   FinancePageHeader,
   PeriodPicker,
-  PeriodViewControl,
   Loading,
   Notice,
   Empty,
@@ -53,24 +52,19 @@ function Movements() {
       <FinancePageHeader
         title="Movimientos"
         subtitle="Entradas y salidas, con cada registro a la vista."
-        view={
-          <PeriodViewControl monthlyOnly value={period} onChange={setPeriod} />
-        }
-        period={
-          <PeriodPicker
-            monthlyOnly
-            value={period}
-            onChange={(p) => {
-              setPeriod(p);
-              setCount(PAGE_SIZE);
-            }}
-          />
-        }
-        actions={
+        aside={
           <button className="button-primary" onClick={() => setCreate(true)}>
             + Registrar movimiento
           </button>
         }
+      />
+      <PeriodPicker
+        monthlyOnly
+        value={period}
+        onChange={(p) => {
+          setPeriod(p);
+          setCount(PAGE_SIZE);
+        }}
       />
       <div className="filters">
         <label>

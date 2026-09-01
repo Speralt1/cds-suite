@@ -34,7 +34,12 @@ export function useProfiles(search: string, cursor = "") {
       safeLimit(PAGE_SIZE + 1),
     ];
   }, [search, cursor]);
-  return useCollection<TitheProfile>("titheProfiles", constraints);
+  return useCollection<TitheProfile>(
+    "titheProfiles",
+    constraints,
+    true,
+    `profiles:${search.trim().toLowerCase()}:${cursor}`,
+  );
 }
 export function useLatestAttribution(profileId: string) {
   const constraints = useMemo(
@@ -46,7 +51,12 @@ export function useLatestAttribution(profileId: string) {
     ],
     [profileId],
   );
-  return useCollection<TitheAttribution>("titheAttributions", constraints);
+  return useCollection<TitheAttribution>(
+    "titheAttributions",
+    constraints,
+    true,
+    `latest:${profileId}`,
+  );
 }
 export function useMonthlyAttributions(year: number, month: number) {
   const constraints = useMemo(
@@ -57,7 +67,12 @@ export function useMonthlyAttributions(year: number, month: number) {
     ],
     [year, month],
   );
-  return useCollection<TitheAttribution>("titheAttributions", constraints);
+  return useCollection<TitheAttribution>(
+    "titheAttributions",
+    constraints,
+    true,
+    `monthly:${periodId(year, month)}`,
+  );
 }
 export function useNewProfileCount(year: number, refresh: number) {
   const [state, setState] = useState<{

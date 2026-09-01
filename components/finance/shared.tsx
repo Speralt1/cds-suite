@@ -47,55 +47,52 @@ export function PeriodPicker({
 }) {
   const view = monthlyOnly ? "month" : value.view;
   return (
-    <div className="period-picker">
-      {view === "month" && (
+    <div className="finance-period">
+      <p className="finance-period-label">Período</p>
+      <div className="period-picker">
+        {view === "month" && (
+          <label>
+            Mes
+            <select
+              value={value.month}
+              onChange={(e) =>
+                onChange({ ...value, month: Number(e.target.value) })
+              }
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
-          Mes
+          Año
           <select
-            value={value.month}
+            value={value.year}
             onChange={(e) =>
-              onChange({ ...value, month: Number(e.target.value) })
+              onChange({ ...value, year: Number(e.target.value) })
             }
           >
-            {MONTHS.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
-            ))}
+            {Array.from({ length: 100 }, (_, i) => 2000 + i)
+              .reverse()
+              .map((y) => (
+                <option key={y}>{y}</option>
+              ))}
           </select>
         </label>
-      )}
-      <label>
-        Año
-        <select
-          value={value.year}
-          onChange={(e) => onChange({ ...value, year: Number(e.target.value) })}
-        >
-          {Array.from({ length: 100 }, (_, i) => 2000 + i)
-            .reverse()
-            .map((y) => (
-              <option key={y}>{y}</option>
-            ))}
-        </select>
-      </label>
+      </div>
     </div>
   );
 }
 export function PeriodViewControl({
   value,
   onChange,
-  monthlyOnly = false,
 }: {
   value: PeriodSelection;
   onChange: (p: PeriodSelection) => void;
-  monthlyOnly?: boolean;
 }) {
-  if (monthlyOnly)
-    return (
-      <span className="period-view-static" aria-label="Vista mensual">
-        Mensual
-      </span>
-    );
   return (
     <div
       className="period-view-toggle"
@@ -123,29 +120,19 @@ export function PeriodViewControl({
 export function FinancePageHeader({
   title,
   subtitle,
-  view,
-  period,
-  actions,
+  aside,
 }: {
   title: string;
   subtitle: string;
-  view: React.ReactNode;
-  period: React.ReactNode;
-  actions?: React.ReactNode;
+  aside?: React.ReactNode;
 }) {
   return (
     <div className="finance-page-header">
-      <div className="finance-page-header-top">
-        <div className="finance-page-title">
-          <h2>{title}</h2>
-          <p>{subtitle}</p>
-        </div>
-        {view}
+      <div className="finance-page-title">
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
       </div>
-      <div className="finance-page-header-bottom">
-        {period}
-        {actions && <div className="finance-page-actions">{actions}</div>}
-      </div>
+      {aside && <div className="finance-page-header-aside">{aside}</div>}
     </div>
   );
 }
