@@ -45,26 +45,10 @@ export function PeriodPicker({
   onChange: (p: PeriodSelection) => void;
   monthlyOnly?: boolean;
 }) {
+  const view = monthlyOnly ? "month" : value.view;
   return (
     <div className="period-picker">
-      {!monthlyOnly && (
-        <label>
-          Vista
-          <select
-            value={value.view}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                view: e.target.value as PeriodSelection["view"],
-              })
-            }
-          >
-            <option value="month">Mensual</option>
-            <option value="year">Anual</option>
-          </select>
-        </label>
-      )}
-      {value.view === "month" && (
+      {view === "month" && (
         <label>
           Mes
           <select
@@ -97,24 +81,68 @@ export function PeriodPicker({
     </div>
   );
 }
+export function PeriodViewControl({
+  value,
+  onChange,
+  monthlyOnly = false,
+}: {
+  value: PeriodSelection;
+  onChange: (p: PeriodSelection) => void;
+  monthlyOnly?: boolean;
+}) {
+  if (monthlyOnly)
+    return (
+      <span className="period-view-static" aria-label="Vista mensual">
+        Mensual
+      </span>
+    );
+  return (
+    <div
+      className="period-view-toggle"
+      role="group"
+      aria-label="Vista del período"
+    >
+      {(
+        [
+          ["month", "Mensual"],
+          ["year", "Anual"],
+        ] as const
+      ).map(([view, label]) => (
+        <button
+          key={view}
+          type="button"
+          aria-pressed={value.view === view}
+          onClick={() => onChange({ ...value, view })}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 export function FinancePageHeader({
   title,
   subtitle,
+  view,
   period,
   actions,
 }: {
   title: string;
   subtitle: string;
+  view: React.ReactNode;
   period: React.ReactNode;
   actions?: React.ReactNode;
 }) {
   return (
     <div className="finance-page-header">
-      <div className="finance-page-title">
-        <h2>{title}</h2>
-        <p>{subtitle}</p>
+      <div className="finance-page-header-top">
+        <div className="finance-page-title">
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+        {view}
       </div>
-      <div className="finance-page-controls">
+      <div className="finance-page-header-bottom">
         {period}
         {actions && <div className="finance-page-actions">{actions}</div>}
       </div>

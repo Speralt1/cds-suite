@@ -145,12 +145,26 @@ button:disabled {
 }
 .finance-page-header {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 22px;
+  margin-bottom: 30px;
+}
+.finance-page-header-top,
+.finance-page-header-bottom {
+  display: flex;
+  width: 100%;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 24px;
+}
+.finance-page-header-top {
+  align-items: flex-start;
+  gap: 32px;
+}
+.finance-page-header-bottom {
+  align-items: flex-end;
+  gap: clamp(36px, 7vw, 96px);
 }
 .finance-page-title {
+  flex: 1;
   min-width: 180px;
 }
 .finance-page-title h2 {
@@ -164,23 +178,58 @@ button:disabled {
   font-size: 13px;
   line-height: 1.5;
 }
-.finance-page-controls,
 .finance-page-actions {
   display: flex;
   align-items: flex-end;
   gap: 10px;
+  margin-left: auto;
 }
-.finance-page-controls {
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-}
-.finance-page-controls .period-picker {
+.finance-page-header-bottom .period-picker {
   flex-wrap: nowrap;
   margin: 0;
 }
-.finance-page-controls .period-picker label {
-  flex: 0 1 150px;
-  min-width: 120px;
+.finance-page-header-bottom .period-picker label:first-child {
+  flex: 0 1 160px;
+  min-width: 140px;
+}
+.finance-page-header-bottom .period-picker label:last-child {
+  flex: 0 1 120px;
+  min-width: 105px;
+}
+.period-view-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--color-line);
+  border-radius: 11px;
+  background: white;
+}
+.period-view-toggle button {
+  min-height: 40px;
+  min-width: 88px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.period-view-toggle button[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.period-view-static {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: white;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
 }
 .button-secondary {
   display: inline-flex;
@@ -579,9 +628,6 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 @media (max-width: 1100px) {
-  .finance-page-controls {
-    flex-wrap: wrap;
-  }
   .kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -603,17 +649,22 @@ button:disabled {
 }
 @media (max-width: 640px) {
   .finance-page-header {
+    gap: 18px;
+    margin-bottom: 26px;
+  }
+  .finance-page-header-top,
+  .finance-page-header-bottom {
     align-items: stretch;
     flex-direction: column;
     gap: 14px;
   }
-  .finance-page-controls {
-    align-items: stretch;
-    flex-direction: column;
+  .period-view-toggle,
+  .period-view-static {
+    align-self: flex-start;
   }
   .finance-page-actions {
-    order: -1;
     width: 100%;
+    margin-left: 0;
   }
   .finance-page-actions > * {
     flex: 1;
@@ -621,10 +672,12 @@ button:disabled {
     padding-inline: 12px;
     text-align: center;
   }
-  .finance-page-controls .period-picker {
+  .finance-page-header-bottom .period-picker {
     width: 100%;
   }
-  .finance-page-controls .period-picker label {
+  .finance-page-header-bottom .period-picker label,
+  .finance-page-header-bottom .period-picker label:first-child,
+  .finance-page-header-bottom .period-picker label:last-child {
     flex: 1 1 0;
     min-width: 0;
   }

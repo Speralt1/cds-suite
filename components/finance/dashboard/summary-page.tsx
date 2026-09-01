@@ -9,6 +9,7 @@ import { previousPeriod, periodLabel } from "@/lib/finance/formatters";
 import {
   FinancePageHeader,
   PeriodPicker,
+  PeriodViewControl,
   Notice,
   Loading,
   Empty,
@@ -30,7 +31,8 @@ export function SummaryPage() {
     <>
       <FinancePageHeader
         title="Resumen financiero"
-        subtitle={`${periodLabel(period)} · Información confirmada en Firestore.`}
+        subtitle="Información confirmada en Firestore."
+        view={<PeriodViewControl value={period} onChange={setPeriod} />}
         period={<PeriodPicker value={period} onChange={setPeriod} />}
         actions={
           details ? (

@@ -8,6 +8,7 @@ import {
   DetailGuard,
   FinancePageHeader,
   PeriodPicker,
+  PeriodViewControl,
   Notice,
   Loading,
   Empty,
@@ -30,6 +31,11 @@ function Reports() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const lock = useRef(false);
+  function changePeriod(nextPeriod: typeof period) {
+    setPeriod(nextPeriod);
+    setSuccess("");
+    setError("");
+  }
   const preview = useMemo(() => {
     if (
       summaries.loading ||
@@ -108,33 +114,27 @@ function Reports() {
       <FinancePageHeader
         title="Reportes financieros"
         subtitle="Revisa la vista previa y descarga un PDF con texto y gráficos vectoriales."
-        period={
-          <PeriodPicker
-            value={period}
-            onChange={(p) => {
-              setPeriod(p);
-              setSuccess("");
-              setError("");
-            }}
-          />
+        view={<PeriodViewControl value={period} onChange={changePeriod} />}
+        period={<PeriodPicker value={period} onChange={changePeriod} />}
+        actions={
+          <>
+            <button
+              className="button-primary"
+              disabled={!preview.data || busy}
+              onClick={() => void generate()}
+            >
+              {busy ? "Preparando PDF…" : "Descargar PDF"}
+            </button>
+            <button
+              className="button-secondary"
+              disabled={!preview.data || busy}
+              onClick={() => void generate(true)}
+            >
+              Compartir
+            </button>
+          </>
         }
       />
-      <div className="flex flex-wrap gap-3 mb-5">
-        <button
-          className="button-primary"
-          disabled={!preview.data || busy}
-          onClick={() => void generate()}
-        >
-          {busy ? "Preparando PDF…" : "Descargar PDF"}
-        </button>
-        <button
-          className="button-secondary"
-          disabled={!preview.data || busy}
-          onClick={() => void generate(true)}
-        >
-          Compartir
-        </button>
-      </div>
       <Notice
         error={summaries.error || transactions.error || preview.error || error}
         success={success}

@@ -13,6 +13,7 @@ import {
   DetailGuard,
   FinancePageHeader,
   PeriodPicker,
+  PeriodViewControl,
   Loading,
   Notice,
   Empty,
@@ -52,6 +53,9 @@ function Movements() {
       <FinancePageHeader
         title="Movimientos"
         subtitle="Entradas y salidas, con cada registro a la vista."
+        view={
+          <PeriodViewControl monthlyOnly value={period} onChange={setPeriod} />
+        }
         period={
           <PeriodPicker
             monthlyOnly
