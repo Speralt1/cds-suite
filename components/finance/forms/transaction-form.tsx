@@ -7,11 +7,12 @@ import {
   newTransactionId,
   transactionInput,
 } from "@/lib/finance/transactions";
+import { PAYMENT_METHODS } from "@/lib/finance/constants";
 import {
-  INCOME_CATEGORIES,
-  EXPENSE_CATEGORIES,
-  PAYMENT_METHODS,
-} from "@/lib/finance/constants";
+  categoriesForTransaction,
+  FALLBACK_INCOME_CATEGORIES,
+} from "@/lib/settings/finance-settings";
+import { useFinanceSettings } from "@/lib/settings/finance-settings-client";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import type {
   FinanceTransaction,
@@ -34,6 +35,7 @@ export function TransactionForm({
 }) {
   const tithe = existing?.source === "tithe" || !!profile;
   const { user } = useAuth();
+  const settings = useFinanceSettings();
   const [id] = useState(
     () => existing?.id || newTransactionId(getFirebaseServices().db),
   );
@@ -44,7 +46,7 @@ export function TransactionForm({
           type: "income",
           amount: 0,
           date: today(),
-          category: tithe ? "Diezmos" : INCOME_CATEGORIES[0],
+          category: tithe ? "Diezmos" : FALLBACK_INCOME_CATEGORIES[0],
           paymentMethod: "cash",
           description: tithe ? "Diezmo" : "",
           note: "",
@@ -54,6 +56,11 @@ export function TransactionForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const categoryOptions = categoriesForTransaction(
+    settings.data,
+    input.type,
+    existing?.type === input.type ? existing.category : undefined,
+  );
   const update = (key: keyof TransactionInput, value: string) =>
     setInput({ ...input, [key]: value });
   async function save(e: React.FormEvent) {
@@ -76,6 +83,7 @@ export function TransactionForm({
           existing,
           profileId: profile?.id,
           privateNote: tithe ? input.note : undefined,
+          allowedCategories: categoryOptions,
         },
       );
       onSaved(
@@ -126,10 +134,10 @@ export function TransactionForm({
                       setInput({
                         ...input,
                         type,
-                        category:
-                          type === "income"
-                            ? INCOME_CATEGORIES[0]
-                            : EXPENSE_CATEGORIES[0],
+                        category: categoriesForTransaction(
+                          settings.data,
+                          type,
+                        )[0],
                       })
                     }
                   >
@@ -197,13 +205,16 @@ export function TransactionForm({
                   value={input.category}
                   onChange={(e) => update("category", e.target.value)}
                 >
-                  {(input.type === "income"
-                    ? INCOME_CATEGORIES
-                    : EXPENSE_CATEGORIES
-                  ).map((c) => (
+                  {categoryOptions.map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
+                {settings.error && (
+                  <span className="field-help text-danger">
+                    No se pudo confirmar la configuración. Se mantienen las
+                    categorías compatibles de respaldo.
+                  </span>
+                )}
               </label>
               <label>
                 Descripción

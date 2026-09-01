@@ -2,7 +2,7 @@
 
 Firestore puede contener información financiera real. El frontend y el historial de datos tienen ciclos de vida separados: publicar una nueva versión de la interfaz no elimina documentos de Firestore.
 
-Las colecciones `users`, `financeTransactions`, `financeMonthlySummaries`, `titheProfiles`, `titheAttributions` y `pastoralFollowups` deben conservar sus nombres y su compatibilidad histórica. Los movimientos se corrigen mediante actualización o anulación; nunca se eliminan para corregir contabilidad. Los campos de auditoría existentes también deben preservarse.
+Las colecciones `users`, `financeTransactions`, `financeMonthlySummaries`, `titheProfiles`, `titheAttributions` y `pastoralFollowups` deben conservar sus nombres y su compatibilidad histórica. `appSettings/finance` puede agregar configuración sin reescribir esas colecciones. Los movimientos se corrigen mediante actualización o anulación; nunca se eliminan para corregir contabilidad. Los campos de auditoría existentes también deben preservarse.
 
 Production financial data is append/update/void oriented. Never perform destructive schema migrations without a reviewed migration plan.
 

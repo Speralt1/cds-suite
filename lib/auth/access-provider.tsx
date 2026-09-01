@@ -106,3 +106,6 @@ export function useAccess() {
   if (!access) throw new Error("Acceso no autorizado");
   return access;
 }
+export function useOptionalAccess() {
+  return useContext(AccessContext);
+}

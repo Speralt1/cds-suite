@@ -1,10 +1,8 @@
+import { MAX_AMOUNT, MAX_MONTHLY_TOTAL, PAYMENT_METHODS } from "./constants";
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  MAX_AMOUNT,
-  MAX_MONTHLY_TOTAL,
-  PAYMENT_METHODS,
-} from "./constants";
+  FALLBACK_EXPENSE_CATEGORIES,
+  FALLBACK_INCOME_CATEGORIES,
+} from "@/lib/settings/finance-settings";
 import { parseDate, periodId } from "./formatters";
 import type {
   FinanceTransaction,
@@ -12,7 +10,11 @@ import type {
   PeriodSelection,
   TransactionInput,
 } from "./types";
-export function validateTransaction(input: TransactionInput, tithe = false) {
+export function validateTransaction(
+  input: TransactionInput,
+  tithe = false,
+  allowedCategories?: readonly string[],
+) {
   if (
     !Number.isSafeInteger(input.amount) ||
     input.amount <= 0 ||
@@ -25,7 +27,10 @@ export function validateTransaction(input: TransactionInput, tithe = false) {
   if (!["income", "expense"].includes(input.type))
     throw new Error("Selecciona entrada o salida.");
   const categories: readonly string[] =
-    input.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    allowedCategories ||
+    (input.type === "income"
+      ? FALLBACK_INCOME_CATEGORIES
+      : FALLBACK_EXPENSE_CATEGORIES);
   if (
     tithe
       ? input.type !== "income" || input.category !== "Diezmos"

@@ -13,20 +13,70 @@ service cloud.firestore {
     function total(v) { return v is int && v >= 0 && v <= 750599937895082; }
     function period(date) { return string(date.year()) + '-' + (date.month() < 10 ? '0' : '') + string(date.month()); }
     function validDate(date) { return date is timestamp && date.year() >= 2000 && date.year() <= 2100; }
-    function incomes() { return ['Ofrendas','Donaciones','Actividades y eventos','Ayudas / aportes especiales','Otros ingresos','Diezmos']; }
-    function expenses() { return ['Servicios básicos','Mantención','Compras y materiales','Administración','Ministerio Jóvenes','Ministerio Niños','Música y Producción','Evangelismo','Ayuda social','Eventos','Otros gastos']; }
+    function fallbackIncomes() { return ['Ofrendas','Donaciones','Actividades y eventos','Ayudas / aportes especiales','Otros ingresos','Cafetería']; }
+    function fallbackExpenses() { return ['Servicios básicos','Mantención','Compras y materiales','Administración','Ministerio Jóvenes','Ministerio Niños','Música y Producción','Evangelismo','Ayuda social','Eventos','Otros gastos','Cafetería']; }
+    function configuredIncome(field) {
+      return exists(/databases/$(database)/documents/appSettings/finance)
+        ? get(/databases/$(database)/documents/appSettings/finance).data.get(field,fallbackIncomes())
+        : fallbackIncomes();
+    }
+    function configuredExpense(field) {
+      return exists(/databases/$(database)/documents/appSettings/finance)
+        ? get(/databases/$(database)/documents/appSettings/finance).data.get(field,fallbackExpenses())
+        : fallbackExpenses();
+    }
+    function incomes() { return configuredIncome('incomeCategoriesAll').concat(['Diezmos']); }
+    function expenses() { return configuredExpense('expenseCategoriesAll'); }
+    function activeIncomes() { return configuredIncome('incomeCategoriesActive'); }
+    function activeExpenses() { return configuredExpense('expenseCategoriesActive'); }
     function days() { return ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31']; }
     function auditCreate(d) { return d.createdBy == request.auth.uid && d.createdAt == request.time && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
     function auditUpdate(d, old) { return d.createdAt == old.createdAt && d.createdBy == old.createdBy && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
 
+    function validUser(d) {
+      return d.keys().hasOnly(['displayName','email','role','active','createdAt'])
+        && text(d.displayName,1,120) && text(d.email,3,160)
+        && d.role in ['admin','pastor','finance','leader']
+        && d.active is bool && d.createdAt is timestamp;
+    }
     match /users/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
-      allow create, update: if admin()
-        && request.resource.data.keys().hasOnly(['displayName','email','role','active','createdAt'])
-        && text(request.resource.data.displayName,1,120) && text(request.resource.data.email,3,160)
-        && request.resource.data.role in ['admin','pastor','finance','leader']
-        && request.resource.data.active is bool && request.resource.data.createdAt is timestamp;
+      allow create: if admin() && validUser(request.resource.data);
+      allow update: if admin() && validUser(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.email == resource.data.email
+        && (uid != request.auth.uid || (request.resource.data.role == 'admin' && request.resource.data.active == true));
+      allow delete: if false;
+    }
+
+    function uniqueCategoryLists(d) {
+      return d.incomeCategoriesAll.toSet().size() == d.incomeCategoriesAll.size()
+        && d.incomeCategoriesActive.toSet().size() == d.incomeCategoriesActive.size()
+        && d.expenseCategoriesAll.toSet().size() == d.expenseCategoriesAll.size()
+        && d.expenseCategoriesActive.toSet().size() == d.expenseCategoriesActive.size();
+    }
+    function validFinanceSettings(d) {
+      return d.keys().hasOnly(['schemaVersion','incomeCategoriesAll','incomeCategoriesActive','expenseCategoriesAll','expenseCategoriesActive','updatedBy','updatedAt'])
+        && d.schemaVersion == 1
+        && d.incomeCategoriesAll is list && d.incomeCategoriesActive is list
+        && d.expenseCategoriesAll is list && d.expenseCategoriesActive is list
+        && d.incomeCategoriesAll.size() >= 1 && d.incomeCategoriesAll.size() <= 100
+        && d.expenseCategoriesAll.size() >= 1 && d.expenseCategoriesAll.size() <= 100
+        && d.incomeCategoriesActive.size() >= 1 && d.expenseCategoriesActive.size() >= 1
+        && d.incomeCategoriesAll.hasAll(fallbackIncomes())
+        && d.expenseCategoriesAll.hasAll(fallbackExpenses())
+        && d.incomeCategoriesActive.hasOnly(d.incomeCategoriesAll)
+        && d.expenseCategoriesActive.hasOnly(d.expenseCategoriesAll)
+        && uniqueCategoryLists(d)
+        && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+    }
+    match /appSettings/{setting} {
+      allow read: if setting == 'finance' && details();
+      allow create: if setting == 'finance' && admin() && validFinanceSettings(request.resource.data);
+      allow update: if setting == 'finance' && admin() && validFinanceSettings(request.resource.data)
+        && request.resource.data.incomeCategoriesAll.hasAll(resource.data.incomeCategoriesAll)
+        && request.resource.data.expenseCategoriesAll.hasAll(resource.data.expenseCategoriesAll);
       allow delete: if false;
     }
 
@@ -41,6 +91,10 @@ service cloud.firestore {
         && ((d.source == 'tithe' && d.type == 'income' && d.category == 'Diezmos' && d.description == 'Diezmo' && d.note == '')
           || (d.source == 'general' && ((d.type == 'income' && d.category in incomes() && d.category != 'Diezmos') || (d.type == 'expense' && d.category in expenses()))));
     }
+    function activeTransactionCategory(d) {
+      return d.source == 'tithe'
+        || (d.source == 'general' && ((d.type == 'income' && d.category in activeIncomes()) || (d.type == 'expense' && d.category in activeExpenses())));
+    }
     function summaryLinked(p,id) {
       let s = getAfter(/databases/$(database)/documents/financeMonthlySummaries/$(p)).data;
       return s.updatedAt == request.time && s.lastTransactionId == id;
@@ -51,12 +105,13 @@ service cloud.firestore {
     }
     match /financeTransactions/{id} {
       allow read: if details();
-      allow create: if details() && validTransaction(request.resource.data)
+      allow create: if details() && validTransaction(request.resource.data) && activeTransactionCategory(request.resource.data)
         && auditCreate(request.resource.data) && request.resource.data.revision == 1 && request.resource.data.status == 'active'
         && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason'])
         && summaryLinked(request.resource.data.period,id)
         && (request.resource.data.source != 'tithe' || attributionLinked(request.resource.data,id));
       allow update: if details() && validTransaction(request.resource.data) && resource.data.status == 'active'
+        && (request.resource.data.category == resource.data.category || activeTransactionCategory(request.resource.data))
         && request.resource.data.source == resource.data.source && request.resource.data.revision == resource.data.revision + 1
         && auditUpdate(request.resource.data,resource.data)
         && ((request.resource.data.status == 'active' && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason']))

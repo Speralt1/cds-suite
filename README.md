@@ -2,7 +2,7 @@
 
 CDS Administración para Casa de Salvación. Continúa la base `feature/base-cds-suite`; el desarrollo está en **`feature/finanzas-v1`**, sin merge a main ni despliegue automático a Firebase.
 
-Incluye autorización por roles, movimientos reales en CLP, edición/anulación auditada, resumen mensual/anual, fichas privadas de diezmos, acompañamiento pastoral con consentimiento y PDF ejecutivo con texto seleccionable y gráficos vectoriales. Conserva Authentication y la identidad visual de V0.1.
+Incluye autorización por roles, movimientos reales en CLP, edición/anulación auditada, resumen mensual/anual, fichas privadas de diezmos, acompañamiento pastoral con consentimiento, configuración administrativa y PDF ejecutivo con texto seleccionable y gráficos vectoriales. Conserva Authentication y la identidad visual de V0.1.
 
 ## Empezar
 
@@ -27,14 +27,15 @@ Abre [CDS Suite](http://localhost:3000). Reinicia el servidor al cambiar variabl
 
 ## Permisos y colecciones
 
-| Colección | Contenido | Lectura |
-|---|---|---|
-| `users/{uid}` | Nombre, correo, rol, activo, fecha de creación | Propio documento o admin |
-| `financeTransactions/{id}` | Libro financiero, sin identidad del diezmante | admin, pastor, finance |
-| `financeMonthlySummaries/{YYYY-MM}` | Totales, categorías y series diarias; sin datos personales | Cuatro roles activos |
-| `titheProfiles/{id}` | Personas/familias, contacto y consentimiento | admin, pastor, finance |
-| `titheAttributions/{transactionId}` | Relación privada entre diezmo y ficha | admin, pastor, finance |
-| `pastoralFollowups/{id}` | Acompañamiento pastoral privado | Solo admin y pastor |
+| Colección                           | Contenido                                                  | Lectura                                  |
+| ----------------------------------- | ---------------------------------------------------------- | ---------------------------------------- |
+| `users/{uid}`                       | Nombre, correo, rol, activo, fecha de creación             | Propio documento o admin                 |
+| `financeTransactions/{id}`          | Libro financiero, sin identidad del diezmante              | admin, pastor, finance                   |
+| `financeMonthlySummaries/{YYYY-MM}` | Totales, categorías y series diarias; sin datos personales | Cuatro roles activos                     |
+| `titheProfiles/{id}`                | Personas/familias, contacto y consentimiento               | admin, pastor, finance                   |
+| `titheAttributions/{transactionId}` | Relación privada entre diezmo y ficha                      | admin, pastor, finance                   |
+| `pastoralFollowups/{id}`            | Acompañamiento pastoral privado                            | Solo admin y pastor                      |
+| `appSettings/finance`               | Categorías financieras conocidas y activas                 | Lectura financiera; escritura solo admin |
 
 Admin/pastor/finance registran, editan y anulan movimientos. Leader solo consulta agregados. Escribir acompañamiento requiere consentimiento vigente. Las reglas deniegan todos los borrados físicos y el acceso de cuentas no autorizadas/inactivas. El guard visual también desmonta los datos al revocar la autorización y exige una verificación de acceso del servidor.
 
@@ -49,11 +50,12 @@ Admin/pastor/finance registran, editan y anulan movimientos. Leader solo consult
 - Último registro por ficha usa una consulta de un documento. El contador anual de fichas usa agregación `count`, sin descargar todas las fichas. Los listeners se cancelan al abandonar la pantalla.
 - Firestore necesita conexión para confirmar transacciones. No se habilita persistencia offline del libro. No hay Functions, Storage, Admin SDK en el navegador ni servicios que requieran Blaze. Spark mantiene sus cuotas; vigila el uso real.
 - El PDF general solo admite campos financieros; los diezmos tienen descripción fija «Diezmo». No copia notas, IDs de fichas ni identidades. Los usuarios deben evitar información personal innecesaria en descripciones de movimientos generales.
-- Las categorías están en `lib/finance/constants.ts` y en la lista permitida de `firestore.rules`: modifica ambas y despliega las reglas al cambiar categorías.
+- Las categorías financieras se administran en **Configuración → Finanzas**. Las listas históricas son acumulativas; desactivar no elimina movimientos ni keys antiguas de los resúmenes. Si el documento de settings no existe se usan los defaults compatibles más Cafetería. Consulta [Configuración V1 y despliegue seguro](docs/configuration-v1.md).
 
 ## Archivos principales
 
 - `app/(private)/finanzas/`: rutas Resumen, Movimientos, Diezmos, Perfil y Reportes.
+- `app/(private)/configuracion/`: categorías financieras y permisos básicos, solo admin.
 - `components/finance/`: pantallas, formularios, gráficos y controles separados por función.
 - `lib/auth/access-provider.tsx`: autorización y revocación por `users/{uid}`.
 - `lib/finance/transactions.ts`, `profiles.ts`: operaciones confirmadas y auditadas.

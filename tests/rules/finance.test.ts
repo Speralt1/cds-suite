@@ -27,6 +27,10 @@ import type {
   FinanceTransaction,
   TransactionInput,
 } from "../../lib/finance/types";
+import {
+  FALLBACK_EXPENSE_CATEGORIES,
+  FALLBACK_INCOME_CATEGORIES,
+} from "../../lib/settings/finance-settings";
 let env: RulesTestEnvironment;
 let db: Firestore;
 const input: TransactionInput = {
@@ -47,6 +51,21 @@ const profile = {
   active: true,
   pastoralContactAuthorized: true,
 };
+function financeSettings(
+  updatedBy: string,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    schemaVersion: 1,
+    incomeCategoriesAll: FALLBACK_INCOME_CATEGORIES,
+    incomeCategoriesActive: FALLBACK_INCOME_CATEGORIES,
+    expenseCategoriesAll: FALLBACK_EXPENSE_CATEGORIES,
+    expenseCategoriesActive: FALLBACK_EXPENSE_CATEGORIES,
+    updatedBy,
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
 async function transaction(id = "one") {
   const s = await getDoc(doc(db, "financeTransactions", id));
   return { id, ...s.data() } as FinanceTransaction;
@@ -409,4 +428,91 @@ it("no se puede crear una nota y revocar consentimiento en el mismo lote", async
     updatedAt: serverTimestamp(),
   });
   await assertFails(b.commit());
+});
+
+it("solo admin administra Configuración y puede actualizar a otro usuario", async () => {
+  const admin = env.authenticatedContext("admin").firestore();
+  await assertSucceeds(
+    setDoc(doc(admin, "appSettings", "finance"), financeSettings("admin")),
+  );
+  for (const role of ["pastor", "finance", "leader"]) {
+    const context = env.authenticatedContext(role).firestore();
+    await assertFails(
+      setDoc(doc(context, "appSettings", "finance"), financeSettings(role)),
+    );
+  }
+  await assertSucceeds(
+    updateDoc(doc(admin, "users", "finance"), {
+      displayName: "Finanzas actualizado",
+      role: "leader",
+      active: false,
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(admin, "users", "admin"), { role: "finance" }),
+  );
+  await assertFails(updateDoc(doc(admin, "users", "admin"), { active: false }));
+});
+
+it("Cafetería funciona para ingresos y gastos sin documento de settings", async () => {
+  await assertSucceeds(
+    saveTransaction(db, "finance", "cafe-income", {
+      ...input,
+      category: "Cafetería",
+    }),
+  );
+  await assertSucceeds(
+    saveTransaction(db, "finance", "cafe-expense", {
+      ...input,
+      type: "expense",
+      category: "Cafetería",
+    }),
+  );
+});
+
+it("una categoría inactiva no sirve para altas y conserva históricos", async () => {
+  await saveTransaction(db, "finance", "historical", input);
+  const admin = env.authenticatedContext("admin").firestore();
+  await setDoc(
+    doc(admin, "appSettings", "finance"),
+    financeSettings("admin", {
+      incomeCategoriesActive: FALLBACK_INCOME_CATEGORIES.filter(
+        (category) => category !== "Ofrendas",
+      ),
+    }),
+  );
+  await assertFails(saveTransaction(db, "finance", "new-inactive", input));
+
+  const historical = await transaction("historical");
+  await assertSucceeds(
+    saveTransaction(
+      db,
+      "finance",
+      "historical",
+      { ...transactionInput(historical), amount: 12000 },
+      { existing: historical },
+    ),
+  );
+  expect((await transaction("historical")).category).toBe("Ofrendas");
+  expect(
+    (await getDoc(doc(db, "financeMonthlySummaries", "2026-08"))).data()!
+      .incomeByCategory.Ofrendas,
+  ).toBe(12000);
+});
+
+it("el universo histórico de categorías es append-only", async () => {
+  const admin = env.authenticatedContext("admin").firestore();
+  await setDoc(
+    doc(admin, "appSettings", "finance"),
+    financeSettings("admin", {
+      incomeCategoriesAll: [
+        ...FALLBACK_INCOME_CATEGORIES,
+        "Categoría histórica",
+      ],
+      incomeCategoriesActive: FALLBACK_INCOME_CATEGORIES,
+    }),
+  );
+  await assertFails(
+    setDoc(doc(admin, "appSettings", "finance"), financeSettings("admin")),
+  );
 });

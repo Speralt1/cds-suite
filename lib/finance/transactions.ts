@@ -28,10 +28,16 @@ export async function saveTransaction(
     profileId?: string;
     privateNote?: string;
     voidReason?: string;
+    allowedCategories?: readonly string[];
   } = {},
 ) {
   const tithe = options.existing?.source === "tithe" || !!options.profileId;
-  validateTransaction(input, tithe);
+  validateTransaction(
+    input,
+    tithe,
+    options.allowedCategories ||
+      (options.existing ? [options.existing.category] : undefined),
+  );
   if (
     options.voidReason !== undefined &&
     (options.voidReason.trim().length < 3 || options.voidReason.length > 300)

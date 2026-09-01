@@ -2,12 +2,11 @@
 import { useState } from "react";
 import { usePeriod, useTransactions } from "@/lib/finance/hooks";
 import {
-  INCOME_CATEGORIES,
-  EXPENSE_CATEGORIES,
   PAYMENT_METHODS,
   MAX_PERIOD_RECORDS,
   PAGE_SIZE,
 } from "@/lib/finance/constants";
+import { useFinanceSettings } from "@/lib/settings/finance-settings-client";
 import { periodLabel } from "@/lib/finance/formatters";
 import {
   DetailGuard,
@@ -29,6 +28,7 @@ export function MovementsPage() {
 function Movements() {
   const [period, setPeriod] = usePeriod();
   const state = useTransactions(period);
+  const settings = useFinanceSettings();
   const [create, setCreate] = useState(false);
   const [success, setSuccess] = useState("");
   const [filters, setFilters] = useState({
@@ -91,9 +91,13 @@ function Movements() {
           [
             "category",
             "Categoría",
-            [...INCOME_CATEGORIES, "Diezmos", ...EXPENSE_CATEGORIES].map(
-              (c) => [c, c],
-            ),
+            [
+              ...new Set([
+                ...settings.data.incomeCategoriesAll,
+                "Diezmos",
+                ...settings.data.expenseCategoriesAll,
+              ]),
+            ].map((c) => [c, c]),
           ],
           ["method", "Método", Object.entries(PAYMENT_METHODS)],
         ].map(([key, label, options]) => (

@@ -82,4 +82,4 @@ Haz primero el ensayo completo en los emuladores, siguiendo [pruebas locales](lo
 | `finance` | Sí | Sí | No puede leer ni escribir |
 | `leader` | Solo agregados | No puede leer ni escribir | No puede leer ni escribir |
 
-Solo admin puede administrar documentos de autorización mediante un cliente autorizado; esta versión prepara las reglas pero no incorpora una pantalla de administración de usuarios. El primer admin se crea en la consola. Ningún rol puede borrar físicamente movimientos desde la aplicación.
+Solo admin puede administrar nombre, rol y estado de documentos de autorización desde **Configuración → Usuarios y permisos**. El primer admin, las cuentas de Authentication y sus contraseñas se administran manualmente en Firebase Console. Ningún rol puede borrar físicamente movimientos desde la aplicación. Para categorías configurables y el orden seguro de publicación consulta [Configuración V1 y despliegue seguro](configuration-v1.md).

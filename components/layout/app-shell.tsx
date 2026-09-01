@@ -9,19 +9,23 @@ import {
   LogOut,
   LoaderCircle,
   ArrowUpRight,
+  Settings,
 } from "lucide-react";
 import { Brand } from "@/components/layout/brand";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getAuthErrorMessage } from "@/lib/auth/errors";
+import { useOptionalAccess } from "@/lib/auth/access-provider";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/finanzas", label: "Finanzas", icon: Wallet },
+  { href: "/configuracion", label: "Configuración", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const access = useOptionalAccess();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,30 +54,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ESPACIO DE TRABAJO
           </p>
           <nav
-            className="flex gap-2 lg:flex-col"
+            className="app-main-nav flex gap-2 lg:flex-col"
             aria-label="Navegación principal"
           >
-            {navigation.map(({ href, label, icon: Icon }) => {
-              const active =
-                pathname === href || pathname.startsWith(`${href}/`);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex flex-1 items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors lg:flex-none ${active ? "bg-primary-soft text-primary" : "text-muted hover:bg-canvas hover:text-ink"}`}
-                >
-                  <Icon className="size-[18px]" aria-hidden="true" />
-                  {label}
-                  {active && (
-                    <span
-                      className="ml-auto size-1.5 rounded-full bg-primary"
-                      aria-hidden="true"
-                    />
-                  )}
-                </Link>
-              );
-            })}
+            {navigation
+              .filter(
+                ({ href }) =>
+                  href !== "/configuracion" || access?.role === "admin",
+              )
+              .map(({ href, label, icon: Icon }) => {
+                const active =
+                  pathname === href || pathname.startsWith(`${href}/`);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex flex-1 items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors lg:flex-none ${active ? "bg-primary-soft text-primary" : "text-muted hover:bg-canvas hover:text-ink"}`}
+                  >
+                    <Icon className="size-[18px]" aria-hidden="true" />
+                    {label}
+                    {active && (
+                      <span
+                        className="ml-auto size-1.5 rounded-full bg-primary"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
           </nav>
         </div>
         <div className="mt-4 px-5 pb-4 lg:mt-auto lg:px-6 lg:pb-7">
@@ -134,7 +143,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-muted">
             Mi espacio <span className="mx-3 text-line">/</span>
             <span className="font-medium text-ink">
-              {pathname.startsWith("/finanzas") ? "Finanzas" : "Dashboard"}
+              {pathname.startsWith("/finanzas")
+                ? "Finanzas"
+                : pathname.startsWith("/configuracion")
+                  ? "Configuración"
+                  : "Dashboard"}
             </span>
           </p>
           <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-medium tracking-wide text-muted">
