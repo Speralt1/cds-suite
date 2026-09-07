@@ -1151,3 +1151,161 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* =========================================================
+   Resumen financiero - toolbar definitiva
+   ========================================================= */
+
+.summary-period-controls {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 28px 0 34px;
+}
+
+.summary-period-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-period-left .finance-period {
+  margin: 0;
+}
+
+.summary-period-left .period-picker {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.summary-period-left .period-picker label {
+  display: block;
+  flex: none;
+  min-width: 0;
+  gap: 0;
+  font-size: 0;
+}
+
+.summary-period-left .period-picker label:first-child {
+  width: 160px;
+}
+
+.summary-period-left .period-picker label:last-child {
+  width: 110px;
+}
+
+.summary-period-left .period-picker select {
+  width: 100%;
+  height: 46px;
+  min-height: 46px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.summary-period-left .period-view-toggle {
+  height: 46px;
+  align-items: center;
+}
+
+.summary-period-left .period-view-toggle button {
+  min-height: 38px;
+}
+
+.summary-period-controls .finance-page-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 0 auto;
+}
+
+.summary-period-controls .finance-page-actions > * {
+  min-height: 46px;
+}
+
+/* Pantallas intermedias */
+@media (max-width: 1050px) and (min-width: 641px) {
+  .summary-period-controls {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .summary-period-left {
+    flex: 1 1 100%;
+  }
+
+  .summary-period-controls .finance-page-actions {
+    margin-left: 0;
+  }
+}
+
+/* Móvil */
+@media (max-width: 640px) {
+  .summary-period-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin: 22px 0 28px;
+  }
+
+  .summary-period-left {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .summary-period-left .period-view-toggle {
+    width: 100%;
+    height: auto;
+  }
+
+  .summary-period-left .period-view-toggle button {
+    flex: 1;
+  }
+
+  .summary-period-left .finance-period {
+    width: 100%;
+  }
+
+  .summary-period-left .period-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 110px;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .summary-period-left .period-picker label:first-child,
+  .summary-period-left .period-picker label:last-child {
+    width: auto;
+    min-width: 0;
+  }
+
+  .summary-period-controls .finance-page-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    margin: 0;
+  }
+
+  .summary-period-controls .finance-page-actions > * {
+    width: 100%;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 370px) {
+  .summary-period-controls .finance-page-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
