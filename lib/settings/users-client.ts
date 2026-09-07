@@ -1,20 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { deleteApp, initializeApp } from "firebase/app";
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  getAuth,
+  inMemoryPersistence,
+  sendPasswordResetEmail,
+  setPersistence,
+  signOut,
+  type Auth,
+} from "firebase/auth";
 import {
   collection,
   doc,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
   updateDoc,
   type Firestore,
 } from "firebase/firestore";
 import { getFirebaseServices } from "@/lib/firebase";
 import { errorMessage } from "@/lib/finance/formatters";
 import {
+  validateManagedUserCreate,
   validateManagedUserUpdate,
   type ManagedUser,
+  type ManagedUserCreate,
   type ManagedUserUpdate,
 } from "./users";
 
@@ -23,7 +38,12 @@ export function useManagedUsers() {
     data: ManagedUser[];
     loading: boolean;
     error: string;
-  }>({ data: [], loading: true, error: "" });
+  }>({
+    data: [],
+    loading: true,
+    error: "",
+  });
+
   useEffect(
     () =>
       onSnapshot(
@@ -40,11 +60,95 @@ export function useManagedUsers() {
             error: "",
           }),
         (error) =>
-          setState({ data: [], loading: false, error: errorMessage(error) }),
+          setState({
+            data: [],
+            loading: false,
+            error: errorMessage(error),
+          }),
       ),
     [],
   );
+
   return state;
+}
+
+function temporaryPassword() {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#";
+
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+
+  return Array.from(
+    bytes,
+    (value) => alphabet[value % alphabet.length],
+  ).join("");
+}
+
+export async function createManagedUser(
+  db: Firestore,
+  primaryAuth: Auth,
+  input: ManagedUserCreate,
+) {
+  const valid = validateManagedUserCreate(input);
+  const primaryApp = getFirebaseServices().app;
+
+  const secondaryApp = initializeApp(
+    primaryApp.options,
+    `cds-user-create-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`,
+  );
+
+  const secondaryAuth = getAuth(secondaryApp);
+
+  await setPersistence(secondaryAuth, inMemoryPersistence);
+
+  try {
+    const credential = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      valid.email,
+      temporaryPassword(),
+    );
+
+    try {
+      await setDoc(doc(db, "users", credential.user.uid), {
+        displayName: valid.displayName,
+        email: valid.email,
+        role: valid.role,
+        active: true,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      await deleteUser(credential.user).catch(() => undefined);
+      throw error;
+    }
+
+    let resetEmailSent = true;
+
+    try {
+      await sendPasswordResetEmail(primaryAuth, valid.email);
+    } catch {
+      resetEmailSent = false;
+    }
+
+    return {
+      uid: credential.user.uid,
+      resetEmailSent,
+    };
+  } finally {
+    await signOut(secondaryAuth).catch(() => undefined);
+    await deleteApp(secondaryApp).catch(() => undefined);
+  }
+}
+
+export async function resendPasswordSetup(
+  auth: Auth,
+  email: string,
+) {
+  await sendPasswordResetEmail(
+    auth,
+    email.trim().toLowerCase(),
+  );
 }
 
 export async function updateManagedUser(
@@ -53,6 +157,11 @@ export async function updateManagedUser(
   targetUid: string,
   update: ManagedUserUpdate,
 ) {
-  const valid = validateManagedUserUpdate(currentUid, targetUid, update);
+  const valid = validateManagedUserUpdate(
+    currentUid,
+    targetUid,
+    update,
+  );
+
   await updateDoc(doc(db, "users", targetUid), valid);
 }

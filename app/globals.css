@@ -1109,3 +1109,45 @@ button:disabled {
   }
 }
 
+
+/* Gestión de usuarios */
+.user-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.button-danger {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #e4bbb6;
+  border-radius: 10px;
+  background: #fff7f5;
+  color: #8e302b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.button-danger:hover {
+  background: #fff0ed;
+}
+
+.button-danger:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .user-settings-actions {
+    flex-direction: column;
+  }
+
+  .user-settings-actions > * {
+    width: 100%;
+  }
+}
