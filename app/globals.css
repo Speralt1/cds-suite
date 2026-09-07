@@ -1022,3 +1022,90 @@ button:disabled {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Resumen financiero · barra de período horizontal */
+@media (min-width: 1025px) {
+  .summary-period-controls {
+    display: grid;
+    grid-template-columns: auto auto minmax(24px, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    margin-bottom: 30px;
+  }
+
+  .summary-period-toolbar {
+    display: contents;
+  }
+
+  .summary-period-view {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .summary-period-view .finance-period-label {
+    display: none;
+  }
+
+  .summary-period-controls > .finance-period {
+    grid-column: 2;
+    margin: 0;
+  }
+
+  .summary-period-controls .period-picker {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .summary-period-controls .period-picker label {
+    gap: 0;
+    font-size: 0;
+  }
+
+  .summary-period-controls .period-picker label:first-child {
+    flex: 0 0 160px;
+    min-width: 160px;
+  }
+
+  .summary-period-controls .period-picker label:last-child {
+    flex: 0 0 110px;
+    min-width: 110px;
+  }
+
+  .summary-period-controls .period-picker select {
+    font-size: 16px;
+  }
+
+  .summary-period-controls .finance-page-actions {
+    grid-column: 4;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 0;
+    white-space: nowrap;
+  }
+}
+
+/* Tablet: conservar respiración sin provocar overflow */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .summary-period-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .summary-period-toolbar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .summary-period-controls > .finance-period {
+    margin: 0;
+  }
+}
+
