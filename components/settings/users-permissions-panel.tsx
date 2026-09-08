@@ -55,8 +55,8 @@ function CreateUserForm({
 
       onCreated(
         result.resetEmailSent
-          ? `Usuario creado correctamente. Enviamos un correo a ${email.trim().toLowerCase()} para que defina su contraseña.`
-          : `Usuario creado correctamente, pero no se pudo enviar el correo para definir contraseña. Puedes reenviarlo desde su ficha.`,
+          ? `Usuario creado correctamente. Firebase confirmó el envío del correo a ${email.trim().toLowerCase()} para que defina su contraseña.`
+          : `El usuario fue creado, pero Firebase no pudo enviar el correo. ${result.resetEmailError || "Puedes intentar Reenviar acceso desde su ficha."}`,
       );
 
       onClose();

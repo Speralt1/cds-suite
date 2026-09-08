@@ -124,16 +124,34 @@ export async function createManagedUser(
     }
 
     let resetEmailSent = true;
+    let resetEmailError = "";
 
     try {
-      await sendPasswordResetEmail(primaryAuth, valid.email);
-    } catch {
+      primaryAuth.languageCode = "es";
+
+      await sendPasswordResetEmail(
+        primaryAuth,
+        valid.email,
+        {
+          url: "https://cds-administracion.web.app/login",
+          handleCodeInApp: false,
+        },
+      );
+    } catch (error) {
       resetEmailSent = false;
+
+      resetEmailError =
+        error instanceof Error
+          ? error.message
+          : "Firebase no pudo enviar el correo de acceso.";
+
+      console.error("Error enviando acceso a usuario:", error);
     }
 
     return {
       uid: credential.user.uid,
       resetEmailSent,
+      resetEmailError,
     };
   } finally {
     await signOut(secondaryAuth).catch(() => undefined);
@@ -145,9 +163,15 @@ export async function resendPasswordSetup(
   auth: Auth,
   email: string,
 ) {
+  auth.languageCode = "es";
+
   await sendPasswordResetEmail(
     auth,
     email.trim().toLowerCase(),
+    {
+      url: "https://cds-administracion.web.app/login",
+      handleCodeInApp: false,
+    },
   );
 }
 
