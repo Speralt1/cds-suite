@@ -202,5 +202,121 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /{document=**} { allow read, write: if false; }
+
+    function validCampaign(d) {
+      return d.keys().hasOnly([
+        'slug',
+        'title',
+        'description',
+        'goalAmount',
+        'verifiedAmount',
+        'lifetimeVerifiedAmount',
+        'contributionCount',
+        'currentInstallment',
+        'totalInstallments',
+        'transferInstructions',
+        'isPublic',
+        'status',
+        'createdBy',
+        'createdAt',
+        'updatedBy',
+        'updatedAt'
+      ])
+      && text(d.slug,1,70)
+      && text(d.title,1,120)
+      && text(d.description,0,600)
+      && money(d.goalAmount)
+      && total(d.verifiedAmount)
+      && total(d.lifetimeVerifiedAmount)
+      && d.contributionCount is int
+      && d.contributionCount >= 0
+      && d.currentInstallment is int
+      && d.currentInstallment >= 0
+      && d.totalInstallments is int
+      && d.totalInstallments >= 0
+      && d.currentInstallment <= d.totalInstallments
+      && text(d.transferInstructions,0,1000)
+      && d.isPublic is bool
+      && d.status in ['active','closed']
+      && text(d.createdBy,1,128)
+      && d.createdAt is timestamp
+      && text(d.updatedBy,1,128)
+      && d.updatedAt is timestamp;
+    }
+
+    match /fundraisingCampaigns/{campaignId} {
+      allow get, list: if details();
+
+      allow create: if details()
+        && validCampaign(request.resource.data)
+        && request.resource.data.slug == campaignId
+        && auditCreate(request.resource.data);
+
+      allow update: if details()
+        && validCampaign(request.resource.data)
+        && request.resource.data.slug == resource.data.slug
+        && auditUpdate(request.resource.data, resource.data);
+
+      allow delete: if false;
+    }
+
+    function validCampaignContribution(d) {
+      return d.keys().hasOnly([
+        'campaignId',
+        'name',
+        'amount',
+        'date',
+        'paymentMethod',
+        'note',
+        'publicName',
+        'source',
+        'status',
+        'installmentNumber',
+        'receiptPath',
+        'createdBy',
+        'createdAt',
+        'reviewedBy',
+        'reviewedAt'
+      ])
+      && text(d.campaignId,1,70)
+      && text(d.name,1,120)
+      && money(d.amount)
+      && text(d.date,10,10)
+      && d.paymentMethod in ['cash','transfer','card','other']
+      && text(d.note,0,500)
+      && d.publicName is bool
+      && d.source in ['manual','public']
+      && d.status in ['pending','approved','rejected']
+      && d.installmentNumber is int
+      && d.installmentNumber >= 0
+      && text(d.receiptPath,0,500)
+      && text(d.createdBy,1,128)
+      && d.createdAt is timestamp
+      && text(d.reviewedBy,1,128)
+      && d.reviewedAt is timestamp;
+    }
+
+    match /campaignContributions/{contributionId} {
+      allow get, list: if details();
+
+      allow create: if details()
+        && validCampaignContribution(request.resource.data)
+        && request.resource.data.source == 'manual'
+        && request.resource.data.status == 'approved'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time;
+
+      allow update: if details()
+        && validCampaignContribution(request.resource.data)
+        && request.resource.data.campaignId == resource.data.campaignId
+        && request.resource.data.amount == resource.data.amount
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
   }
 }

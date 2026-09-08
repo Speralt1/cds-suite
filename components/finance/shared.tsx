@@ -15,6 +15,7 @@ export function FinanceNav() {
         ["/finanzas", "Resumen"],
         ["/finanzas/movimientos", "Movimientos"],
         ["/finanzas/diezmos", "Diezmos"],
+        ["/finanzas/campanas", "Campañas"],
         ["/finanzas/reportes", "Reportes"],
       ]
     : [["/finanzas", "Resumen"]];

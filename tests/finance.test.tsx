@@ -31,7 +31,7 @@ it.each(["admin", "pastor", "finance"] as Role[])(
     state.role = role;
     state.path = "/finanzas/diezmos/abc";
     render(<FinanceNav />);
-    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getAllByRole("link")).toHaveLength(5);
     expect(screen.getByRole("link", { name: "Diezmos" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -39,6 +39,10 @@ it.each(["admin", "pastor", "finance"] as Role[])(
     expect(screen.getByRole("link", { name: "Movimientos" })).toHaveAttribute(
       "href",
       "/finanzas/movimientos",
+    );
+    expect(screen.getByRole("link", { name: "Campañas" })).toHaveAttribute(
+      "href",
+      "/finanzas/campanas",
     );
   },
 );
