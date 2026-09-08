@@ -1309,3 +1309,26 @@ button:disabled {
   }
 }
 
+
+/* Fix formulario de movimientos en móvil */
+@media (max-width: 640px) {
+  .finance-form .form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .finance-form .form-grid > label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .finance-form .form-grid input,
+  .finance-form .form-grid select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
