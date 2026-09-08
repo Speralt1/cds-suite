@@ -31,6 +31,12 @@
           }
         ]
       }
+    ],
+    "rewrites": [
+      {
+        "source": "/campanas/**",
+        "destination": "/campanas.html"
+      }
     ]
   },
   "emulators": {

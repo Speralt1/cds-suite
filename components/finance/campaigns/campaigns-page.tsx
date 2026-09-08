@@ -12,6 +12,7 @@ import { getFirebaseServices } from "@/lib/firebase";
 import { useAccess } from "@/lib/auth/access-provider";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
+import { PendingCampaignSubmissions } from "./pending-submissions";
 import {
   addManualContribution,
   campaignProgress,
@@ -21,6 +22,7 @@ import {
   type Campaign,
   type CampaignContribution,
 } from "@/lib/campaigns/client";
+import { syncPublicCampaignView } from "@/lib/campaigns/public-client";
 import {
   Empty,
   Loading,
@@ -390,6 +392,11 @@ function CampaignDetail({
   async function copyPublicUrl() {
     if (!publicUrl) return;
 
+    await syncPublicCampaignView(
+      getFirebaseServices().db,
+      campaign,
+    );
+
     await navigator.clipboard.writeText(publicUrl);
     setCopied(true);
 
@@ -481,6 +488,8 @@ function CampaignDetail({
           </button>
         </div>
       </section>
+
+      <PendingCampaignSubmissions campaign={campaign} />
 
       <section className="mt-8">
         <div className="section-heading">
