@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function financeTeam() {
+      return request.auth != null
+        && firestore.exists(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        )
+        && firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.active == true
+        && firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.role in ['admin', 'pastor', 'finance'];
+    }
+
+    function campaignActive(campaignId) {
+      return firestore.exists(
+        /databases/(default)/documents/campaignPublicViews/$(campaignId)
+      )
+      && firestore.get(
+        /databases/(default)/documents/campaignPublicViews/$(campaignId)
+      ).data.isPublic == true
+      && firestore.get(
+        /databases/(default)/documents/campaignPublicViews/$(campaignId)
+      ).data.status == 'active';
+    }
+
+    match /campaign-receipts/{campaignId}/{submissionId}/receipt {
+      allow create: if campaignActive(campaignId)
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow read: if financeTeam();
+
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
