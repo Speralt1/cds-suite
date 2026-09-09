@@ -4,12 +4,9 @@ import { useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
-import {
-  getBlob,
-  ref,
-} from "firebase/storage";
 import { clp, errorMessage } from "@/lib/finance/formatters";
 import type { Campaign } from "@/lib/campaigns/client";
+import { ReceiptPreviewButton } from "./receipt-preview-button";
 import {
   reviewCampaignSubmission,
   useCampaignSubmissions,
@@ -33,41 +30,6 @@ export function PendingCampaignSubmissions({
     [submissions.data],
   );
 
-  async function openReceipt(
-    receiptPath: string,
-  ) {
-    const popup = window.open("", "_blank");
-
-    try {
-      const { storage } =
-        getFirebaseServices();
-
-      const blob = await getBlob(
-        ref(storage, receiptPath),
-      );
-
-      const url =
-        URL.createObjectURL(blob);
-
-      if (popup) {
-        popup.location.replace(url);
-      } else {
-        window.open(
-          url,
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }
-
-      window.setTimeout(
-        () => URL.revokeObjectURL(url),
-        60000,
-      );
-    } catch (error) {
-      popup?.close();
-      setError(errorMessage(error));
-    }
-  }
 
   async function review(
     id: string,
@@ -141,17 +103,9 @@ export function PendingCampaignSubmissions({
                 )}
 
                 {item.receiptPath && (
-                  <button
-                    type="button"
-                    className="campaign-receipt-link"
-                    onClick={() =>
-                      void openReceipt(
-                        item.receiptPath,
-                      )
-                    }
-                  >
-                    Ver comprobante
-                  </button>
+                  <ReceiptPreviewButton
+                    receiptPath={item.receiptPath}
+                  />
                 )}
               </div>
 

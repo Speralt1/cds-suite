@@ -276,7 +276,12 @@ service cloud.firestore {
         'createdBy',
         'createdAt',
         'reviewedBy',
-        'reviewedAt'
+        'reviewedAt',
+        'updatedBy',
+        'updatedAt',
+        'voidedBy',
+        'voidedAt',
+        'voidReason'
       ])
       && text(d.campaignId,1,70)
       && text(d.name,1,120)
@@ -286,14 +291,119 @@ service cloud.firestore {
       && text(d.note,0,500)
       && d.publicName is bool
       && d.source in ['manual','public']
-      && d.status in ['pending','approved','rejected']
+      && d.status in ['approved','voided']
       && d.installmentNumber is int
       && d.installmentNumber >= 0
       && text(d.receiptPath,0,500)
       && text(d.createdBy,1,128)
       && d.createdAt is timestamp
       && text(d.reviewedBy,1,128)
-      && d.reviewedAt is timestamp;
+      && d.reviewedAt is timestamp
+      && (
+        !d.keys().hasAny([
+          'updatedBy',
+          'updatedAt'
+        ])
+        ||
+        (
+          text(d.updatedBy,1,128)
+          && d.updatedAt is timestamp
+        )
+      )
+      && (
+        (
+          d.status == 'approved'
+          && !d.keys().hasAny([
+            'voidedBy',
+            'voidedAt',
+            'voidReason'
+          ])
+        )
+        ||
+        (
+          d.status == 'voided'
+          && text(d.voidedBy,1,128)
+          && d.voidedAt is timestamp
+          && text(d.voidReason,3,300)
+        )
+      );
+    }
+
+    function contributionValue(d) {
+      return d.status == 'approved'
+        ? d.amount
+        : 0;
+    }
+
+    function contributionCountValue(d) {
+      return d.status == 'approved'
+        ? 1
+        : 0;
+    }
+
+    function campaignContributionLinked(old, next) {
+      let path =
+        /databases/$(database)/documents/fundraisingCampaigns/$(old.campaignId);
+
+      let before = get(path).data;
+      let after = getAfter(path).data;
+
+      let oldCurrent =
+        old.installmentNumber == before.currentInstallment
+          ? contributionValue(old)
+          : 0;
+
+      let nextCurrent =
+        next.installmentNumber == before.currentInstallment
+          ? contributionValue(next)
+          : 0;
+
+      let lifetimeDelta =
+        contributionValue(next)
+        - contributionValue(old);
+
+      let countDelta =
+        contributionCountValue(next)
+        - contributionCountValue(old);
+
+      return
+        after.verifiedAmount ==
+          before.verifiedAmount
+          - oldCurrent
+          + nextCurrent
+        && after.lifetimeVerifiedAmount ==
+          before.lifetimeVerifiedAmount
+          + lifetimeDelta
+        && after.contributionCount ==
+          before.contributionCount
+          + countDelta
+        && after.updatedBy ==
+          request.auth.uid
+        && after.updatedAt ==
+          request.time;
+    }
+
+    function campaignPublicContributionLinked(campaignId) {
+      let campaignPath =
+        /databases/$(database)/documents/fundraisingCampaigns/$(campaignId);
+
+      let publicPath =
+        /databases/$(database)/documents/campaignPublicViews/$(campaignId);
+
+      let campaign =
+        getAfter(campaignPath).data;
+
+      return
+        !exists(publicPath)
+        ||
+        (
+          getAfter(publicPath).data.verifiedAmount ==
+            campaign.verifiedAmount
+          && getAfter(publicPath).data.contributionCount ==
+            campaign.contributionCount
+          && getAfter(publicPath).data.updatedAt ==
+            request.time
+        );
     }
 
     match /campaignContributions/{contributionId} {
@@ -310,10 +420,91 @@ service cloud.firestore {
 
       allow update: if details()
         && validCampaignContribution(request.resource.data)
-        && request.resource.data.campaignId == resource.data.campaignId
-        && request.resource.data.amount == resource.data.amount
-        && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && resource.data.status == 'approved'
+        && request.resource.data.status in ['approved','voided']
+        && request.resource.data.campaignId ==
+          resource.data.campaignId
+        && request.resource.data.source ==
+          resource.data.source
+        && request.resource.data.installmentNumber ==
+          resource.data.installmentNumber
+        && request.resource.data.receiptPath ==
+          resource.data.receiptPath
+        && request.resource.data.createdBy ==
+          resource.data.createdBy
+        && request.resource.data.createdAt ==
+          resource.data.createdAt
+        && request.resource.data.reviewedBy ==
+          resource.data.reviewedBy
+        && request.resource.data.reviewedAt ==
+          resource.data.reviewedAt
+        && request.resource.data.updatedBy ==
+          request.auth.uid
+        && request.resource.data.updatedAt ==
+          request.time
+        && (
+          (
+            request.resource.data.status == 'approved'
+            && !request.resource.data.keys().hasAny([
+              'voidedBy',
+              'voidedAt',
+              'voidReason'
+            ])
+            && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'name',
+                'amount',
+                'date',
+                'paymentMethod',
+                'note',
+                'updatedBy',
+                'updatedAt'
+              ])
+          )
+          ||
+          (
+            request.resource.data.status == 'voided'
+            && request.resource.data.name ==
+              resource.data.name
+            && request.resource.data.amount ==
+              resource.data.amount
+            && request.resource.data.date ==
+              resource.data.date
+            && request.resource.data.paymentMethod ==
+              resource.data.paymentMethod
+            && request.resource.data.note ==
+              resource.data.note
+            && request.resource.data.publicName ==
+              resource.data.publicName
+            && request.resource.data.voidedBy ==
+              request.auth.uid
+            && request.resource.data.voidedAt ==
+              request.time
+            && text(
+              request.resource.data.voidReason,
+              3,
+              300
+            )
+            && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'status',
+                'updatedBy',
+                'updatedAt',
+                'voidedBy',
+                'voidedAt',
+                'voidReason'
+              ])
+          )
+        )
+        && campaignContributionLinked(
+          resource.data,
+          request.resource.data
+        )
+        && campaignPublicContributionLinked(
+          resource.data.campaignId
+        );
 
       allow delete: if false;
     }

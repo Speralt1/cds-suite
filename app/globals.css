@@ -2141,3 +2141,57 @@ button:disabled {
   text-decoration: underline;
 }
 
+
+.campaign-row-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.campaign-row-actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.campaign-void-reason {
+  display: block;
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.campaign-receipt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.campaign-receipt-preview {
+  display: flex;
+  max-height: 72vh;
+  justify-content: center;
+  overflow: auto;
+  border-radius: 12px;
+  background: var(--color-canvas);
+}
+
+.campaign-receipt-preview img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .campaign-row-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .campaign-row-actions button {
+    width: 100%;
+  }
+}

@@ -46,13 +46,18 @@ export interface CampaignContribution {
   note: string;
   publicName: boolean;
   source: "manual" | "public";
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "voided";
   installmentNumber: number;
   receiptPath: string;
   createdBy: string;
   createdAt: Timestamp | null;
   reviewedBy: string;
   reviewedAt: Timestamp | null;
+  updatedBy?: string;
+  updatedAt?: Timestamp | null;
+  voidedBy?: string;
+  voidedAt?: Timestamp | null;
+  voidReason?: string;
 }
 
 export function campaignSlug(title: string) {
@@ -327,4 +332,346 @@ export async function addManualContribution(
       updatedAt: serverTimestamp(),
     });
   });
+}
+
+
+function publicCampaignPayload(
+  campaign: Campaign,
+  verifiedAmount: number,
+  contributionCount: number,
+) {
+  return {
+    slug: campaign.slug,
+    title: campaign.title,
+    description: campaign.description,
+    goalAmount: campaign.goalAmount,
+    verifiedAmount,
+    contributionCount,
+    currentInstallment: campaign.currentInstallment,
+    totalInstallments: campaign.totalInstallments,
+    transferInstructions: campaign.transferInstructions,
+    isPublic: campaign.isPublic,
+    status: campaign.status,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+export async function editCampaignContribution(
+  db: Firestore,
+  uid: string,
+  campaignId: string,
+  contributionId: string,
+  input: {
+    name: string;
+    amount: number;
+    date: string;
+    paymentMethod: CampaignContribution["paymentMethod"];
+    note: string;
+  },
+) {
+  const name =
+    input.name.trim().replace(/\s+/g, " ") ||
+    "Aporte anónimo";
+
+  if (
+    !Number.isInteger(input.amount) ||
+    input.amount <= 0
+  ) {
+    throw new Error("Ingresa un monto válido.");
+  }
+
+  if (!input.date) {
+    throw new Error(
+      "Selecciona la fecha del aporte.",
+    );
+  }
+
+  const campaignRef = doc(
+    db,
+    "fundraisingCampaigns",
+    campaignId,
+  );
+
+  const contributionRef = doc(
+    db,
+    "campaignContributions",
+    contributionId,
+  );
+
+  const publicRef = doc(
+    db,
+    "campaignPublicViews",
+    campaignId,
+  );
+
+  await runTransaction(
+    db,
+    async (transaction) => {
+      const campaignSnapshot =
+        await transaction.get(campaignRef);
+
+      const contributionSnapshot =
+        await transaction.get(
+          contributionRef,
+        );
+
+      const publicSnapshot =
+        await transaction.get(publicRef);
+
+      if (!campaignSnapshot.exists()) {
+        throw new Error(
+          "La campaña ya no existe.",
+        );
+      }
+
+      if (!contributionSnapshot.exists()) {
+        throw new Error(
+          "El aporte ya no existe.",
+        );
+      }
+
+      const campaign = {
+        id: campaignSnapshot.id,
+        ...campaignSnapshot.data(),
+      } as Campaign;
+
+      const contribution = {
+        id: contributionSnapshot.id,
+        ...contributionSnapshot.data(),
+      } as CampaignContribution;
+
+      if (
+        contribution.campaignId !==
+        campaignId
+      ) {
+        throw new Error(
+          "El aporte no pertenece a esta campaña.",
+        );
+      }
+
+      if (
+        contribution.status !==
+        "approved"
+      ) {
+        throw new Error(
+          "Solo se pueden editar aportes activos.",
+        );
+      }
+
+      const delta =
+        input.amount -
+        contribution.amount;
+
+      const currentDelta =
+        contribution.installmentNumber ===
+        campaign.currentInstallment
+          ? delta
+          : 0;
+
+      const verifiedAmount =
+        campaign.verifiedAmount +
+        currentDelta;
+
+      const lifetimeVerifiedAmount =
+        campaign.lifetimeVerifiedAmount +
+        delta;
+
+      if (
+        verifiedAmount < 0 ||
+        lifetimeVerifiedAmount < 0
+      ) {
+        throw new Error(
+          "El ajuste dejaría totales inválidos.",
+        );
+      }
+
+      transaction.update(
+        contributionRef,
+        {
+          name,
+          amount: input.amount,
+          date: input.date,
+          paymentMethod:
+            input.paymentMethod,
+          note: input.note.trim(),
+          updatedBy: uid,
+          updatedAt:
+            serverTimestamp(),
+        },
+      );
+
+      transaction.update(
+        campaignRef,
+        {
+          verifiedAmount,
+          lifetimeVerifiedAmount,
+          updatedBy: uid,
+          updatedAt:
+            serverTimestamp(),
+        },
+      );
+
+      if (publicSnapshot.exists()) {
+        transaction.set(
+          publicRef,
+          publicCampaignPayload(
+            campaign,
+            verifiedAmount,
+            campaign.contributionCount,
+          ),
+        );
+      }
+    },
+  );
+}
+
+export async function voidCampaignContribution(
+  db: Firestore,
+  uid: string,
+  campaignId: string,
+  contributionId: string,
+  reason: string,
+) {
+  const cleanReason =
+    reason.trim().replace(/\s+/g, " ");
+
+  if (
+    cleanReason.length < 3 ||
+    cleanReason.length > 300
+  ) {
+    throw new Error(
+      "Indica un motivo para eliminar el aporte.",
+    );
+  }
+
+  const campaignRef = doc(
+    db,
+    "fundraisingCampaigns",
+    campaignId,
+  );
+
+  const contributionRef = doc(
+    db,
+    "campaignContributions",
+    contributionId,
+  );
+
+  const publicRef = doc(
+    db,
+    "campaignPublicViews",
+    campaignId,
+  );
+
+  await runTransaction(
+    db,
+    async (transaction) => {
+      const campaignSnapshot =
+        await transaction.get(campaignRef);
+
+      const contributionSnapshot =
+        await transaction.get(
+          contributionRef,
+        );
+
+      const publicSnapshot =
+        await transaction.get(publicRef);
+
+      if (!campaignSnapshot.exists()) {
+        throw new Error(
+          "La campaña ya no existe.",
+        );
+      }
+
+      if (!contributionSnapshot.exists()) {
+        throw new Error(
+          "El aporte ya no existe.",
+        );
+      }
+
+      const campaign = {
+        id: campaignSnapshot.id,
+        ...campaignSnapshot.data(),
+      } as Campaign;
+
+      const contribution = {
+        id: contributionSnapshot.id,
+        ...contributionSnapshot.data(),
+      } as CampaignContribution;
+
+      if (
+        contribution.status !==
+        "approved"
+      ) {
+        throw new Error(
+          "Este aporte ya fue eliminado.",
+        );
+      }
+
+      const affectsCurrent =
+        contribution.installmentNumber ===
+        campaign.currentInstallment;
+
+      const verifiedAmount =
+        campaign.verifiedAmount -
+        (affectsCurrent
+          ? contribution.amount
+          : 0);
+
+      const lifetimeVerifiedAmount =
+        campaign.lifetimeVerifiedAmount -
+        contribution.amount;
+
+      const contributionCount =
+        Math.max(
+          0,
+          campaign.contributionCount - 1,
+        );
+
+      if (
+        verifiedAmount < 0 ||
+        lifetimeVerifiedAmount < 0
+      ) {
+        throw new Error(
+          "Los totales de la campaña son inconsistentes.",
+        );
+      }
+
+      transaction.update(
+        contributionRef,
+        {
+          status: "voided",
+          updatedBy: uid,
+          updatedAt:
+            serverTimestamp(),
+          voidedBy: uid,
+          voidedAt:
+            serverTimestamp(),
+          voidReason: cleanReason,
+        },
+      );
+
+      transaction.update(
+        campaignRef,
+        {
+          verifiedAmount,
+          lifetimeVerifiedAmount,
+          contributionCount,
+          updatedBy: uid,
+          updatedAt:
+            serverTimestamp(),
+        },
+      );
+
+      if (publicSnapshot.exists()) {
+        transaction.set(
+          publicRef,
+          publicCampaignPayload(
+            campaign,
+            verifiedAmount,
+            contributionCount,
+          ),
+        );
+      }
+    },
+  );
 }

@@ -6,6 +6,8 @@ import {
   Copy,
   Plus,
   ReceiptText,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
@@ -13,10 +15,13 @@ import { useAccess } from "@/lib/auth/access-provider";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import { PendingCampaignSubmissions } from "./pending-submissions";
+import { ReceiptPreviewButton } from "./receipt-preview-button";
 import {
   addManualContribution,
   campaignProgress,
   createCampaign,
+  editCampaignContribution,
+  voidCampaignContribution,
   useCampaignContributions,
   useCampaigns,
   type Campaign,
@@ -373,6 +378,306 @@ function AddContributionModal({
   );
 }
 
+
+function EditContributionModal({
+  campaign,
+  contribution,
+  onClose,
+}: {
+  campaign: Campaign;
+  contribution: CampaignContribution;
+  onClose: () => void;
+}) {
+  const { user } = useAuth();
+
+  const [name, setName] = useState(
+    contribution.name,
+  );
+
+  const [amount, setAmount] = useState(
+    String(contribution.amount),
+  );
+
+  const [date, setDate] = useState(
+    contribution.date,
+  );
+
+  const [paymentMethod, setPaymentMethod] =
+    useState<CampaignContribution["paymentMethod"]>(
+      contribution.paymentMethod,
+    );
+
+  const [note, setNote] = useState(
+    contribution.note,
+  );
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(
+    event: React.FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (!user || busy) return;
+
+    setBusy(true);
+    setError("");
+
+    try {
+      await editCampaignContribution(
+        getFirebaseServices().db,
+        user.uid,
+        campaign.id,
+        contribution.id,
+        {
+          name,
+          amount: Number(amount),
+          date,
+          paymentMethod,
+          note,
+        },
+      );
+
+      onClose();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Editar aporte"
+      onClose={onClose}
+      busy={busy}
+    >
+      <form
+        className="finance-form"
+        onSubmit={submit}
+      >
+        <fieldset disabled={busy}>
+          <label>
+            Nombre
+            <input
+              value={name}
+              maxLength={120}
+              onChange={(e) =>
+                setName(e.target.value)
+              }
+            />
+          </label>
+
+          <label>
+            Monto
+            <input
+              required
+              inputMode="numeric"
+              pattern="[0-9]+"
+              value={amount}
+              onChange={(e) =>
+                setAmount(
+                  e.target.value.replace(
+                    /\D/g,
+                    "",
+                  ),
+                )
+              }
+            />
+          </label>
+
+          <div className="form-grid">
+            <label>
+              Fecha
+              <input
+                required
+                type="date"
+                value={date}
+                onChange={(e) =>
+                  setDate(e.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              Método
+              <select
+                value={paymentMethod}
+                onChange={(e) =>
+                  setPaymentMethod(
+                    e.target
+                      .value as CampaignContribution["paymentMethod"],
+                  )
+                }
+              >
+                <option value="transfer">
+                  Transferencia
+                </option>
+                <option value="cash">
+                  Efectivo
+                </option>
+                <option value="card">
+                  Tarjeta
+                </option>
+                <option value="other">
+                  Otro
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            Nota
+            <textarea
+              rows={2}
+              maxLength={500}
+              value={note}
+              onChange={(e) =>
+                setNote(e.target.value)
+              }
+            />
+          </label>
+
+          <Notice error={error} />
+        </fieldset>
+
+        <div className="form-footer">
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Cancelar
+          </button>
+
+          <button
+            className="button-primary"
+            disabled={busy}
+          >
+            {busy
+              ? "Guardando…"
+              : "Guardar cambios"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function VoidContributionModal({
+  campaign,
+  contribution,
+  onClose,
+}: {
+  campaign: Campaign;
+  contribution: CampaignContribution;
+  onClose: () => void;
+}) {
+  const { user } = useAuth();
+  const [reason, setReason] =
+    useState("");
+  const [busy, setBusy] =
+    useState(false);
+  const [error, setError] =
+    useState("");
+
+  async function submit(
+    event: React.FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (!user || busy) return;
+
+    setBusy(true);
+    setError("");
+
+    try {
+      await voidCampaignContribution(
+        getFirebaseServices().db,
+        user.uid,
+        campaign.id,
+        contribution.id,
+        reason,
+      );
+
+      onClose();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Eliminar aporte"
+      onClose={onClose}
+      busy={busy}
+    >
+      <form
+        className="finance-form"
+        onSubmit={submit}
+      >
+        <fieldset disabled={busy}>
+          <div className="notice error">
+            <strong>
+              {contribution.name} ·{" "}
+              {clp(contribution.amount)}
+            </strong>
+
+            <p>
+              Este aporte se descontará de
+              la campaña. El registro no se
+              borrará físicamente para
+              conservar la auditoría.
+            </p>
+          </div>
+
+          <label>
+            Motivo
+            <textarea
+              required
+              data-autofocus
+              rows={3}
+              minLength={3}
+              maxLength={300}
+              value={reason}
+              placeholder="Ej. Transferencia registrada por error"
+              onChange={(e) =>
+                setReason(e.target.value)
+              }
+            />
+          </label>
+
+          <Notice error={error} />
+        </fieldset>
+
+        <div className="form-footer">
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Cancelar
+          </button>
+
+          <button
+            className="button-danger"
+            disabled={busy}
+          >
+            {busy
+              ? "Eliminando…"
+              : "Eliminar aporte"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function CampaignDetail({
   campaign,
   onBack,
@@ -382,6 +687,10 @@ function CampaignDetail({
 }) {
   const contributions = useCampaignContributions(campaign.id);
   const [add, setAdd] = useState(false);
+  const [editing, setEditing] =
+    useState<CampaignContribution | null>(null);
+  const [voiding, setVoiding] =
+    useState<CampaignContribution | null>(null);
   const [copied, setCopied] = useState(false);
 
   const publicUrl =
@@ -528,9 +837,51 @@ function CampaignDetail({
 
                 <div className="campaign-contribution-amount">
                   <strong>{clp(item.amount)}</strong>
+
                   <span className="status-pill">
-                    Verificado
+                    {item.status === "voided"
+                      ? "Anulado"
+                      : "Verificado"}
                   </span>
+
+                  {item.receiptPath && (
+                    <ReceiptPreviewButton
+                      receiptPath={item.receiptPath}
+                    />
+                  )}
+
+                  {item.status === "approved" && (
+                    <div className="campaign-row-actions">
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() =>
+                          setEditing(item)
+                        }
+                      >
+                        <Pencil size={15} />
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        className="button-danger"
+                        onClick={() =>
+                          setVoiding(item)
+                        }
+                      >
+                        <Trash2 size={15} />
+                        Eliminar
+                      </button>
+                    </div>
+                  )}
+
+                  {item.status === "voided" &&
+                    item.voidReason && (
+                      <small className="campaign-void-reason">
+                        {item.voidReason}
+                      </small>
+                    )}
                 </div>
               </div>
             ))}
@@ -546,6 +897,22 @@ function CampaignDetail({
         <AddContributionModal
           campaign={campaign}
           onClose={() => setAdd(false)}
+        />
+      )}
+
+      {editing && (
+        <EditContributionModal
+          campaign={campaign}
+          contribution={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {voiding && (
+        <VoidContributionModal
+          campaign={campaign}
+          contribution={voiding}
+          onClose={() => setVoiding(null)}
         />
       )}
     </>
