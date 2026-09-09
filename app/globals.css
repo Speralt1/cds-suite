@@ -2454,3 +2454,80 @@ button:disabled {
     max-width: 620px;
   }
 }
+
+/* Resumen financiero · SumUp agrupado */
+.summary-sumup-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 14px;
+  padding: 22px 24px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-primary-soft);
+}
+
+.summary-sumup-copy {
+  min-width: 0;
+}
+
+.summary-sumup-copy h3 {
+  margin-top: 5px;
+  font-size: 20px;
+  color: var(--color-primary);
+}
+
+.summary-sumup-copy p {
+  max-width: 620px;
+  margin-top: 5px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.summary-sumup-amount {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.summary-sumup-amount strong {
+  color: var(--color-primary);
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-sumup-amount > span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.summary-sumup-amount .button-secondary {
+  margin-top: 5px;
+}
+
+.summary-sumup-only-note {
+  margin-top: 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .summary-sumup-card {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .summary-sumup-amount {
+    justify-items: start;
+  }
+
+  .summary-sumup-amount .button-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}
