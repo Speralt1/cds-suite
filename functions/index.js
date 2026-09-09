@@ -136,7 +136,6 @@ async function fetchSumUpTransactions(config) {
   const endpoint = `https://api.sumup.com/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions/history`;
   const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
   const params = new URLSearchParams({ order: 'descending', limit: '100', changes_since: since });
-  params.set('payment_types', 'POS');
 
   let url = `${endpoint}?${params.toString()}`;
   const all = new Map();
