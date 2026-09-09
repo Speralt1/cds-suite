@@ -1825,3 +1825,319 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* ==========================================================
+   Campaña pública V2 · compacta y orientada a conversión
+   ========================================================== */
+
+.public-campaign-v2 {
+  max-width: 680px;
+}
+
+.public-brand-compact {
+  margin-bottom: 14px;
+}
+
+.public-hero-compact {
+  margin-bottom: 12px;
+  padding: 22px;
+}
+
+.public-hero-compact h1 {
+  margin-top: 7px;
+  font-size: clamp(27px, 6vw, 36px);
+}
+
+.public-main-progress {
+  margin-top: 24px;
+}
+
+.public-main-number {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.public-main-number strong {
+  font-size: clamp(36px, 9vw, 50px);
+  line-height: 1;
+}
+
+.public-main-number span {
+  color: var(--color-muted);
+  font-size: 16px;
+}
+
+.public-hero-compact .public-progress {
+  margin-top: 15px;
+}
+
+.public-contribution-count {
+  margin-top: 8px !important;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.public-contribution-card {
+  padding: 22px;
+}
+
+.public-contribution-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.public-contribution-heading h2 {
+  margin-top: 6px;
+  font-size: 25px;
+}
+
+.public-contribution-heading > span {
+  flex-shrink: 0;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.public-form-intro.compact {
+  margin-top: 7px;
+  font-size: 13px;
+}
+
+.public-form-compact {
+  gap: 13px;
+  margin-top: 18px;
+}
+
+.public-form-compact
+  label:not(.public-checkbox) {
+  gap: 6px;
+  font-size: 13px;
+}
+
+.public-form-compact input,
+.public-form-compact textarea {
+  min-height: 48px;
+}
+
+.public-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 155px;
+  gap: 10px;
+}
+
+.public-form-row label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.public-form-row input {
+  min-width: 0;
+}
+
+.optional-label,
+.public-receipt-field > span {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.public-file-input {
+  position: relative;
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  overflow: hidden;
+  border: 1px dashed #bac8be;
+  border-radius: 11px;
+  background: var(--color-canvas);
+  color: var(--color-primary);
+}
+
+.public-file-input > div {
+  min-width: 0;
+}
+
+.public-file-input strong,
+.public-file-input span {
+  display: block;
+}
+
+.public-file-input strong {
+  max-width: 420px;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-file-input span {
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.public-file-input input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.public-checkbox {
+  margin-top: 1px;
+}
+
+.public-submit {
+  width: 100%;
+  min-height: 50px;
+}
+
+.public-verification-note {
+  margin-top: -3px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.public-another-contribution {
+  margin-top: 12px;
+}
+
+.public-transfer-details {
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: white;
+}
+
+.public-transfer-details summary {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 15px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.public-transfer-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.public-transfer-details summary span,
+.public-transfer-details summary strong {
+  display: block;
+}
+
+.public-transfer-details summary span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.public-transfer-details summary strong {
+  margin-top: 3px;
+  font-size: 15px;
+}
+
+.public-transfer-details[open]
+  summary
+  svg {
+  transform: rotate(180deg);
+}
+
+.public-transfer-body {
+  padding: 0 20px 20px;
+  border-top: 1px solid var(--color-line);
+}
+
+.public-transfer-body
+  .button-secondary {
+  width: 100%;
+  margin-top: 15px;
+}
+
+.public-transfer-body .transfer-data {
+  margin-top: 11px;
+  padding: 14px;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .public-campaign-v2 {
+    width: calc(100% - 16px);
+    padding-top: 11px;
+  }
+
+  .public-brand-compact {
+    padding: 0 5px;
+  }
+
+  .public-brand-compact
+    .public-campaign-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+  }
+
+  .public-hero-compact,
+  .public-contribution-card {
+    padding: 19px;
+    border-radius: 15px;
+  }
+
+  .public-main-number {
+    display: block;
+  }
+
+  .public-main-number span {
+    display: block;
+    margin-top: 6px;
+    font-size: 14px;
+  }
+
+  .public-contribution-heading {
+    display: block;
+  }
+
+  .public-contribution-heading
+    > span {
+    display: inline-flex;
+    margin-top: 8px;
+  }
+
+  .public-form-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, 1fr);
+  }
+
+  .public-transfer-details {
+    border-radius: 15px;
+  }
+}
+
+
+.campaign-receipt-link {
+  margin-top: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+

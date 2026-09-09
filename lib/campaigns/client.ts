@@ -132,14 +132,7 @@ export function useCampaignContributions(campaignId: string) {
   });
 
   useEffect(() => {
-    if (!campaignId) {
-      setState({
-        data: [],
-        loading: false,
-        error: "",
-      });
-      return;
-    }
+    if (!campaignId) return;
 
     return onSnapshot(
       query(
@@ -175,6 +168,14 @@ export function useCampaignContributions(campaignId: string) {
         }),
     );
   }, [campaignId]);
+
+  if (!campaignId) {
+    return {
+      data: [],
+      loading: false,
+      error: "",
+    };
+  }
 
   return state;
 }

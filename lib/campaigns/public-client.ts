@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  addDoc,
   collection,
   doc,
   onSnapshot,
@@ -17,6 +16,13 @@ import {
 import { getFirebaseServices } from "@/lib/firebase";
 import { errorMessage } from "@/lib/finance/formatters";
 import type { Campaign } from "./client";
+import {
+  deleteObject,
+  ref,
+  uploadBytes,
+  type FirebaseStorage,
+  type StorageReference,
+} from "firebase/storage";
 
 export interface PublicCampaign {
   id: string;
@@ -89,14 +95,7 @@ export function usePublicCampaign(slug: string) {
   });
 
   useEffect(() => {
-    if (!slug) {
-      setState({
-        data: null,
-        loading: false,
-        error: "Campaña no encontrada.",
-      });
-      return;
-    }
+    if (!slug) return;
 
     return onSnapshot(
       doc(getFirebaseServices().db, "campaignPublicViews", slug),
@@ -123,11 +122,20 @@ export function usePublicCampaign(slug: string) {
     );
   }, [slug]);
 
+  if (!slug) {
+    return {
+      data: null,
+      loading: false,
+      error: "Campaña no encontrada.",
+    };
+  }
+
   return state;
 }
 
 export async function submitPublicContribution(
   db: Firestore,
+  storage: FirebaseStorage,
   campaignId: string,
   input: {
     name: string;
@@ -135,6 +143,7 @@ export async function submitPublicContribution(
     date: string;
     publicName: boolean;
     note: string;
+    receipt?: File | null;
   },
 ) {
   const name = input.name.trim().replace(/\s+/g, " ");
@@ -151,18 +160,83 @@ export async function submitPublicContribution(
     throw new Error("Selecciona la fecha del depósito.");
   }
 
-  await addDoc(collection(db, "campaignSubmissions"), {
-    campaignId,
-    name,
-    amount: input.amount,
-    date: input.date,
-    paymentMethod: "transfer",
-    note: input.note.trim(),
-    publicName: input.publicName,
-    receiptPath: "",
-    status: "pending",
-    createdAt: serverTimestamp(),
-  });
+  if (input.receipt) {
+    if (!input.receipt.type.startsWith("image/")) {
+      throw new Error(
+        "El comprobante debe ser una imagen.",
+      );
+    }
+
+    if (input.receipt.size > 10 * 1024 * 1024) {
+      throw new Error(
+        "El comprobante no puede superar los 10 MB.",
+      );
+    }
+  }
+
+  const submissionRef = doc(
+    collection(db, "campaignSubmissions"),
+  );
+
+  let receiptPath = "";
+  let uploadedRef: StorageReference | null = null;
+  let receiptWarning = "";
+
+  if (input.receipt) {
+    const objectRef = ref(
+      storage,
+      `campaign-receipts/${campaignId}/${submissionRef.id}/receipt`,
+    );
+
+    try {
+      await uploadBytes(objectRef, input.receipt, {
+        contentType: input.receipt.type,
+        customMetadata: {
+          campaignId,
+          submissionId: submissionRef.id,
+        },
+      });
+
+      receiptPath = objectRef.fullPath;
+      uploadedRef = objectRef;
+    } catch (error) {
+      console.error(
+        "No se pudo subir comprobante:",
+        error,
+      );
+
+      receiptWarning =
+        "El aporte fue enviado, pero no pudimos adjuntar el comprobante.";
+    }
+  }
+
+  try {
+    await setDoc(submissionRef, {
+      campaignId,
+      name,
+      amount: input.amount,
+      date: input.date,
+      paymentMethod: "transfer",
+      note: input.note.trim(),
+      publicName: input.publicName,
+      receiptPath,
+      status: "pending",
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (uploadedRef) {
+      await deleteObject(uploadedRef).catch(
+        () => undefined,
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    receiptUploaded: !!receiptPath,
+    receiptWarning,
+  };
 }
 
 export function useCampaignSubmissions(campaignId: string) {

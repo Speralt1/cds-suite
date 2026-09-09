@@ -414,7 +414,14 @@ service cloud.firestore {
     match /campaignSubmissions/{submissionId} {
       allow create: if validCampaignSubmission(request.resource.data)
         && request.resource.data.status == 'pending'
-        && request.resource.data.receiptPath == ''
+        && (
+          request.resource.data.receiptPath == ''
+          ||
+          request.resource.data.receiptPath ==
+            'campaign-receipts/' +
+            request.resource.data.campaignId +
+            '/' + submissionId + '/receipt'
+        )
         && request.resource.data.createdAt == request.time
         && exists(
           /databases/$(database)/documents/campaignPublicViews/$(request.resource.data.campaignId)
