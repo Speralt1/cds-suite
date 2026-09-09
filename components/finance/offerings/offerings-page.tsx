@@ -172,11 +172,15 @@ function CashModal({
   area,
   date,
   existing,
+  loading,
+  onDateChange,
   onClose,
 }: {
   area: CashArea;
   date: string;
   existing?: FinanceTransaction;
+  loading: boolean;
+  onDateChange: (date: string) => void;
   onClose: () => void;
 }) {
   const { user } = useAuth();
@@ -188,7 +192,7 @@ function CashModal({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!user || busy) return;
+    if (!user || busy || loading) return;
 
     setBusy(true);
     setError("");
@@ -218,12 +222,29 @@ function CashModal({
       busy={busy}
     >
       <form className="finance-form" onSubmit={submit}>
-        <fieldset disabled={busy}>
+        <fieldset disabled={busy || loading}>
+          <label>
+            Fecha correspondiente
+            <input
+              type="date"
+              min={SUMUP_SPLIT_START_DATE}
+              max="2099-12-31"
+              value={date}
+              required
+              onChange={(e) =>
+                onDateChange(e.target.value)
+              }
+            />
+            <span className="field-help">
+              Puedes registrar hoy el efectivo de un día anterior.
+            </span>
+          </label>
+
           <div className="notice success">
-            <strong>{date}</strong>
             <p>
-              Quedará registrado como ingreso de {label} en efectivo
-              y se sumará automáticamente a Finanzas.
+              Se registrará como ingreso de {label} en efectivo
+              correspondiente al {date} y se sumará automáticamente
+              a Finanzas.
             </p>
           </div>
 
@@ -248,7 +269,7 @@ function CashModal({
               rows={2}
               value={note}
               maxLength={500}
-              placeholder="Ej. Servicio domingo AM"
+              placeholder={area === "offerings" ? "Ej. Servicio domingo AM" : "Ej. Ventas domingo AM"}
               onChange={(e) => setNote(e.target.value)}
             />
           </label>
@@ -266,7 +287,7 @@ function CashModal({
             Cancelar
           </button>
 
-          <button className="button-primary" disabled={busy}>
+          <button className="button-primary" disabled={busy || loading}>
             {busy
               ? "Guardando…"
               : existing
@@ -584,9 +605,14 @@ export function OfferingsPage() {
 
       {cashArea && (
         <CashModal
+          key={`${cashArea}-${selectedDate}-${
+            (cashArea === "offerings" ? offeringCash : cafeCash)?.id || "new"
+          }`}
           area={cashArea}
           date={selectedDate}
           existing={cashArea === "offerings" ? offeringCash : cafeCash}
+          loading={financeTransactions.loading}
+          onDateChange={setSelectedDate}
           onClose={() => setCashArea(null)}
         />
       )}

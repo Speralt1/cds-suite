@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
+import { deleteObject, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   saveTransaction,
   newTransactionId,
@@ -53,6 +54,7 @@ export function TransactionForm({
         },
   );
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
+  const [receipt, setReceipt] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -69,13 +71,54 @@ export function TransactionForm({
     lock.current = true;
     setBusy(true);
     setError("");
+    const services = getFirebaseServices();
+    const receiptPath = `tithe-receipts/${id}/receipt`;
+    let receiptUploaded = false;
+
     try {
       if (!/^\d+$/.test(amount))
         throw new Error(
           "Ingresa el monto en pesos enteros, sin puntos ni decimales.",
         );
+
+      if (receipt && tithe && !existing) {
+        if (receipt.size > 10 * 1024 * 1024) {
+          throw new Error(
+            "El comprobante puede pesar como máximo 10 MB.",
+          );
+        }
+
+        const receiptType =
+          receipt.type ||
+          (receipt.name.toLowerCase().endsWith(".pdf")
+            ? "application/pdf"
+            : "");
+
+        if (
+          !receiptType.startsWith("image/") &&
+          receiptType !== "application/pdf"
+        ) {
+          throw new Error(
+            "El comprobante debe ser una imagen o un PDF.",
+          );
+        }
+
+        await uploadBytes(
+          storageRef(services.storage, receiptPath),
+          receipt,
+          {
+            contentType: receiptType,
+            customMetadata: {
+              originalName: receipt.name,
+            },
+          },
+        );
+
+        receiptUploaded = true;
+      }
+
       await saveTransaction(
-        getFirebaseServices().db,
+        services.db,
         user.uid,
         id,
         { ...input, amount: Number(amount) },
@@ -95,6 +138,12 @@ export function TransactionForm({
       );
       onClose();
     } catch (e) {
+      if (receiptUploaded) {
+        await deleteObject(
+          storageRef(services.storage, receiptPath),
+        ).catch(() => {});
+      }
+
       setError(errorMessage(e));
     } finally {
       lock.current = false;
@@ -183,6 +232,7 @@ export function TransactionForm({
             <label>
               Método de pago
               <select
+                className={tithe ? "tithe-payment-select" : undefined}
                 value={input.paymentMethod}
                 onChange={(e) =>
                   update("paymentMethod", e.target.value as PaymentMethod)
@@ -239,6 +289,29 @@ export function TransactionForm({
               />
             </label>
           )}
+
+          {tithe && !existing && (
+            <label className="tithe-receipt-field">
+              Comprobante (opcional)
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) =>
+                  setReceipt(e.target.files?.[0] || null)
+                }
+              />
+              <span className="field-help">
+                Foto o PDF · máximo 10 MB. Solo visible para
+                Administración, Pastor y Finanzas.
+              </span>
+              {receipt && (
+                <span className="field-help tithe-receipt-selected">
+                  Archivo seleccionado: {receipt.name}
+                </span>
+              )}
+            </label>
+          )}
+
           <Notice error={error} />
         </fieldset>
         <div className="form-footer">
