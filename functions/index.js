@@ -381,9 +381,9 @@ exports.sumupSyncNow = onRequest(
 
 exports.sumupSyncScheduled = onSchedule(
   {
-    schedule: 'every 15 minutes',
+    schedule: 'every 60 minutes',
     timeZone: 'America/Santiago',
-    region: REGION,
+    region: 'southamerica-east1',
     timeoutSeconds: 120,
     secrets: [sumupOfferings, sumupCafe],
   },
