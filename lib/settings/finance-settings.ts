@@ -7,6 +7,7 @@ export const MAX_CATEGORIES_PER_TYPE = 100;
 export const FALLBACK_INCOME_CATEGORIES = [
   ...INCOME_CATEGORIES,
   "Cafetería",
+  "SumUp histórico sin separar",
 ] as string[];
 
 export const FALLBACK_EXPENSE_CATEGORIES = [

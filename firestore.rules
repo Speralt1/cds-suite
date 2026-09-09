@@ -13,7 +13,7 @@ service cloud.firestore {
     function total(v) { return v is int && v >= 0 && v <= 750599937895082; }
     function period(date) { return string(date.year()) + '-' + (date.month() < 10 ? '0' : '') + string(date.month()); }
     function validDate(date) { return date is timestamp && date.year() >= 2000 && date.year() <= 2100; }
-    function fallbackIncomes() { return ['Ofrendas','Donaciones','Actividades y eventos','Ayudas / aportes especiales','Otros ingresos','Cafetería']; }
+    function fallbackIncomes() { return ['Ofrendas','Donaciones','Actividades y eventos','Ayudas / aportes especiales','Otros ingresos','Cafetería','SumUp histórico sin separar']; }
     function fallbackExpenses() { return ['Servicios básicos','Mantención','Compras y materiales','Administración','Ministerio Jóvenes','Ministerio Niños','Música y Producción','Evangelismo','Ayuda social','Eventos','Otros gastos','Cafetería']; }
     function configuredIncome(field) {
       return exists(/databases/$(database)/documents/appSettings/finance)

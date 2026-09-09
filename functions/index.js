@@ -11,6 +11,8 @@ const db = getFirestore();
 const REGION = "southamerica-west1";
 const PROJECT = "cds-administracion";
 const SITE = `https://${PROJECT}.web.app`;
+const SUMUP_SPLIT_START_DATE = '2026-09-09';
+const SUMUP_LEGACY_CATEGORY = 'SumUp histórico sin separar';
 
 const sumupOfferings = defineJsonSecret("SUMUP_OFFERINGS_CONFIG");
 const sumupCafe = defineJsonSecret("SUMUP_CAFETERIA_CONFIG");
@@ -122,25 +124,27 @@ function datePartsChile(iso) {
   const year = get('year');
   const month = get('month');
   const day = get('day');
-  return { date, dayKey: String(Number(day)), period: `${year}-${month}` };
+  return { date, dayKey: String(Number(day)), period: `${year}-${month}`, localDate: `${year}-${month}-${day}` };
 }
 
 function safeId(value) {
   return String(value).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
 }
 
-async function fetchSumUpTransactions(config) {
+async function fetchSumUpTransactions(config, fullHistory = false) {
   const { apiKey, merchantCode } = config || {};
   if (!apiKey || !merchantCode) throw new Error('Configuración SumUp incompleta.');
 
   const endpoint = `https://api.sumup.com/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions/history`;
   const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
-  const params = new URLSearchParams({ order: 'descending', limit: '100', changes_since: since });
+  const params = new URLSearchParams({ order: 'descending', limit: '100' });
+  if (!fullHistory) params.set('changes_since', since);
 
   let url = `${endpoint}?${params.toString()}`;
   const all = new Map();
 
-  for (let page = 0; page < 10 && url; page += 1) {
+  const maxPages = fullHistory ? 100 : 10;
+  for (let page = 0; page < maxPages && url; page += 1) {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
     });
@@ -190,12 +194,20 @@ async function upsertSumUpTransaction(account, item) {
   const refunded = Math.max(0, Math.round(Number(item.refunded_amount || 0)));
   const net = Math.max(0, gross - refunded);
   const fee = Math.max(0, Math.round(Number(item.fee_amount || 0)));
-  const { date, dayKey, period } = datePartsChile(item.timestamp);
+  const { date, dayKey, period, localDate } = datePartsChile(item.timestamp);
+  const isLegacy = localDate < SUMUP_SPLIT_START_DATE;
 
-  const category = account === 'offerings' ? 'Ofrendas' : 'Cafetería';
-  const description = account === 'offerings'
-    ? 'Ofrenda tarjeta física · SumUp'
-    : 'Venta Cafetería · SumUp';
+  const category = isLegacy
+    ? SUMUP_LEGACY_CATEGORY
+    : account === 'offerings'
+      ? 'Ofrendas'
+      : 'Cafetería';
+
+  const description = isLegacy
+    ? 'Ingreso SumUp histórico · sin separación'
+    : account === 'offerings'
+      ? 'Ofrenda tarjeta física · SumUp'
+      : 'Venta Cafetería · SumUp';
 
   const rawRef = db.doc(`sumupIntegrations/${account}/transactions/${safeId(transactionId)}`);
   const financeRef = db.doc(`financeTransactions/sumup_${account}_${safeId(transactionId)}`);
@@ -205,67 +217,136 @@ async function upsertSumUpTransaction(account, item) {
     const beforeSnap = await tx.get(financeRef);
     const summarySnap = await tx.get(summaryRef);
     const before = beforeSnap.exists ? beforeSnap.data() : null;
-    const beforeActive = before && before.status === 'active' ? Number(before.amount || 0) : 0;
+
+    const beforeActive =
+      before && before.status === 'active'
+        ? Number(before.amount || 0)
+        : 0;
     const afterActive = net > 0 ? net : 0;
-    const delta = afterActive - beforeActive;
+
     const wasActive = !!before && before.status === 'active';
     const willBeActive = net > 0;
-    const changed = !before || delta !== 0 || wasActive !== willBeActive;
+    const beforeCategory = before?.category || category;
+    const beforeDay = before?.day || dayKey;
+
+    const changed =
+      !before ||
+      beforeActive !== afterActive ||
+      wasActive !== willBeActive ||
+      beforeCategory !== category ||
+      beforeDay !== dayKey;
 
     if (changed) {
-      const summary = summarySnap.exists ? { ...emptySummary(), ...summarySnap.data() } : emptySummary();
-      const incomeByCategory = { ...(summary.incomeByCategory || {}) };
-      const dailyIncome = { ...(summary.dailyIncome || {}) };
-      incomeByCategory[category] = Number(incomeByCategory[category] || 0) + delta;
-      dailyIncome[dayKey] = Number(dailyIncome[dayKey] || 0) + delta;
-      if (incomeByCategory[category] === 0) delete incomeByCategory[category];
-      if (dailyIncome[dayKey] === 0) delete dailyIncome[dayKey];
+      const summary = summarySnap.exists
+        ? { ...emptySummary(), ...summarySnap.data() }
+        : emptySummary();
 
-      const countDelta = (willBeActive ? 1 : 0) - (wasActive ? 1 : 0);
-      const incomeTotal = Number(summary.incomeTotal || 0) + delta;
-      const expenseTotal = Number(summary.expenseTotal || 0);
+      const incomeByCategory = {
+        ...(summary.incomeByCategory || {}),
+      };
+      const dailyIncome = {
+        ...(summary.dailyIncome || {}),
+      };
 
-      tx.set(summaryRef, {
-        ...summary,
-        incomeTotal,
-        result: incomeTotal - expenseTotal,
-        transactionCount: Number(summary.transactionCount || 0) + countDelta,
-        incomeByCategory,
-        dailyIncome,
-        updatedAt: FieldValue.serverTimestamp(),
-        lastTransactionId: financeRef.id,
-      }, { merge: true });
+      if (beforeActive > 0) {
+        incomeByCategory[beforeCategory] =
+          Number(incomeByCategory[beforeCategory] || 0) -
+          beforeActive;
+        dailyIncome[beforeDay] =
+          Number(dailyIncome[beforeDay] || 0) -
+          beforeActive;
+      }
+
+      if (afterActive > 0) {
+        incomeByCategory[category] =
+          Number(incomeByCategory[category] || 0) +
+          afterActive;
+        dailyIncome[dayKey] =
+          Number(dailyIncome[dayKey] || 0) +
+          afterActive;
+      }
+
+      for (const key of Object.keys(incomeByCategory)) {
+        if (incomeByCategory[key] === 0) {
+          delete incomeByCategory[key];
+        }
+      }
+
+      for (const key of Object.keys(dailyIncome)) {
+        if (dailyIncome[key] === 0) {
+          delete dailyIncome[key];
+        }
+      }
+
+      const countDelta =
+        (willBeActive ? 1 : 0) -
+        (wasActive ? 1 : 0);
+
+      const incomeTotal =
+        Number(summary.incomeTotal || 0) -
+        beforeActive +
+        afterActive;
+
+      const expenseTotal =
+        Number(summary.expenseTotal || 0);
+
+      tx.set(
+        summaryRef,
+        {
+          ...summary,
+          incomeTotal,
+          result: incomeTotal - expenseTotal,
+          transactionCount:
+            Number(summary.transactionCount || 0) +
+            countDelta,
+          incomeByCategory,
+          dailyIncome,
+          updatedAt: FieldValue.serverTimestamp(),
+          lastTransactionId: financeRef.id,
+        },
+        { merge: true },
+      );
 
       if (willBeActive) {
-        tx.set(financeRef, {
-          type: 'income',
-          amount: net,
-          date: Timestamp.fromDate(date),
-          period,
-          day: dayKey,
-          category,
-          paymentMethod: 'card',
-          description,
-          note: `SumUp ${item.transaction_code || transactionId}`,
-          source: 'general',
-          status: 'active',
-          revision: Number(before?.revision || 0) + 1,
-          createdBy: before?.createdBy || 'system:sumup',
-          createdAt: before?.createdAt || FieldValue.serverTimestamp(),
-          updatedBy: 'system:sumup',
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        tx.set(
+          financeRef,
+          {
+            type: 'income',
+            amount: net,
+            date: Timestamp.fromDate(date),
+            period,
+            day: dayKey,
+            category,
+            paymentMethod: 'card',
+            description,
+            note: `SumUp ${item.transaction_code || transactionId}`,
+            source: 'general',
+            status: 'active',
+            revision: Number(before?.revision || 0) + 1,
+            createdBy: before?.createdBy || 'system:sumup',
+            createdAt:
+              before?.createdAt ||
+              FieldValue.serverTimestamp(),
+            updatedBy: 'system:sumup',
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
       } else if (before) {
-        tx.set(financeRef, {
-          ...before,
-          status: 'voided',
-          revision: Number(before.revision || 0) + 1,
-          updatedBy: 'system:sumup',
-          updatedAt: FieldValue.serverTimestamp(),
-          voidReason: 'Pago reembolsado en SumUp',
-          voidedBy: 'system:sumup',
-          voidedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        tx.set(
+          financeRef,
+          {
+            ...before,
+            status: 'voided',
+            revision: Number(before.revision || 0) + 1,
+            updatedBy: 'system:sumup',
+            updatedAt: FieldValue.serverTimestamp(),
+            voidReason: 'Pago reembolsado en SumUp',
+            voidedBy: 'system:sumup',
+            voidedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
       }
     }
 
@@ -293,16 +374,50 @@ async function upsertSumUpTransaction(account, item) {
   return true;
 }
 
-async function syncAccount(account, config) {
+async function ensureSumUpSystemCategory() {
+  const ref = db.doc('appSettings/finance');
+  const snap = await ref.get();
+  if (!snap.exists) return;
+
+  const data = snap.data();
+  const all = Array.isArray(data.incomeCategoriesAll)
+    ? data.incomeCategoriesAll
+    : [];
+
+  if (all.includes(SUMUP_LEGACY_CATEGORY)) return;
+
+  await ref.set(
+    {
+      incomeCategoriesAll: [
+        ...all,
+        SUMUP_LEGACY_CATEGORY,
+      ],
+      updatedBy: 'system:sumup',
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function syncAccount(account, config, allowBackfill = false) {
   const integrationRef = db.doc(`sumupIntegrations/${account}`);
   const label = account === 'offerings' ? 'Ofrendas' : 'Cafetería';
   try {
-    const items = await fetchSumUpTransactions(config);
+    const integrationSnap = await integrationRef.get();
+    const alreadyBackfilled =
+      !!integrationSnap.data()?.historyBackfilledAt;
+    const fullHistory =
+      allowBackfill && !alreadyBackfilled;
+
+    const items = await fetchSumUpTransactions(
+      config,
+      fullHistory,
+    );
     let reviewed = 0;
     for (const item of items) {
       if (await upsertSumUpTransaction(account, item)) reviewed += 1;
     }
-    await integrationRef.set({
+    const integrationUpdate = {
       account,
       label,
       configured: true,
@@ -311,8 +426,23 @@ async function syncAccount(account, config) {
       lastSyncStatus: 'ok',
       lastError: '',
       lastImportedCount: reviewed,
-    }, { merge: true });
-    return { account, reviewed };
+    };
+
+    if (fullHistory) {
+      integrationUpdate.historyBackfilledAt =
+        FieldValue.serverTimestamp();
+    }
+
+    await integrationRef.set(
+      integrationUpdate,
+      { merge: true },
+    );
+
+    return {
+      account,
+      reviewed,
+      fullHistory,
+    };
   } catch (error) {
     await integrationRef.set({
       account,
@@ -326,10 +456,20 @@ async function syncAccount(account, config) {
   }
 }
 
-async function syncAllSumUp() {
+async function syncAllSumUp(allowBackfill = false) {
+  await ensureSumUpSystemCategory();
+
   return [
-    await syncAccount('offerings', sumupOfferings.value()),
-    await syncAccount('cafeteria', sumupCafe.value()),
+    await syncAccount(
+      'offerings',
+      sumupOfferings.value(),
+      allowBackfill,
+    ),
+    await syncAccount(
+      'cafeteria',
+      sumupCafe.value(),
+      allowBackfill,
+    ),
   ];
 }
 
@@ -347,7 +487,7 @@ async function requireFinanceUser(req) {
 }
 
 exports.sumupSyncNow = onRequest(
-  { region: REGION, timeoutSeconds: 120, secrets: [sumupOfferings, sumupCafe] },
+  { region: REGION, timeoutSeconds: 540, secrets: [sumupOfferings, sumupCafe] },
   async (req, res) => {
     const origin = req.get('origin') || '';
     if (origin === SITE || origin === `https://${PROJECT}.firebaseapp.com`) {
@@ -368,7 +508,7 @@ exports.sumupSyncNow = onRequest(
 
     try {
       await requireFinanceUser(req);
-      const results = await syncAllSumUp();
+      const results = await syncAllSumUp(true);
       res.status(200).json({ ok: true, results });
     } catch (error) {
       const message = String(error?.message || error);
@@ -388,6 +528,6 @@ exports.sumupSyncScheduled = onSchedule(
     secrets: [sumupOfferings, sumupCafe],
   },
   async () => {
-    await syncAllSumUp();
+    await syncAllSumUp(false);
   },
 );

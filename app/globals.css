@@ -2435,3 +2435,22 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* Corte histórico SumUp · 09/09/2026 */
+.sumup-cutoff-notice {
+  margin-top: 16px;
+}
+
+.sumup-cutoff-notice p {
+  margin-top: 4px;
+}
+
+.daily-cash-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 760px) {
+  .daily-cash-grid-single .daily-cash-card {
+    max-width: 620px;
+  }
+}

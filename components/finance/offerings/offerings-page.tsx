@@ -18,9 +18,12 @@ import {
   useSumUpTransactions,
   type GivingSettings,
   type SumUpIntegration,
-  type SumUpTransaction,
 } from "@/lib/offerings/client";
 import { Empty, FinancePageHeader, Loading, Modal, Notice } from "@/components/finance/shared";
+
+const SUMUP_SPLIT_START_DATE = "2026-09-09";
+const SUMUP_LEGACY_CATEGORY =
+  "SumUp histórico sin separar";
 
 function dateKeyChile(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -41,11 +44,47 @@ function periodFromDate(date: string): PeriodSelection {
   return { year, month, view: "month" };
 }
 
-function sumSumUpDay(items: SumUpTransaction[], date: string) {
+function sumFinanceDay(
+  items: FinanceTransaction[],
+  date: string,
+  category: string,
+  paymentMethod: "cash" | "card",
+) {
+  const period = date.slice(0, 7);
+  const day = String(Number(date.slice(8, 10)));
+
   return items.reduce((sum, item) => {
-    const stamp = item.timestamp?.toDate();
-    if (!stamp || dateKeyChile(stamp) !== date) return sum;
-    return sum + Math.max(0, Number(item.netAmount || 0));
+    if (
+      item.status !== "active" ||
+      item.type !== "income" ||
+      item.period !== period ||
+      item.day !== day ||
+      item.category !== category ||
+      item.paymentMethod !== paymentMethod
+    ) {
+      return sum;
+    }
+
+    return sum + item.amount;
+  }, 0);
+}
+
+function sumFinanceMonth(
+  items: FinanceTransaction[],
+  category: string,
+  paymentMethod: "cash" | "card",
+) {
+  return items.reduce((sum, item) => {
+    if (
+      item.status !== "active" ||
+      item.type !== "income" ||
+      item.category !== category ||
+      item.paymentMethod !== paymentMethod
+    ) {
+      return sum;
+    }
+
+    return sum + item.amount;
   }, 0);
 }
 
@@ -327,8 +366,44 @@ export function OfferingsPage() {
       item.status === "active",
   );
 
-  const offeringCardDay = sumSumUpDay(transactions.data, selectedDate);
-  const cafeCardDay = sumSumUpDay(cafeTransactions.data, selectedDate);
+  const separationActive =
+    selectedDate >= SUMUP_SPLIT_START_DATE;
+
+  const offeringCardDay = sumFinanceDay(
+    financeTransactions.data,
+    selectedDate,
+    "Ofrendas",
+    "card",
+  );
+
+  const cafeCardDay = sumFinanceDay(
+    financeTransactions.data,
+    selectedDate,
+    "Cafetería",
+    "card",
+  );
+
+  const legacyCardDay = sumFinanceDay(
+    financeTransactions.data,
+    selectedDate,
+    SUMUP_LEGACY_CATEGORY,
+    "card",
+  );
+
+  const legacyCardMonth = sumFinanceMonth(
+    financeTransactions.data,
+    SUMUP_LEGACY_CATEGORY,
+    "card",
+  );
+
+  const separatedOfferingTransactions =
+    transactions.data.filter((item) => {
+      const stamp = item.timestamp?.toDate();
+      return stamp
+        ? dateKeyChile(stamp) >=
+            SUMUP_SPLIT_START_DATE
+        : false;
+    });
 
   const publicUrl =
     typeof window === "undefined"
@@ -345,7 +420,18 @@ export function OfferingsPage() {
       const reviewed = Array.isArray(result.results)
         ? result.results.reduce((sum: number, item: { reviewed?: number }) => sum + Number(item.reviewed || 0), 0)
         : 0;
-      setSyncMessage(`Sincronización completa · ${reviewed} pagos físicos revisados.`);
+      const backfilled = Array.isArray(result.results)
+        ? result.results.some(
+            (item: { fullHistory?: boolean }) =>
+              item.fullHistory === true,
+          )
+        : false;
+
+      setSyncMessage(
+        backfilled
+          ? `Histórico SumUp conciliado · ${reviewed} pagos revisados. La separación Ofrendas/Cafetería comienza el 09/09/2026.`
+          : `Sincronización completa · ${reviewed} pagos físicos revisados.`,
+      );
     } catch (error) {
       setSyncError(errorMessage(error));
     } finally {
@@ -368,6 +454,18 @@ export function OfferingsPage() {
 
       <Notice error={syncError || settings.error || transactions.error || cafeTransactions.error || financeTransactions.error || offeringsIntegration.error || cafeIntegration.error} success={syncMessage} />
 
+      <div className="notice success sumup-cutoff-notice">
+        <strong>
+          Separación oficial desde el 09/09/2026
+        </strong>
+        <p>
+          Los pagos SumUp anteriores se conservan
+          completos, pero como “SumUp histórico sin
+          separar”. No se atribuyen retroactivamente a
+          Ofrendas ni Cafetería.
+        </p>
+      </div>
+
       <div className="daily-cash-toolbar">
         <div>
           <span className="eyebrow">CIERRE DIARIO</span>
@@ -387,7 +485,7 @@ export function OfferingsPage() {
 
       {financeTransactions.loading ? (
         <Loading />
-      ) : (
+      ) : separationActive ? (
         <div className="daily-cash-grid">
           <DailyCashCard
             title="Ofrendas"
@@ -405,6 +503,47 @@ export function OfferingsPage() {
             onCash={() => setCashArea("cafeteria")}
           />
         </div>
+      ) : (
+        <div className="daily-cash-grid daily-cash-grid-single">
+          <div className="panel daily-cash-card">
+            <div className="daily-cash-heading">
+              <div>
+                <span className="eyebrow">
+                  HISTÓRICO SUMUP
+                </span>
+                <h3>Sin separación</h3>
+              </div>
+              <CreditCard size={21} />
+            </div>
+
+            <div className="daily-cash-lines">
+              <div>
+                <span>
+                  <CreditCard size={15} />
+                  Tarjeta SumUp · día
+                </span>
+                <strong>{clp(legacyCardDay)}</strong>
+              </div>
+
+              <div>
+                <span>Total del mes</span>
+                <strong>{clp(legacyCardMonth)}</strong>
+              </div>
+            </div>
+
+            <div className="daily-cash-total">
+              <span>Total conocido del día</span>
+              <strong>{clp(legacyCardDay)}</strong>
+            </div>
+
+            <p className="field-help">
+              Hasta el 08/09/2026 ambas operaciones
+              usaban la misma cuenta SumUp. Conservamos
+              el ingreso total, sin inventar cuánto
+              correspondía a Ofrendas o Cafetería.
+            </p>
+          </div>
+        </div>
       )}
 
       <section className="mt-8">
@@ -416,10 +555,10 @@ export function OfferingsPage() {
       </section>
 
       <section className="mt-8">
-        <div className="section-heading"><div><h2>Últimas ofrendas por tarjeta física</h2><p>Se importan desde la cuenta SumUp de Ofrendas y se registran automáticamente en Finanzas.</p></div></div>
-        {transactions.loading ? <Loading /> : transactions.data.length ? (
+        <div className="section-heading"><div><h2>Últimas ofrendas por tarjeta física</h2><p>Solo se consideran como Ofrendas los cobros realizados desde el 09/09/2026 en la cuenta SumUp de Ofrendas.</p></div></div>
+        {transactions.loading ? <Loading /> : separatedOfferingTransactions.length ? (
           <div className="campaign-contributions">
-            {transactions.data.map((item) => (
+            {separatedOfferingTransactions.map((item) => (
               <div className="campaign-contribution-row" key={item.id}>
                 <div className="campaign-contribution-icon"><CreditCard size={18} /></div>
                 <div>
