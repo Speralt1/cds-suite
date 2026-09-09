@@ -131,19 +131,19 @@ function safeId(value) {
   return String(value).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
 }
 
-async function fetchSumUpTransactions(config, fullHistory = false) {
+async function fetchSumUpTransactions(config, fullHistory = false, recentLimit = 25) {
   const { apiKey, merchantCode } = config || {};
   if (!apiKey || !merchantCode) throw new Error('Configuración SumUp incompleta.');
 
   const endpoint = `https://api.sumup.com/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions/history`;
   const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
-  const params = new URLSearchParams({ order: 'descending', limit: '100' });
+  const params = new URLSearchParams({ order: 'descending', limit: fullHistory ? '100' : String(recentLimit) });
   if (!fullHistory) params.set('changes_since', since);
 
   let url = `${endpoint}?${params.toString()}`;
   const all = new Map();
 
-  const maxPages = fullHistory ? 100 : 10;
+  const maxPages = fullHistory ? 100 : 1;
   for (let page = 0; page < maxPages && url; page += 1) {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
@@ -399,7 +399,167 @@ async function ensureSumUpSystemCategory() {
   );
 }
 
-async function syncAccount(account, config, allowBackfill = false) {
+async function fetchLegacyPage(
+  config,
+  url = '',
+  limit = 100,
+) {
+  const { apiKey, merchantCode } = config || {};
+
+  if (!apiKey || !merchantCode) {
+    throw new Error('Configuración SumUp incompleta.');
+  }
+
+  const endpoint =
+    `https://api.sumup.com/v2.1/merchants/` +
+    `${encodeURIComponent(merchantCode)}/transactions/history`;
+
+  const target =
+    url ||
+    `${endpoint}?${new URLSearchParams({
+      order: 'descending',
+      limit: String(limit),
+    }).toString()}`;
+
+  const response = await fetch(target, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `SumUp ${response.status}: ${body.slice(0, 300)}`,
+    );
+  }
+
+  const body = await response.json();
+  const items = Array.isArray(body.items)
+    ? body.items
+    : [];
+
+  const next = (body.links || []).find(
+    (link) => link.rel === 'next',
+  );
+
+  let nextUrl = '';
+
+  if (next?.href) {
+    nextUrl = next.href.startsWith('http')
+      ? next.href
+      : `${endpoint}?${String(next.href).replace(/^\?/, '')}`;
+  }
+
+  return {
+    items,
+    nextUrl,
+  };
+}
+
+async function syncLegacyPage(config) {
+  const integrationRef =
+    db.doc('sumupIntegrations/offerings');
+
+  const integrationSnap =
+    await integrationRef.get();
+
+  const integration =
+    integrationSnap.exists
+      ? integrationSnap.data()
+      : {};
+
+  if (integration?.historyBackfilledAt) {
+    return {
+      reviewed: 0,
+      completed: true,
+    };
+  }
+
+  const cursor =
+    typeof integration?.historyCursor === 'string'
+      ? integration.historyCursor
+      : '';
+
+  const { items, nextUrl } =
+    await fetchLegacyPage(
+      config,
+      cursor,
+      100,
+    );
+
+  let reviewed = 0;
+
+  for (const item of items) {
+    if (!item.timestamp) continue;
+
+    const { localDate } =
+      datePartsChile(item.timestamp);
+
+    if (localDate >= SUMUP_SPLIT_START_DATE) {
+      continue;
+    }
+
+    if (
+      await upsertSumUpTransaction(
+        'offerings',
+        item,
+      )
+    ) {
+      reviewed += 1;
+    }
+  }
+
+  const totalProcessed =
+    Number(
+      integration?.historyBackfillProcessed ||
+        0,
+    ) + reviewed;
+
+  if (!nextUrl) {
+    await integrationRef.set(
+      {
+        historyCursor:
+          FieldValue.delete(),
+        historyBackfillStatus:
+          'completed',
+        historyBackfillProcessed:
+          totalProcessed,
+        historyBackfilledAt:
+          FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return {
+      reviewed,
+      completed: true,
+    };
+  }
+
+  await integrationRef.set(
+    {
+      historyCursor: nextUrl,
+      historyBackfillStatus:
+        'processing',
+      historyBackfillProcessed:
+        totalProcessed,
+      historyBackfillStartedAt:
+        integration?.historyBackfillStartedAt ||
+        FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return {
+    reviewed,
+    completed: false,
+  };
+}
+
+
+async function syncAccount(account, config, allowBackfill = false, recentLimit = 25) {
   const integrationRef = db.doc(`sumupIntegrations/${account}`);
   const label = account === 'offerings' ? 'Ofrendas' : 'Cafetería';
   try {
@@ -412,9 +572,14 @@ async function syncAccount(account, config, allowBackfill = false) {
     const items = await fetchSumUpTransactions(
       config,
       fullHistory,
+      recentLimit,
     );
     let reviewed = 0;
     for (const item of items) {
+      if (!allowBackfill && item.timestamp) {
+        const { localDate } = datePartsChile(item.timestamp);
+        if (localDate < SUMUP_SPLIT_START_DATE) continue;
+      }
       if (await upsertSumUpTransaction(account, item)) reviewed += 1;
     }
     const integrationUpdate = {
@@ -456,7 +621,7 @@ async function syncAccount(account, config, allowBackfill = false) {
   }
 }
 
-async function syncAllSumUp(allowBackfill = false) {
+async function syncAllSumUp(allowBackfill = false, recentLimit = 25) {
   await ensureSumUpSystemCategory();
 
   return [
@@ -464,11 +629,13 @@ async function syncAllSumUp(allowBackfill = false) {
       'offerings',
       sumupOfferings.value(),
       allowBackfill,
+      recentLimit,
     ),
     await syncAccount(
       'cafeteria',
       sumupCafe.value(),
       allowBackfill,
+      recentLimit,
     ),
   ];
 }
@@ -487,7 +654,7 @@ async function requireFinanceUser(req) {
 }
 
 exports.sumupSyncNow = onRequest(
-  { region: REGION, timeoutSeconds: 540, secrets: [sumupOfferings, sumupCafe] },
+  { region: REGION, timeoutSeconds: 55, secrets: [sumupOfferings, sumupCafe] },
   async (req, res) => {
     const origin = req.get('origin') || '';
     if (origin === SITE || origin === `https://${PROJECT}.firebaseapp.com`) {
@@ -508,7 +675,7 @@ exports.sumupSyncNow = onRequest(
 
     try {
       await requireFinanceUser(req);
-      const results = await syncAllSumUp(true);
+      const results = await syncAllSumUp(false, 25);
       res.status(200).json({ ok: true, results });
     } catch (error) {
       const message = String(error?.message || error);
@@ -524,10 +691,13 @@ exports.sumupSyncScheduled = onSchedule(
     schedule: 'every 60 minutes',
     timeZone: 'America/Santiago',
     region: 'southamerica-east1',
-    timeoutSeconds: 120,
+    timeoutSeconds: 540,
     secrets: [sumupOfferings, sumupCafe],
   },
   async () => {
-    await syncAllSumUp(false);
+    await syncAllSumUp(false, 100);
+    await syncLegacyPage(
+      sumupOfferings.value(),
+    );
   },
 );
