@@ -2260,3 +2260,43 @@ button:disabled {
     justify-content: center;
   }
 }
+
+
+/* ==========================================================
+   Ofrendas · página pública + integración SumUp
+   ========================================================== */
+.offering-header-actions { display:flex; gap:10px; }
+.offering-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:18px; }
+.offering-summary-card { display:grid; gap:7px; }
+.offering-summary-card > svg { color:var(--color-primary); }
+.offering-summary-card > span,.offering-summary-card > small { color:var(--color-muted); }
+.offering-summary-card > strong { font-size:26px; }
+.offering-integrations-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.offering-integration-card { padding:20px; border:1px solid var(--color-line); border-radius:16px; background:white; }
+.offering-integration-card h3 { margin-top:5px; }
+.offering-integration-card > .status-pill { display:inline-flex; margin-top:12px; }
+.offering-integration-card > p { margin-top:10px; color:var(--color-muted); font-size:12px; }
+.offering-public-panel { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.offering-public-panel h2 { margin-top:5px; }
+.offering-public-panel p { margin-top:6px; overflow-wrap:anywhere; color:var(--color-muted); font-size:12px; }
+.text-button { width:fit-content; padding:0; border:0; background:transparent; color:var(--color-primary); font-weight:700; cursor:pointer; }
+.giving-public-shell { width:min(680px,calc(100% - 24px)); margin:0 auto; padding:28px 0 44px; }
+.giving-public-hero { margin-top:18px; padding:28px; border:1px solid var(--color-line); border-radius:20px; background:white; }
+.giving-public-hero h1 { margin-top:7px; font-size:clamp(34px,8vw,52px); color:#213c31; }
+.giving-public-hero > p:last-child { margin-top:12px; color:var(--color-muted); line-height:1.55; }
+.giving-methods { display:grid; gap:12px; margin-top:12px; }
+.giving-method-card { padding:24px; border:1px solid var(--color-line); border-radius:18px; background:white; }
+.giving-method-icon { display:inline-flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:12px; background:var(--color-primary-soft); color:var(--color-primary); }
+.giving-method-copy { margin-top:16px; }
+.giving-method-copy h2 { margin-top:5px; font-size:25px; }
+.giving-method-copy > p { margin-top:7px; color:var(--color-muted); line-height:1.5; }
+.giving-method-card .transfer-data { margin-top:18px; }
+.giving-copy-button { width:100%; margin-top:12px; }
+@media (max-width:640px) {
+  .offering-header-actions { width:100%; }
+  .offering-header-actions button { flex:1; }
+  .offering-summary-grid,.offering-integrations-grid { grid-template-columns:1fr; }
+  .offering-public-panel { align-items:stretch; flex-direction:column; }
+  .giving-public-shell { width:calc(100% - 16px); padding-top:14px; }
+  .giving-public-hero,.giving-method-card { padding:20px; border-radius:16px; }
+}

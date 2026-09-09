@@ -203,6 +203,40 @@ service cloud.firestore {
     }
     match /{document=**} { allow read, write: if false; }
 
+    function validGivingSettings(d) {
+      return d.keys().hasOnly([
+        'title','intro','transferEnabled','transferInstructions',
+        'onlineEnabled','onlineLabel','onlineUrl','updatedAt'
+      ])
+      && text(d.title,1,100)
+      && text(d.intro,0,500)
+      && d.transferEnabled is bool
+      && text(d.transferInstructions,0,1500)
+      && d.onlineEnabled is bool
+      && text(d.onlineLabel,0,80)
+      && text(d.onlineUrl,0,500)
+      && d.updatedAt is timestamp;
+    }
+
+    match /publicGivingSettings/{settingId} {
+      allow get: if settingId == 'current';
+      allow list: if false;
+      allow create, update: if details()
+        && settingId == 'current'
+        && validGivingSettings(request.resource.data)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /sumupIntegrations/{account} {
+      allow get, list: if details();
+      allow create, update, delete: if false;
+      match /transactions/{transactionId} {
+        allow get, list: if details();
+        allow create, update, delete: if false;
+      }
+    }
+
     function validCampaign(d) {
       return d.keys().hasOnly([
         'slug',

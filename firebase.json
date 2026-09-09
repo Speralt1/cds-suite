@@ -34,6 +34,13 @@
     ],
     "rewrites": [
       {
+        "source": "/c/**",
+        "function": {
+          "functionId": "campaignShare",
+          "region": "southamerica-west1"
+        }
+      },
+      {
         "source": "/campanas/**",
         "destination": "/campanas.html"
       }
@@ -55,5 +62,9 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "codebase": "default"
   }
 }

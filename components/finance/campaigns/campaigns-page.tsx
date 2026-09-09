@@ -713,7 +713,7 @@ function CampaignDetail({
   const publicUrl =
     typeof window === "undefined"
       ? ""
-      : `${window.location.origin}/campanas/${campaign.slug}`;
+      : `${window.location.origin}/c/${campaign.slug}`;
 
   async function copyPublicUrl() {
     if (!publicUrl) return;

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   test: {
-    exclude: ["tests/rules/**", "node_modules/**"],
+    exclude: ["tests/rules/**", "node_modules/**", "functions/**"],
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
     restoreMocks: true,
