@@ -691,7 +691,24 @@ function CampaignDetail({
     useState<CampaignContribution | null>(null);
   const [voiding, setVoiding] =
     useState<CampaignContribution | null>(null);
+  const [paymentView, setPaymentView] =
+    useState<"active" | "voided">("active");
   const [copied, setCopied] = useState(false);
+
+  const activeContributions =
+    contributions.data.filter(
+      (item) => item.status === "approved",
+    );
+
+  const voidedContributions =
+    contributions.data.filter(
+      (item) => item.status === "voided",
+    );
+
+  const visibleContributions =
+    paymentView === "active"
+      ? activeContributions
+      : voidedContributions;
 
   const publicUrl =
     typeof window === "undefined"
@@ -804,21 +821,51 @@ function CampaignDetail({
         <div className="section-heading">
           <div>
             <h2>Pagos registrados</h2>
-            <p>
-              Aportes verificados que forman parte de esta campaña.
-            </p>
+            <p>Aportes asociados a esta campaña.</p>
           </div>
+        </div>
+
+        <div className="campaign-payment-tabs">
+          <button
+            type="button"
+            className={
+              paymentView === "active"
+                ? "campaign-payment-tab active"
+                : "campaign-payment-tab"
+            }
+            onClick={() => setPaymentView("active")}
+          >
+            Pagos activos
+            <span>{activeContributions.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={
+              paymentView === "voided"
+                ? "campaign-payment-tab active"
+                : "campaign-payment-tab"
+            }
+            onClick={() => setPaymentView("voided")}
+          >
+            Anulados
+            <span>{voidedContributions.length}</span>
+          </button>
         </div>
 
         <Notice error={contributions.error} />
 
         {contributions.loading ? (
           <Loading />
-        ) : contributions.data.length ? (
+        ) : visibleContributions.length ? (
           <div className="campaign-contributions">
-            {contributions.data.map((item) => (
+            {visibleContributions.map((item) => (
               <div
-                className="campaign-contribution-row"
+                className={
+                  item.status === "voided"
+                    ? "campaign-contribution-row campaign-contribution-voided"
+                    : "campaign-contribution-row"
+                }
                 key={item.id}
               >
                 <div className="campaign-contribution-icon">
@@ -833,12 +880,31 @@ function CampaignDetail({
                       ? ` · Cuota ${item.installmentNumber}`
                       : ""}
                   </p>
+
+                  {item.note && (
+                    <p className="campaign-contribution-note">
+                      {item.note}
+                    </p>
+                  )}
+
+                  {item.status === "voided" &&
+                    item.voidReason && (
+                      <p className="campaign-void-reason">
+                        Motivo: {item.voidReason}
+                      </p>
+                    )}
                 </div>
 
                 <div className="campaign-contribution-amount">
                   <strong>{clp(item.amount)}</strong>
 
-                  <span className="status-pill">
+                  <span
+                    className={
+                      item.status === "voided"
+                        ? "status-pill status-voided"
+                        : "status-pill"
+                    }
+                  >
                     {item.status === "voided"
                       ? "Anulado"
                       : "Verificado"}
@@ -855,9 +921,7 @@ function CampaignDetail({
                       <button
                         type="button"
                         className="button-secondary"
-                        onClick={() =>
-                          setEditing(item)
-                        }
+                        onClick={() => setEditing(item)}
                       >
                         <Pencil size={15} />
                         Editar
@@ -866,29 +930,22 @@ function CampaignDetail({
                       <button
                         type="button"
                         className="button-danger"
-                        onClick={() =>
-                          setVoiding(item)
-                        }
+                        onClick={() => setVoiding(item)}
                       >
                         <Trash2 size={15} />
                         Eliminar
                       </button>
                     </div>
                   )}
-
-                  {item.status === "voided" &&
-                    item.voidReason && (
-                      <small className="campaign-void-reason">
-                        {item.voidReason}
-                      </small>
-                    )}
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <Empty>
-            Todavía no has agregado pagos a esta campaña.
+            {paymentView === "active"
+              ? "No hay pagos activos en esta campaña."
+              : "No hay pagos anulados."}
           </Empty>
         )}
       </section>

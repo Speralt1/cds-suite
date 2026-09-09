@@ -2195,3 +2195,68 @@ button:disabled {
     width: 100%;
   }
 }
+
+
+/* Campañas · pestañas de pagos activos/anulados */
+.campaign-payment-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 18px 0;
+  padding: 4px;
+  width: fit-content;
+  border-radius: 10px;
+  background: var(--color-canvas);
+}
+
+.campaign-payment-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.campaign-payment-tab span {
+  display: inline-flex;
+  min-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: white;
+  font-size: 10px;
+}
+
+.campaign-payment-tab.active {
+  background: white;
+  color: var(--color-primary);
+}
+
+.campaign-contribution-voided {
+  opacity: 0.62;
+}
+
+.status-voided {
+  background: #f1f1ef;
+  color: #686868;
+}
+
+@media (max-width: 640px) {
+  .campaign-payment-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .campaign-payment-tab {
+    justify-content: center;
+  }
+}
