@@ -155,16 +155,36 @@ export function useSumUpTransactions(account: SumUpAccount, max = 50) {
 export async function requestSumUpSync(user: User) {
   const token = await user.getIdToken();
   const response = await fetch(
-    "https://southamerica-west1-cds-administracion.cloudfunctions.net/sumupSyncNow",
+    "/api/sumup-sync",
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: "{}",
     },
   );
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body.error || "SumUp todavía no está conectado. Ejecuta el configurador SumUp.");
+  const raw = await response.text();
+  let body: Record<string, unknown> = {};
+
+  try {
+    body = raw
+      ? (JSON.parse(raw) as Record<string, unknown>)
+      : {};
+  } catch {
+    body = {};
   }
+
+  if (!response.ok) {
+    const backendError =
+      typeof body.error === "string"
+        ? body.error
+        : "";
+
+    throw new Error(
+      backendError ||
+        raw ||
+        `No se pudo sincronizar SumUp (HTTP ${response.status}).`,
+    );
+  }
+
   return body;
 }

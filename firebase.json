@@ -34,6 +34,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/sumup-sync",
+        "function": {
+          "functionId": "sumupSyncNow",
+          "region": "southamerica-west1"
+        }
+      },
+      {
         "source": "/c/**",
         "function": {
           "functionId": "campaignShare",
