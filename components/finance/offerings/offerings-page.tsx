@@ -329,7 +329,7 @@ function DailyCashCard({
 
       <div className="daily-cash-lines">
         <div>
-          <span><CreditCard size={15} />Tarjeta SumUp</span>
+          <span><CreditCard size={15} />Tarjeta SumUp · líquido</span>
           <strong>{clp(cardAmount)}</strong>
         </div>
         <div>
@@ -347,7 +347,7 @@ function DailyCashCard({
         <div>
           <span>Acumulado del mes</span>
           <small>
-            Tarjeta {clp(monthCardAmount)} · Efectivo {clp(monthCashAmount)}
+            Tarjeta líquida {clp(monthCardAmount)} · Efectivo {clp(monthCashAmount)}
           </small>
         </div>
         <strong>{clp(monthCardAmount + monthCashAmount)}</strong>
@@ -583,7 +583,7 @@ export function OfferingsPage() {
               <div>
                 <span>
                   <CreditCard size={15} />
-                  Tarjeta SumUp · día
+                  Tarjeta SumUp · líquido del día
                 </span>
                 <strong>{clp(legacyCardDay)}</strong>
               </div>

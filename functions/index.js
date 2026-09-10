@@ -13,6 +13,7 @@ const PROJECT = "cds-administracion";
 const SITE = `https://${PROJECT}.web.app`;
 const SUMUP_SPLIT_START_DATE = '2026-09-09';
 const SUMUP_LEGACY_CATEGORY = 'SumUp histórico sin separar';
+const SUMUP_LIQUID_SCHEMA_VERSION = 2;
 
 const sumupOfferings = defineJsonSecret("SUMUP_OFFERINGS_CONFIG");
 const sumupCafe = defineJsonSecret("SUMUP_CAFETERIA_CONFIG");
@@ -192,8 +193,9 @@ async function upsertSumUpTransaction(account, item) {
 
   const gross = Math.max(0, Math.round(Number(item.amount || 0)));
   const refunded = Math.max(0, Math.round(Number(item.refunded_amount || 0)));
-  const net = Math.max(0, gross - refunded);
+  const amountAfterRefunds = Math.max(0, gross - refunded);
   const fee = Math.max(0, Math.round(Number(item.fee_amount || 0)));
+  const liquid = Math.max(0, amountAfterRefunds - fee);
   const { date, dayKey, period, localDate } = datePartsChile(item.timestamp);
   const isLegacy = localDate < SUMUP_SPLIT_START_DATE;
 
@@ -222,7 +224,7 @@ async function upsertSumUpTransaction(account, item) {
       before && before.status === 'active'
         ? Number(before.amount || 0)
         : 0;
-    const afterActive = net > 0 ? net : 0;
+    const afterActive = liquid > 0 ? liquid : 0;
 
     const wasActive = !!before && before.status === 'active';
     const willBeActive = net > 0;
@@ -312,7 +314,7 @@ async function upsertSumUpTransaction(account, item) {
           financeRef,
           {
             type: 'income',
-            amount: net,
+            amount: liquid,
             date: Timestamp.fromDate(date),
             period,
             day: dayKey,
@@ -356,8 +358,10 @@ async function upsertSumUpTransaction(account, item) {
       transactionCode: item.transaction_code || '',
       grossAmount: gross,
       refundedAmount: refunded,
-      netAmount: net,
+      amountAfterRefunds,
       feeAmount: fee,
+      liquidAmount: liquid,
+      netAmount: liquid,
       currency: item.currency,
       timestamp: Timestamp.fromDate(date),
       status: item.status,
@@ -459,105 +463,90 @@ async function fetchLegacyPage(
 }
 
 async function syncLegacyPage(config) {
-  const integrationRef =
-    db.doc('sumupIntegrations/offerings');
+  const integrationRef = db.doc('sumupIntegrations/offerings');
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.exists ? integrationSnap.data() : {};
 
-  const integrationSnap =
-    await integrationRef.get();
+  const liquidSchemaVersion = Number(integration?.liquidSchemaVersion || 1);
+  const recalculatingLiquid =
+    liquidSchemaVersion < SUMUP_LIQUID_SCHEMA_VERSION;
 
-  const integration =
-    integrationSnap.exists
-      ? integrationSnap.data()
-      : {};
-
-  if (integration?.historyBackfilledAt) {
-    return {
-      reviewed: 0,
-      completed: true,
-    };
+  if (integration?.historyBackfilledAt && !recalculatingLiquid) {
+    return { reviewed: 0, completed: true, liquidSchemaVersion };
   }
 
-  const cursor =
-    typeof integration?.historyCursor === 'string'
-      ? integration.historyCursor
-      : '';
+  const cursor = recalculatingLiquid
+    ? (typeof integration?.liquidMigrationCursor === 'string'
+        ? integration.liquidMigrationCursor
+        : '')
+    : (typeof integration?.historyCursor === 'string'
+        ? integration.historyCursor
+        : '');
 
-  const { items, nextUrl } =
-    await fetchLegacyPage(
-      config,
-      cursor,
-      100,
-    );
-
+  const { items, nextUrl } = await fetchLegacyPage(config, cursor, 100);
   let reviewed = 0;
 
   for (const item of items) {
     if (!item.timestamp) continue;
+    const { localDate } = datePartsChile(item.timestamp);
+    if (localDate >= SUMUP_SPLIT_START_DATE) continue;
+    if (await upsertSumUpTransaction('offerings', item)) reviewed += 1;
+  }
 
-    const { localDate } =
-      datePartsChile(item.timestamp);
+  if (recalculatingLiquid) {
+    const processed = Number(integration?.liquidMigrationProcessed || 0) + reviewed;
 
-    if (localDate >= SUMUP_SPLIT_START_DATE) {
-      continue;
+    if (!nextUrl) {
+      await integrationRef.set({
+        liquidMigrationCursor: FieldValue.delete(),
+        liquidMigrationStatus: 'completed',
+        liquidMigrationProcessed: processed,
+        liquidMigrationCompletedAt: FieldValue.serverTimestamp(),
+        liquidSchemaVersion: SUMUP_LIQUID_SCHEMA_VERSION,
+        historyBackfilledAt:
+          integration?.historyBackfilledAt || FieldValue.serverTimestamp(),
+        historyBackfillStatus: 'completed',
+      }, { merge: true });
+
+      return { reviewed, completed: true, recalculatingLiquid: true };
     }
 
-    if (
-      await upsertSumUpTransaction(
-        'offerings',
-        item,
-      )
-    ) {
-      reviewed += 1;
-    }
+    await integrationRef.set({
+      liquidMigrationCursor: nextUrl,
+      liquidMigrationStatus: 'processing',
+      liquidMigrationProcessed: processed,
+      liquidMigrationStartedAt:
+        integration?.liquidMigrationStartedAt || FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return { reviewed, completed: false, recalculatingLiquid: true };
   }
 
   const totalProcessed =
-    Number(
-      integration?.historyBackfillProcessed ||
-        0,
-    ) + reviewed;
+    Number(integration?.historyBackfillProcessed || 0) + reviewed;
 
   if (!nextUrl) {
-    await integrationRef.set(
-      {
-        historyCursor:
-          FieldValue.delete(),
-        historyBackfillStatus:
-          'completed',
-        historyBackfillProcessed:
-          totalProcessed,
-        historyBackfilledAt:
-          FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    await integrationRef.set({
+      historyCursor: FieldValue.delete(),
+      historyBackfillStatus: 'completed',
+      historyBackfillProcessed: totalProcessed,
+      historyBackfilledAt: FieldValue.serverTimestamp(),
+      liquidSchemaVersion: SUMUP_LIQUID_SCHEMA_VERSION,
+    }, { merge: true });
 
-    return {
-      reviewed,
-      completed: true,
-    };
+    return { reviewed, completed: true };
   }
 
-  await integrationRef.set(
-    {
-      historyCursor: nextUrl,
-      historyBackfillStatus:
-        'processing',
-      historyBackfillProcessed:
-        totalProcessed,
-      historyBackfillStartedAt:
-        integration?.historyBackfillStartedAt ||
-        FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+  await integrationRef.set({
+    historyCursor: nextUrl,
+    historyBackfillStatus: 'processing',
+    historyBackfillProcessed: totalProcessed,
+    historyBackfillStartedAt:
+      integration?.historyBackfillStartedAt || FieldValue.serverTimestamp(),
+  }, { merge: true });
 
-  return {
-    reviewed,
-    completed: false,
-  };
+  return { reviewed, completed: false };
 }
-
 
 async function syncAccount(account, config, allowBackfill = false, recentLimit = 25) {
   const integrationRef = db.doc(`sumupIntegrations/${account}`);
@@ -591,6 +580,7 @@ async function syncAccount(account, config, allowBackfill = false, recentLimit =
       lastSyncStatus: 'ok',
       lastError: '',
       lastImportedCount: reviewed,
+      currentLiquidSchemaVersion: SUMUP_LIQUID_SCHEMA_VERSION,
     };
 
     if (fullHistory) {
