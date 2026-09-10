@@ -304,12 +304,16 @@ function DailyCashCard({
   title,
   cardAmount,
   cashAmount,
+  monthCardAmount,
+  monthCashAmount,
   existingCash,
   onCash,
 }: {
   title: string;
   cardAmount: number;
   cashAmount: number;
+  monthCardAmount: number;
+  monthCashAmount: number;
   existingCash?: FinanceTransaction;
   onCash: () => void;
 }) {
@@ -337,6 +341,16 @@ function DailyCashCard({
       <div className="daily-cash-total">
         <span>Total del día</span>
         <strong>{clp(cardAmount + cashAmount)}</strong>
+      </div>
+
+      <div className="daily-cash-month-total">
+        <div>
+          <span>Acumulado del mes</span>
+          <small>
+            Tarjeta {clp(monthCardAmount)} · Efectivo {clp(monthCashAmount)}
+          </small>
+        </div>
+        <strong>{clp(monthCardAmount + monthCashAmount)}</strong>
       </div>
 
       <button
@@ -402,6 +416,30 @@ export function OfferingsPage() {
     selectedDate,
     "Cafetería",
     "card",
+  );
+
+  const offeringCardMonth = sumFinanceMonth(
+    financeTransactions.data,
+    "Ofrendas",
+    "card",
+  );
+
+  const offeringCashMonth = sumFinanceMonth(
+    financeTransactions.data,
+    "Ofrendas",
+    "cash",
+  );
+
+  const cafeCardMonth = sumFinanceMonth(
+    financeTransactions.data,
+    "Cafetería",
+    "card",
+  );
+
+  const cafeCashMonth = sumFinanceMonth(
+    financeTransactions.data,
+    "Cafetería",
+    "cash",
   );
 
   const legacyCardDay = sumFinanceDay(
@@ -512,6 +550,8 @@ export function OfferingsPage() {
             title="Ofrendas"
             cardAmount={offeringCardDay}
             cashAmount={offeringCash?.amount || 0}
+            monthCardAmount={offeringCardMonth}
+            monthCashAmount={offeringCashMonth}
             existingCash={offeringCash}
             onCash={() => setCashArea("offerings")}
           />
@@ -520,6 +560,8 @@ export function OfferingsPage() {
             title="Cafetería"
             cardAmount={cafeCardDay}
             cashAmount={cafeCash?.amount || 0}
+            monthCardAmount={cafeCardMonth}
+            monthCashAmount={cafeCashMonth}
             existingCash={cafeCash}
             onCash={() => setCashArea("cafeteria")}
           />
