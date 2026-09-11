@@ -227,7 +227,7 @@ async function upsertSumUpTransaction(account, item) {
     const afterActive = liquid > 0 ? liquid : 0;
 
     const wasActive = !!before && before.status === 'active';
-    const willBeActive = net > 0;
+    const willBeActive = liquid > 0;
     const beforeCategory = before?.category || category;
     const beforeDay = before?.day || dayKey;
 
