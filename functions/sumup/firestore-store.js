@@ -95,7 +95,10 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
           return { acquired: false, existingRunId: current.runId || null };
         }
         if (current && expired && current.runId) {
-          tx.set(runRef(current.runId), { status: "abandoned", finishedAt: FieldValue.serverTimestamp() }, { merge: true });
+          const staleRunSnap = await tx.get(runRef(current.runId));
+          if (staleRunSnap.exists && staleRunSnap.data().status === "running") {
+            tx.set(runRef(current.runId), { status: "abandoned", finishedAt: FieldValue.serverTimestamp() }, { merge: true });
+          }
         }
         tx.set(ref, { runId, trigger, acquiredAtMs: now, expiresAtMs: now + ttlMs }, { merge: false });
         return { acquired: true };
@@ -148,6 +151,10 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
             const snap = await tx.get(summaryRef(period));
             return snap.exists ? snap.data() : null;
           },
+          async getAdjustment() {
+            const snap = await tx.get(adjustmentsCol(account).doc(rawId));
+            return snap.exists ? snap.data() : null;
+          },
           setFinance(data) {
             const converted = { ...data };
             if (converted.date instanceof Date) converted.date = Timestamp.fromDate(converted.date);
@@ -168,11 +175,11 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
             tx.set(rRef, converted, { merge: true });
           },
           setSummary(period, data, lastTransactionId) {
-            tx.set(
-              summaryRef(period),
-              { ...data, lastTransactionId, updatedAt: FieldValue.serverTimestamp() },
-              { merge: true },
-            );
+            // Deliberately NOT merge:true — `data` is the FULL 9-field
+            // summary doc (see core.applySummaryDelta). Firestore's merge
+            // recursively merges nested maps, so it would never delete a
+            // category/day key we zeroed out locally (Slice 1 review B1).
+            tx.set(summaryRef(period), { ...data, lastTransactionId, updatedAt: FieldValue.serverTimestamp() });
           },
           setAdjustment(data) {
             const converted = { ...data };

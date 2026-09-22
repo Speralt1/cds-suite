@@ -97,23 +97,33 @@ export class MemoryStore {
       getFinance: () => Promise<FinanceDoc | null>;
       getRaw: () => Promise<RawDoc | null>;
       getSummary: (period: string) => Promise<Record<string, unknown> | null>;
+      getAdjustment: () => Promise<Record<string, unknown> | null>;
       setFinance: (data: FinanceDoc) => void;
       setRaw: (data: RawDoc) => void;
       setSummary: (period: string, data: Record<string, unknown>, lastTransactionId: string) => void;
       setAdjustment: (data: Record<string, unknown>) => void;
       addVersion: (data: Record<string, unknown>) => void;
-    }) => Promise<void>,
+    }) => Promise<{ outcome: string } | void>,
   ) {
     const rawKey = `${account}/${rawId}`;
     const tx = {
       getFinance: async () => this.finance.get(financeId) || null,
       getRaw: async () => this.raw.get(rawKey) || null,
       getSummary: async (period: string) => this.summaries.get(period) || null,
-      setFinance: (data: FinanceDoc) => this.finance.set(financeId, data),
-      setRaw: (data: RawDoc) => this.raw.set(rawKey, data),
+      getAdjustment: async () => this.adjustments.get(rawKey) as Record<string, unknown> | null || null,
+      // Firestore's set(..., {merge:true}) recursively merges nested map
+      // fields instead of replacing them — a key our payload omits is left
+      // untouched (not deleted). Emulating that here is what makes the B1
+      // regression (a full-refund zeroing a category out of the JS object,
+      // but the stale key surviving in Firestore) detectable by these tests.
+      setFinance: (data: FinanceDoc) => this.finance.set(financeId, mergeDeep(this.finance.get(financeId) || {}, data)),
+      setRaw: (data: RawDoc) => this.raw.set(rawKey, mergeDeep(this.raw.get(rawKey) || {}, data)),
+      // setSummary is a deliberate FULL REPLACE (no merge) — see
+      // functions/sumup/core.js applySummaryDelta and firestore-store.js.
       setSummary: (period: string, data: Record<string, unknown>, lastTransactionId: string) =>
         this.summaries.set(period, { ...data, lastTransactionId }),
-      setAdjustment: (data: Record<string, unknown>) => this.adjustments.set(rawKey, data),
+      setAdjustment: (data: Record<string, unknown>) =>
+        this.adjustments.set(rawKey, mergeDeep((this.adjustments.get(rawKey) as Record<string, unknown>) || {}, data)),
       addVersion: (data: Record<string, unknown>) => {
         const list = this.versions.get(rawKey) || [];
         list.push(data);
@@ -122,6 +132,24 @@ export class MemoryStore {
     };
     return workFn(tx);
   }
+}
+
+/** Emulates Firestore's recursive merge for set(..., {merge:true}): plain
+ * nested objects are merged key by key; anything else (arrays, Dates,
+ * primitives, `null`) replaces the previous value wholesale. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date);
+}
+function mergeDeep<T extends Record<string, unknown>>(base: T, patch: Record<string, unknown>): T {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(out[key])) {
+      out[key] = mergeDeep(out[key] as Record<string, unknown>, value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out as T;
 }
 
 export function makeClock(startMs: number) {

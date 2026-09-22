@@ -211,7 +211,7 @@ function classifyItem(normalized, existing, context) {
   if (!normalized.isCLP) return { action: "ignored", reason: "nonCLP", ledgerEffect: false };
   if (!normalized.isPayment) return { action: "ignored", reason: "nonPayment", ledgerEffect: false };
   if (normalized.isPending) return { action: "ignored", reason: "pending", ledgerEffect: false };
-  if (mode === "main" && normalized.localDate < splitStartDate) {
+  if ((mode === "main" || mode === "sweep") && normalized.localDate < splitStartDate) {
     return { action: "ignored", reason: "preSplit", ledgerEffect: false };
   }
   if (mode === "legacy" && normalized.localDate >= splitStartDate) {
@@ -254,21 +254,30 @@ function classifyItem(normalized, existing, context) {
   const wasActive = financeDoc.status === "active";
 
   if (wasActive && !willBeActive) {
-    return { action: "void", reason: "refunded", ledgerEffect: true };
+    return { action: "void", reason: "refund_total", ledgerEffect: true };
   }
 
   if (!wasActive && willBeActive) {
-    return { action: "reactivate", reason: "system_reactivation", ledgerEffect: true };
+    return { action: "reactivate", reason: "reactivate", ledgerEffect: true };
   }
 
   if (wasActive && willBeActive) {
+    // Ledger changes are decided ONLY by what the book actually shows
+    // (amount/category/day). A snapshotHash difference caused by metadata
+    // that never reaches the ledger (payout_*, card_type, etc.) must not
+    // bump revision or write a version — it only refreshes the raw doc.
+    const sameAmount = Number(financeDoc.amount || 0) === normalized.amount;
     const sameCategory = financeDoc.category === normalized.category;
     const sameDay = financeDoc.day === normalized.dayKey;
     const sameHash = existing?.rawSnapshotHash === normalized.snapshotHash;
-    if (sameCategory && sameDay && sameHash) {
-      return { action: "unchanged", reason: null, ledgerEffect: false };
+
+    if (sameAmount && sameCategory && sameDay) {
+      if (sameHash) return { action: "unchanged", reason: null, ledgerEffect: false };
+      return { action: "rawRefresh", reason: null, ledgerEffect: false };
     }
-    return { action: "update", reason: "refunded_partial", ledgerEffect: true };
+
+    const reason = !sameAmount ? "refund_partial" : "reclassify";
+    return { action: "update", reason, ledgerEffect: true };
   }
 
   // !wasActive && !willBeActive: still voided/zero, nothing to do.
@@ -302,16 +311,39 @@ function summaryDelta(before, after) {
   return { incomeTotalDelta, countDelta, categoryDeltas, dayDeltas };
 }
 
-/** Applies summaryDelta output onto a (mutable-copy) summary map, matching current merge semantics. */
-function applySummaryDelta(summary, delta) {
-  const next = {
-    incomeTotal: Number(summary?.incomeTotal || 0) + delta.incomeTotalDelta,
-    expenseTotal: Number(summary?.expenseTotal || 0),
-    transactionCount: Number(summary?.transactionCount || 0) + delta.countDelta,
-    incomeByCategory: { ...(summary?.incomeByCategory || {}) },
-    dailyIncome: { ...(summary?.dailyIncome || {}) },
+/** The 9 fields a financeMonthlySummaries doc always has (see firestore.rules validSummary). */
+function emptySummary() {
+  return {
+    incomeTotal: 0,
+    expenseTotal: 0,
+    result: 0,
+    titheTotal: 0,
+    transactionCount: 0,
+    incomeByCategory: {},
+    expenseByCategory: {},
+    dailyIncome: {},
+    dailyExpense: {},
   };
-  next.result = next.incomeTotal - next.expenseTotal;
+}
+
+/**
+ * Applies summaryDelta output onto a summary doc and returns the FULL 9-field
+ * document. Callers MUST write this with a plain (non-merge) set — Firestore's
+ * merge:true recursively merges nested maps, so a category/day key we delete
+ * locally (because its total hit zero) would silently survive in Firestore
+ * under merge:true, since merge never deletes a key just because our payload
+ * omits it (BLOCKER B1 / M1 in the Slice 1 review).
+ */
+function applySummaryDelta(summary, delta) {
+  const base = { ...emptySummary(), ...(summary || {}) };
+  const next = {
+    ...base,
+    incomeTotal: Number(base.incomeTotal || 0) + delta.incomeTotalDelta,
+    transactionCount: Number(base.transactionCount || 0) + delta.countDelta,
+    incomeByCategory: { ...(base.incomeByCategory || {}) },
+    dailyIncome: { ...(base.dailyIncome || {}) },
+  };
+  next.result = next.incomeTotal - Number(next.expenseTotal || 0);
 
   for (const [key, value] of Object.entries(delta.categoryDeltas)) {
     next.incomeByCategory[key] = Number(next.incomeByCategory[key] || 0) + value;
@@ -355,6 +387,7 @@ module.exports = {
   SUMUP_LIQUID_SCHEMA_VERSION,
   SUMUP_AMOUNT_BASIS,
   IGNORE_REASONS,
+  emptySummary,
   safeId,
   datePartsChile,
   ledgerAmount,

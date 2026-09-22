@@ -29,6 +29,7 @@ function emptyCounts() {
     unchanged: 0,
     review: 0,
     chargebacks: 0,
+    rawRefreshed: 0,
     ignored: { nonPOS: 0, nonCLP: 0, nonPayment: 0, pending: 0, preSplit: 0, other: 0 },
   };
 }
@@ -65,7 +66,6 @@ function buildRawDoc(normalized, previousRaw, extra) {
     financeTransactionId: `sumup_${normalized.account}_${core.safeId(normalized.id)}`,
     review: false,
     reviewReason: null,
-    ...(previousRaw ? {} : {}),
     ...extra,
   };
 }
@@ -78,6 +78,12 @@ function mapCountKey(action) {
   return null;
 }
 
+/**
+ * Applies one classifyItem decision. Counters are incremented AFTER the
+ * transaction resolves (never inside the callback), because Firestore
+ * retries a transaction callback on contention — counting inside it would
+ * double-count on a retry (Slice 1 review, MINOR).
+ */
 async function applyLedgerDecision({ account, normalized, decision, store, runId, now, counts }) {
   const rawId = core.safeId(normalized.id);
   const financeId = `sumup_${account}_${rawId}`;
@@ -91,11 +97,19 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
     return;
   }
 
-  if (decision.action === "review") {
-    counts.review += 1;
-    if (decision.reason === "chargeback") counts.chargebacks += 1;
+  if (decision.action === "rawRefresh") {
     await store.runLedgerTransaction({ account, rawId, financeId }, async (tx) => {
       const previousRaw = await tx.getRaw();
+      tx.setRaw(buildRawDoc(normalized, previousRaw, { review: false, reviewReason: null, runId, syncedAt: now }));
+    });
+    counts.rawRefreshed = (counts.rawRefreshed || 0) + 1;
+    return;
+  }
+
+  if (decision.action === "review") {
+    await store.runLedgerTransaction({ account, rawId, financeId }, async (tx) => {
+      const previousRaw = await tx.getRaw();
+      const existingAdjustment = decision.reason === "chargeback" ? await tx.getAdjustment() : null;
       tx.setRaw(
         buildRawDoc(normalized, previousRaw, {
           review: true,
@@ -115,15 +129,18 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
           reviewRequired: true,
           runId,
           detectedAt: now,
+          firstDetectedAt: existingAdjustment?.firstDetectedAt || now,
         });
       }
     });
+    counts.review += 1;
+    if (decision.reason === "chargeback") counts.chargebacks += 1;
     return;
   }
 
   // create | update | void | reactivate
   const countKey = mapCountKey(decision.action);
-  await store.runLedgerTransaction({ account, rawId, financeId }, async (tx) => {
+  const outcome = await store.runLedgerTransaction({ account, rawId, financeId }, async (tx) => {
     const freshFinance = await tx.getFinance();
     const previousRaw = await tx.getRaw();
 
@@ -132,7 +149,6 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
     const voidedByHuman =
       freshFinance?.status === "voided" && !!freshFinance?.voidedBy && freshFinance.voidedBy !== "system:sumup";
     if (editedByHuman || voidedByHuman) {
-      counts.review += 1;
       tx.setRaw(
         buildRawDoc(normalized, previousRaw, {
           review: true,
@@ -141,20 +157,18 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
           syncedAt: now,
         }),
       );
-      return;
+      return { outcome: "review" };
     }
-
-    counts[countKey] += 1;
 
     const willBeActive = decision.action !== "void";
     const before = freshFinance
       ? {
           active: freshFinance.status === "active",
           amount: Number(freshFinance.amount || 0),
-          category: freshFinance.category,
-          day: freshFinance.day,
+          category: freshFinance.category || normalized.category,
+          day: freshFinance.day || normalized.dayKey,
         }
-      : { active: false, amount: 0, category: null, day: null };
+      : { active: false, amount: 0, category: normalized.category, day: normalized.dayKey };
     const after = willBeActive
       ? { active: true, amount: normalized.amount, category: normalized.category, day: normalized.dayKey }
       : { active: false, amount: 0, category: before.category, day: before.day };
@@ -220,7 +234,12 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
         at: now,
       });
     }
+
+    return { outcome: "applied" };
   });
+
+  if (outcome?.outcome === "review") counts.review += 1;
+  else counts[countKey] += 1;
 }
 
 /**
