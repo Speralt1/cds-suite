@@ -27,7 +27,7 @@ import {
   reviewDays,
   type DayStatus,
 } from "@/lib/finance/insights";
-import { WORSHIP_WEEKDAYS, MONTHS } from "@/lib/finance/constants";
+import { WORSHIP_WEEKDAYS, MONTHS, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
 import type { CashArea } from "@/lib/offerings/cash";
 import {
@@ -51,6 +51,22 @@ const AREA_TO_KEY: Record<string, CashArea> = {
   Ofrendas: "offerings",
   Cafetería: "cafeteria",
 };
+
+// SumUp breakdown order (§D minor de Atlas): Ofrendas, luego Cafetería,
+// luego el histórico sin separar y por último cualquier otra categoría.
+const SUMUP_CATEGORY_ORDER = ["Ofrendas", "Cafetería", "SumUp histórico sin separar"];
+function orderedSumUpEntries(byCategory: Record<string, number>) {
+  return Object.entries(byCategory).sort(([a], [b]) => {
+    const ia = SUMUP_CATEGORY_ORDER.indexOf(a);
+    const ib = SUMUP_CATEGORY_ORDER.indexOf(b);
+    const ra = ia === -1 ? SUMUP_CATEGORY_ORDER.length : ia;
+    const rb = ib === -1 ? SUMUP_CATEGORY_ORDER.length : ib;
+    return ra !== rb ? ra - rb : a.localeCompare(b);
+  });
+}
+function sumUpCategoryLabel(category: string) {
+  return category === "SumUp histórico sin separar" ? "Histórico sin separar" : category;
+}
 
 function DailyKpis({
   income,
@@ -381,13 +397,23 @@ export function SummaryPage() {
 
   const isMonthCalendarView = summaryView === "month" && period.view === "month";
 
-  const income = details && summaryView !== "day" ? incomeByMethod(latest.data) : null;
-  const review = isMonthCalendarView
-    ? reviewDays(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
-    : [];
-  const calendar = isMonthCalendarView
-    ? buildMonthCalendar(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
-    : null;
+  // M2 (Atlas): income/review/calendar must only be computed once `latest`
+  // has actually loaded without error for this period — otherwise a leader
+  // (details=false, hook disabled) or a still-loading/errored fetch could
+  // render stale or empty-looking figures as if they were final. Leaders
+  // never get here since `details` is false, so they keep seeing exactly
+  // what they saw before (no calendar, no "Días por revisar").
+  const detailReady = details && !latest.loading && !latest.error;
+
+  const income = detailReady && summaryView !== "day" ? incomeByMethod(latest.data) : null;
+  const review =
+    isMonthCalendarView && detailReady
+      ? reviewDays(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
+      : [];
+  const calendar =
+    isMonthCalendarView && detailReady
+      ? buildMonthCalendar(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
+      : null;
   const effectiveSelectedDay =
     selectedDay ||
     (calendar ? defaultSelectedDay(calendar, review, today()) : undefined) ||
@@ -590,7 +616,13 @@ export function SummaryPage() {
             />
           )}
 
-          {details && income && (
+          {details &&
+            (latest.loading ? (
+              <Loading />
+            ) : latest.error ? (
+              <Notice error={latest.error} />
+            ) : (
+              income && (
             <section className="panel income-method-panel">
               <h3>Ingresos por tipo de dinero</h3>
               <table className="income-method-table">
@@ -616,8 +648,8 @@ export function SummaryPage() {
                       {row.key === "sumup" && row.amount > 0 && (
                         <tr className="income-method-breakdown">
                           <td colSpan={4}>
-                            {Object.entries(income.sumUpByCategory)
-                              .map(([category, amount]) => `${category} ${clp(amount)}`)
+                            {orderedSumUpEntries(income.sumUpByCategory)
+                              .map(([category, amount]) => `${sumUpCategoryLabel(category)} ${clp(amount)}`)
                               .join(" · ")}
                           </td>
                         </tr>
@@ -635,14 +667,21 @@ export function SummaryPage() {
               <p className="field-help">
                 SumUp en bruto: la comisión aún no está disponible.
               </p>
-              {income.total !== total.incomeTotal && (
-                <p className="notice success">
-                  Los datos se están sincronizando; los totales pueden
-                  cambiar en segundos.
-                </p>
-              )}
+              {income.total !== total.incomeTotal &&
+                (latest.data.length >= MAX_PERIOD_RECORDS ? (
+                  <p className="notice-warning">
+                    <TriangleAlert size={15} aria-hidden="true" />
+                    Resultado truncado: el período supera 10.000 movimientos.
+                  </p>
+                ) : (
+                  <p className="notice success">
+                    Los datos se están sincronizando; los totales pueden
+                    cambiar en segundos.
+                  </p>
+                ))}
             </section>
-          )}
+              )
+            ))}
 
           <p className="mb-6 text-xs text-muted">
             El resultado del período es ingresos menos gastos; no representa el
@@ -651,8 +690,15 @@ export function SummaryPage() {
 
           {/* Días por revisar y el calendario dependen de los días de culto
               del mes, no de si ya hay movimientos registrados: deben poder
-              mostrar "Sin registros" incluso en un mes vacío. */}
-          {isMonthCalendarView && (
+              mostrar "Sin registros" incluso en un mes vacío. Solo se
+              calculan/muestran para roles con detalle (M2, Atlas): leader
+              nunca ve calendario ni "Días por revisar". */}
+          {details && isMonthCalendarView && (latest.loading ? (
+            <Loading />
+          ) : latest.error ? (
+            <Notice error={latest.error} />
+          ) : (
+            <>
             <section className="panel review-days">
               <h3>Días por revisar ({review.length})</h3>
               {review.length ? (
@@ -684,14 +730,7 @@ export function SummaryPage() {
                 </p>
               )}
             </section>
-          )}
 
-          {summaryView === "year" ? (
-            <p className="field-help mb-6">
-              Selecciona Mensual para ver el calendario.
-            </p>
-          ) : (
-            isMonthCalendarView && (
               <section className="calendar-section">
                 <div className="calendar-wrap">
                   <MonthCalendar
@@ -713,7 +752,13 @@ export function SummaryPage() {
                   }}
                 />
               </section>
-            )
+            </>
+          ))}
+
+          {summaryView === "year" && (
+            <p className="field-help mb-6">
+              Selecciona Mensual para ver el calendario.
+            </p>
           )}
 
           {!total.transactionCount ? (
