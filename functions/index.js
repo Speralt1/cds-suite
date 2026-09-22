@@ -5,18 +5,24 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 
+const core = require("./sumup/core");
+const engine = require("./sumup/engine");
+const { createFirestoreStore } = require("./sumup/firestore-store");
+
 initializeApp();
 
 const db = getFirestore();
 const REGION = "southamerica-west1";
 const PROJECT = "cds-administracion";
 const SITE = `https://${PROJECT}.web.app`;
-const SUMUP_SPLIT_START_DATE = '2026-09-09';
-const SUMUP_LEGACY_CATEGORY = 'SumUp histórico sin separar';
-const SUMUP_LIQUID_SCHEMA_VERSION = 2;
+const SUMUP_SPLIT_START_DATE = core.SUMUP_SPLIT_START_DATE;
+const SUMUP_LEGACY_CATEGORY = core.SUMUP_LEGACY_CATEGORY;
 
 const sumupOfferings = defineJsonSecret("SUMUP_OFFERINGS_CONFIG");
 const sumupCafe = defineJsonSecret("SUMUP_CAFETERIA_CONFIG");
+
+const store = createFirestoreStore({ db, FieldValue, Timestamp });
+const clock = { now: () => Date.now() };
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -113,269 +119,76 @@ exports.campaignShare = onRequest(
   },
 );
 
-function datePartsChile(iso) {
-  const date = new Date(iso);
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
-  const get = (type) => parts.find((p) => p.type === type)?.value || '';
-  const year = get('year');
-  const month = get('month');
-  const day = get('day');
-  return { date, dayKey: String(Number(day)), period: `${year}-${month}`, localDate: `${year}-${month}-${day}` };
-}
-
-function safeId(value) {
-  return String(value).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
-}
-
-async function fetchSumUpTransactions(config, fullHistory = false, recentLimit = 25) {
+/**
+ * fetchPage — the only place that talks HTTP to SumUp. `cursor` is either
+ * null (first page: build the query from changesSince/order/limit) or a
+ * `links.next` href from a previous page (may be relative or absolute).
+ * Every call gets its own 15s AbortController (S1.7).
+ */
+async function fetchPage({ config, changesSince, order, limit, cursor }) {
   const { apiKey, merchantCode } = config || {};
-  if (!apiKey || !merchantCode) throw new Error('Configuración SumUp incompleta.');
-
-  const endpoint = `https://api.sumup.com/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions/history`;
-  const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
-  const params = new URLSearchParams({ order: 'descending', limit: fullHistory ? '100' : String(recentLimit) });
-  if (!fullHistory) params.set('changes_since', since);
-
-  let url = `${endpoint}?${params.toString()}`;
-  const all = new Map();
-
-  const maxPages = fullHistory ? 100 : 1;
-  for (let page = 0; page < maxPages && url; page += 1) {
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`SumUp ${response.status}: ${text.slice(0, 300)}`);
-    }
-
-    const body = await response.json();
-    for (const item of body.items || []) {
-      const id = item.transaction_id || item.id;
-      if (id) all.set(id, item);
-    }
-
-    const next = (body.links || []).find((link) => link.rel === 'next');
-    if (!next?.href) url = '';
-    else if (next.href.startsWith('http')) url = next.href;
-    else url = `${endpoint}?${String(next.href).replace(/^\?/, '')}`;
+  if (!apiKey || !merchantCode) {
+    const err = new Error("Configuración SumUp incompleta.");
+    err.errorClass = "config_error";
+    throw err;
   }
 
-  return [...all.values()];
-}
+  const endpoint = `https://api.sumup.com/v2.1/merchants/${encodeURIComponent(merchantCode)}/transactions/history`;
+  let url;
+  if (cursor) {
+    url = cursor.startsWith("http") ? cursor : `${endpoint}?${String(cursor).replace(/^\?/, "")}`;
+  } else {
+    const params = new URLSearchParams({ order, limit: String(limit) });
+    if (changesSince) params.set("changes_since", changesSince);
+    url = `${endpoint}?${params.toString()}`;
+  }
 
-function emptySummary() {
-  return {
-    incomeTotal: 0,
-    expenseTotal: 0,
-    result: 0,
-    titheTotal: 0,
-    transactionCount: 0,
-    incomeByCategory: {},
-    expenseByCategory: {},
-    dailyIncome: {},
-    dailyExpense: {},
-  };
-}
-
-async function upsertSumUpTransaction(account, item) {
-  if (item.payment_type !== 'POS' || item.type !== 'PAYMENT') return false;
-  if (!['SUCCESSFUL', 'REFUNDED'].includes(item.status)) return false;
-  if (item.currency !== 'CLP') return false;
-
-  const transactionId = item.transaction_id || item.id;
-  if (!transactionId || !item.timestamp) return false;
-
-  const gross = Math.max(0, Math.round(Number(item.amount || 0)));
-  const refunded = Math.max(0, Math.round(Number(item.refunded_amount || 0)));
-  const amountAfterRefunds = Math.max(0, gross - refunded);
-  const fee = Math.max(0, Math.round(Number(item.fee_amount || 0)));
-  const liquid = Math.max(0, amountAfterRefunds - fee);
-  const { date, dayKey, period, localDate } = datePartsChile(item.timestamp);
-  const isLegacy = localDate < SUMUP_SPLIT_START_DATE;
-
-  const category = isLegacy
-    ? SUMUP_LEGACY_CATEGORY
-    : account === 'offerings'
-      ? 'Ofrendas'
-      : 'Cafetería';
-
-  const description = isLegacy
-    ? 'Ingreso SumUp histórico · sin separación'
-    : account === 'offerings'
-      ? 'Ofrenda tarjeta física · SumUp'
-      : 'Venta Cafetería · SumUp';
-
-  const rawRef = db.doc(`sumupIntegrations/${account}/transactions/${safeId(transactionId)}`);
-  const financeRef = db.doc(`financeTransactions/sumup_${account}_${safeId(transactionId)}`);
-  const summaryRef = db.doc(`financeMonthlySummaries/${period}`);
-
-  await db.runTransaction(async (tx) => {
-    const beforeSnap = await tx.get(financeRef);
-    const summarySnap = await tx.get(summaryRef);
-    const before = beforeSnap.exists ? beforeSnap.data() : null;
-
-    const beforeActive =
-      before && before.status === 'active'
-        ? Number(before.amount || 0)
-        : 0;
-    const afterActive = liquid > 0 ? liquid : 0;
-
-    const wasActive = !!before && before.status === 'active';
-    const willBeActive = liquid > 0;
-    const beforeCategory = before?.category || category;
-    const beforeDay = before?.day || dayKey;
-
-    const changed =
-      !before ||
-      beforeActive !== afterActive ||
-      wasActive !== willBeActive ||
-      beforeCategory !== category ||
-      beforeDay !== dayKey;
-
-    if (changed) {
-      const summary = summarySnap.exists
-        ? { ...emptySummary(), ...summarySnap.data() }
-        : emptySummary();
-
-      const incomeByCategory = {
-        ...(summary.incomeByCategory || {}),
-      };
-      const dailyIncome = {
-        ...(summary.dailyIncome || {}),
-      };
-
-      if (beforeActive > 0) {
-        incomeByCategory[beforeCategory] =
-          Number(incomeByCategory[beforeCategory] || 0) -
-          beforeActive;
-        dailyIncome[beforeDay] =
-          Number(dailyIncome[beforeDay] || 0) -
-          beforeActive;
-      }
-
-      if (afterActive > 0) {
-        incomeByCategory[category] =
-          Number(incomeByCategory[category] || 0) +
-          afterActive;
-        dailyIncome[dayKey] =
-          Number(dailyIncome[dayKey] || 0) +
-          afterActive;
-      }
-
-      for (const key of Object.keys(incomeByCategory)) {
-        if (incomeByCategory[key] === 0) {
-          delete incomeByCategory[key];
-        }
-      }
-
-      for (const key of Object.keys(dailyIncome)) {
-        if (dailyIncome[key] === 0) {
-          delete dailyIncome[key];
-        }
-      }
-
-      const countDelta =
-        (willBeActive ? 1 : 0) -
-        (wasActive ? 1 : 0);
-
-      const incomeTotal =
-        Number(summary.incomeTotal || 0) -
-        beforeActive +
-        afterActive;
-
-      const expenseTotal =
-        Number(summary.expenseTotal || 0);
-
-      tx.set(
-        summaryRef,
-        {
-          ...summary,
-          incomeTotal,
-          result: incomeTotal - expenseTotal,
-          transactionCount:
-            Number(summary.transactionCount || 0) +
-            countDelta,
-          incomeByCategory,
-          dailyIncome,
-          updatedAt: FieldValue.serverTimestamp(),
-          lastTransactionId: financeRef.id,
-        },
-        { merge: true },
-      );
-
-      if (willBeActive) {
-        tx.set(
-          financeRef,
-          {
-            type: 'income',
-            amount: liquid,
-            date: Timestamp.fromDate(date),
-            period,
-            day: dayKey,
-            category,
-            paymentMethod: 'card',
-            description,
-            note: `SumUp ${item.transaction_code || transactionId}`,
-            source: 'general',
-            status: 'active',
-            revision: Number(before?.revision || 0) + 1,
-            createdBy: before?.createdBy || 'system:sumup',
-            createdAt:
-              before?.createdAt ||
-              FieldValue.serverTimestamp(),
-            updatedBy: 'system:sumup',
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-      } else if (before) {
-        tx.set(
-          financeRef,
-          {
-            ...before,
-            status: 'voided',
-            revision: Number(before.revision || 0) + 1,
-            updatedBy: 'system:sumup',
-            updatedAt: FieldValue.serverTimestamp(),
-            voidReason: 'Pago reembolsado en SumUp',
-            voidedBy: 'system:sumup',
-            voidedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const err = new Error("SumUp timeout (15s)");
+      err.errorClass = "provider_unavailable";
+      throw err;
     }
+    const err = new Error(String(error.message || error));
+    err.errorClass = "provider_unavailable";
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
-    tx.set(rawRef, {
-      account,
-      transactionId,
-      transactionCode: item.transaction_code || '',
-      grossAmount: gross,
-      refundedAmount: refunded,
-      amountAfterRefunds,
-      feeAmount: fee,
-      liquidAmount: liquid,
-      netAmount: liquid,
-      currency: item.currency,
-      timestamp: Timestamp.fromDate(date),
-      status: item.status,
-      paymentType: item.payment_type,
-      cardType: item.card_type || '',
-      entryMode: item.entry_mode || '',
-      user: item.user || item.username || '',
-      productSummary: item.product_summary || '',
-      syncedAt: FieldValue.serverTimestamp(),
-      financeTransactionId: financeRef.id,
-    }, { merge: true });
-  });
+  if (!response.ok) {
+    const text = await response.text();
+    const err = new Error(`SumUp ${response.status}: ${text.slice(0, 300)}`);
+    err.status = response.status;
+    err.errorClass = core.classifyHttpError({ status: response.status });
+    throw err;
+  }
 
-  return true;
+  const body = await response.json();
+  const items = Array.isArray(body.items) ? body.items : [];
+  const next = (body.links || []).find((link) => link.rel === "next");
+  return { items, nextCursor: next?.href || null };
+}
+
+async function requireFinanceUser(req) {
+  const header = req.get('authorization') || '';
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) throw new Error('UNAUTHENTICATED');
+
+  const decoded = await getAuth().verifyIdToken(match[1]);
+  const user = await db.doc(`users/${decoded.uid}`).get();
+  if (!user.exists || user.data().active !== true || !['admin', 'pastor', 'finance'].includes(user.data().role)) {
+    throw new Error('FORBIDDEN');
+  }
+  return decoded.uid;
 }
 
 async function ensureSumUpSystemCategory() {
@@ -403,244 +216,47 @@ async function ensureSumUpSystemCategory() {
   );
 }
 
-async function fetchLegacyPage(
-  config,
-  url = '',
-  limit = 100,
-) {
-  const { apiKey, merchantCode } = config || {};
-
-  if (!apiKey || !merchantCode) {
-    throw new Error('Configuración SumUp incompleta.');
-  }
-
-  const endpoint =
-    `https://api.sumup.com/v2.1/merchants/` +
-    `${encodeURIComponent(merchantCode)}/transactions/history`;
-
-  const target =
-    url ||
-    `${endpoint}?${new URLSearchParams({
-      order: 'descending',
-      limit: String(limit),
-    }).toString()}`;
-
-  const response = await fetch(target, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      Accept: 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(
-      `SumUp ${response.status}: ${body.slice(0, 300)}`,
-    );
-  }
-
-  const body = await response.json();
-  const items = Array.isArray(body.items)
-    ? body.items
-    : [];
-
-  const next = (body.links || []).find(
-    (link) => link.rel === 'next',
-  );
-
-  let nextUrl = '';
-
-  if (next?.href) {
-    nextUrl = next.href.startsWith('http')
-      ? next.href
-      : `${endpoint}?${String(next.href).replace(/^\?/, '')}`;
-  }
-
-  return {
-    items,
-    nextUrl,
-  };
-}
-
-async function syncLegacyPage(config) {
-  const integrationRef = db.doc('sumupIntegrations/offerings');
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.exists ? integrationSnap.data() : {};
-
-  const liquidSchemaVersion = Number(integration?.liquidSchemaVersion || 1);
-  const recalculatingLiquid =
-    liquidSchemaVersion < SUMUP_LIQUID_SCHEMA_VERSION;
-
-  if (integration?.historyBackfilledAt && !recalculatingLiquid) {
-    return { reviewed: 0, completed: true, liquidSchemaVersion };
-  }
-
-  const cursor = recalculatingLiquid
-    ? (typeof integration?.liquidMigrationCursor === 'string'
-        ? integration.liquidMigrationCursor
-        : '')
-    : (typeof integration?.historyCursor === 'string'
-        ? integration.historyCursor
-        : '');
-
-  const { items, nextUrl } = await fetchLegacyPage(config, cursor, 100);
-  let reviewed = 0;
-
-  for (const item of items) {
-    if (!item.timestamp) continue;
-    const { localDate } = datePartsChile(item.timestamp);
-    if (localDate >= SUMUP_SPLIT_START_DATE) continue;
-    if (await upsertSumUpTransaction('offerings', item)) reviewed += 1;
-  }
-
-  if (recalculatingLiquid) {
-    const processed = Number(integration?.liquidMigrationProcessed || 0) + reviewed;
-
-    if (!nextUrl) {
-      await integrationRef.set({
-        liquidMigrationCursor: FieldValue.delete(),
-        liquidMigrationStatus: 'completed',
-        liquidMigrationProcessed: processed,
-        liquidMigrationCompletedAt: FieldValue.serverTimestamp(),
-        liquidSchemaVersion: SUMUP_LIQUID_SCHEMA_VERSION,
-        historyBackfilledAt:
-          integration?.historyBackfilledAt || FieldValue.serverTimestamp(),
-        historyBackfillStatus: 'completed',
-      }, { merge: true });
-
-      return { reviewed, completed: true, recalculatingLiquid: true };
-    }
-
-    await integrationRef.set({
-      liquidMigrationCursor: nextUrl,
-      liquidMigrationStatus: 'processing',
-      liquidMigrationProcessed: processed,
-      liquidMigrationStartedAt:
-        integration?.liquidMigrationStartedAt || FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    return { reviewed, completed: false, recalculatingLiquid: true };
-  }
-
-  const totalProcessed =
-    Number(integration?.historyBackfillProcessed || 0) + reviewed;
-
-  if (!nextUrl) {
-    await integrationRef.set({
-      historyCursor: FieldValue.delete(),
-      historyBackfillStatus: 'completed',
-      historyBackfillProcessed: totalProcessed,
-      historyBackfilledAt: FieldValue.serverTimestamp(),
-      liquidSchemaVersion: SUMUP_LIQUID_SCHEMA_VERSION,
-    }, { merge: true });
-
-    return { reviewed, completed: true };
-  }
-
-  await integrationRef.set({
-    historyCursor: nextUrl,
-    historyBackfillStatus: 'processing',
-    historyBackfillProcessed: totalProcessed,
-    historyBackfillStartedAt:
-      integration?.historyBackfillStartedAt || FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  return { reviewed, completed: false };
-}
-
-async function syncAccount(account, config, allowBackfill = false, recentLimit = 25) {
-  const integrationRef = db.doc(`sumupIntegrations/${account}`);
-  const label = account === 'offerings' ? 'Ofrendas' : 'Cafetería';
+/** Runs one account's sync in isolation: never throws, always resolves to a result row. */
+async function safeRunAccountSync(opts) {
   try {
-    const integrationSnap = await integrationRef.get();
-    const alreadyBackfilled =
-      !!integrationSnap.data()?.historyBackfilledAt;
-    const fullHistory =
-      allowBackfill && !alreadyBackfilled;
-
-    const items = await fetchSumUpTransactions(
-      config,
-      fullHistory,
-      recentLimit,
-    );
-    let reviewed = 0;
-    for (const item of items) {
-      if (!allowBackfill && item.timestamp) {
-        const { localDate } = datePartsChile(item.timestamp);
-        if (localDate < SUMUP_SPLIT_START_DATE) continue;
-      }
-      if (await upsertSumUpTransaction(account, item)) reviewed += 1;
-    }
-    const integrationUpdate = {
-      account,
-      label,
-      configured: true,
-      merchantCode: config.merchantCode,
-      lastSyncAt: FieldValue.serverTimestamp(),
-      lastSyncStatus: 'ok',
-      lastError: '',
-      lastImportedCount: reviewed,
-      currentLiquidSchemaVersion: SUMUP_LIQUID_SCHEMA_VERSION,
-    };
-
-    if (fullHistory) {
-      integrationUpdate.historyBackfilledAt =
-        FieldValue.serverTimestamp();
-    }
-
-    await integrationRef.set(
-      integrationUpdate,
-      { merge: true },
-    );
-
-    return {
-      account,
-      reviewed,
-      fullHistory,
-    };
+    return await engine.runAccountSync(opts);
   } catch (error) {
-    await integrationRef.set({
-      account,
-      label,
-      configured: true,
-      lastSyncAt: FieldValue.serverTimestamp(),
-      lastSyncStatus: 'error',
-      lastError: String(error?.message || error).slice(0, 500),
-    }, { merge: true });
-    throw error;
+    console.error(`sumup sync (${opts.account})`, error);
+    return {
+      account: opts.account,
+      runId: null,
+      status: "failed",
+      counts: engine.emptyCounts(),
+      errorClass: error.errorClass || core.classifyHttpError(error),
+      errorMessage: String(error?.message || error),
+    };
   }
 }
 
-async function syncAllSumUp(allowBackfill = false, recentLimit = 25) {
-  await ensureSumUpSystemCategory();
-
-  return [
-    await syncAccount(
-      'offerings',
-      sumupOfferings.value(),
-      allowBackfill,
-      recentLimit,
-    ),
-    await syncAccount(
-      'cafeteria',
-      sumupCafe.value(),
-      allowBackfill,
-      recentLimit,
-    ),
-  ];
+async function safeRunLegacyPage(opts) {
+  try {
+    return await engine.runLegacyPage(opts);
+  } catch (error) {
+    console.error(`sumup legacy sync (${opts.account})`, error);
+    return {
+      account: opts.account,
+      runId: null,
+      status: "failed",
+      counts: engine.emptyCounts(),
+      errorClass: error.errorClass || core.classifyHttpError(error),
+      errorMessage: String(error?.message || error),
+    };
+  }
 }
 
-async function requireFinanceUser(req) {
-  const header = req.get('authorization') || '';
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  if (!match) throw new Error('UNAUTHENTICATED');
-
-  const decoded = await getAuth().verifyIdToken(match[1]);
-  const user = await db.doc(`users/${decoded.uid}`).get();
-  if (!user.exists || user.data().active !== true || !['admin', 'pastor', 'finance'].includes(user.data().role)) {
-    throw new Error('FORBIDDEN');
-  }
-  return decoded.uid;
+function toApiResult(result) {
+  return {
+    account: result.account,
+    runId: result.runId,
+    status: result.status,
+    counts: result.counts,
+    errorClass: result.errorClass || null,
+  };
 }
 
 exports.sumupSyncNow = onRequest(
@@ -663,18 +279,71 @@ exports.sumupSyncNow = onRequest(
       return;
     }
 
+    let uid;
     try {
-      await requireFinanceUser(req);
-      const results = await syncAllSumUp(false, 25);
-      res.status(200).json({ ok: true, results });
+      uid = await requireFinanceUser(req);
     } catch (error) {
       const message = String(error?.message || error);
-      const status = message === 'UNAUTHENTICATED' ? 401 : message === 'FORBIDDEN' ? 403 : 500;
-      console.error('sumupSyncNow', error);
+      const status = message === 'UNAUTHENTICATED' ? 401 : message === 'FORBIDDEN' ? 403 : 401;
+      console.error('sumupSyncNow auth', error);
       res.status(status).json({ ok: false, error: message });
+      return;
     }
+
+    // Budget of 40s for the whole request (S1.7). Both accounts are isolated
+    // and the response is ALWAYS 200 JSON from here on, whatever happens.
+    const BUDGET_MS = 40_000;
+    try {
+      await ensureSumUpSystemCategory();
+    } catch (error) {
+      console.error('sumupSyncNow ensureSumUpSystemCategory', error);
+    }
+
+    const offeringsConfig = sumupOfferings.value();
+    const cafeConfig = sumupCafe.value();
+
+    const [offeringsResult, cafeResult] = await Promise.all([
+      safeRunAccountSync({
+        account: 'offerings',
+        config: offeringsConfig,
+        otherMerchantCode: cafeConfig?.merchantCode,
+        trigger: 'manual',
+        requestedBy: uid,
+        budgetMs: BUDGET_MS,
+        fetchPage,
+        store,
+        clock,
+      }),
+      safeRunAccountSync({
+        account: 'cafeteria',
+        config: cafeConfig,
+        otherMerchantCode: offeringsConfig?.merchantCode,
+        trigger: 'manual',
+        requestedBy: uid,
+        budgetMs: BUDGET_MS,
+        fetchPage,
+        store,
+        clock,
+      }),
+    ]);
+
+    res.status(200).json({ ok: true, results: [toApiResult(offeringsResult), toApiResult(cafeResult)] });
   },
 );
+
+const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+async function shouldSweep(account) {
+  try {
+    const integration = await store.getIntegration(account);
+    const last = integration?.lastSweepAt;
+    if (!last) return true;
+    const lastMs = last?.toDate ? last.toDate().getTime() : new Date(last).getTime();
+    return Number.isNaN(lastMs) || Date.now() - lastMs >= SWEEP_INTERVAL_MS;
+  } catch {
+    return false;
+  }
+}
 
 exports.sumupSyncScheduled = onSchedule(
   {
@@ -685,9 +354,79 @@ exports.sumupSyncScheduled = onSchedule(
     secrets: [sumupOfferings, sumupCafe],
   },
   async () => {
-    await syncAllSumUp(false, 100);
-    await syncLegacyPage(
-      sumupOfferings.value(),
-    );
+    try {
+      await ensureSumUpSystemCategory();
+    } catch (error) {
+      console.error('sumupSyncScheduled ensureSumUpSystemCategory', error);
+    }
+
+    const offeringsConfig = sumupOfferings.value();
+    const cafeConfig = sumupCafe.value();
+
+    // Incremental sync, isolated per account (S1.3): one account failing
+    // never stops the other, nor the legacy backfill below.
+    const incremental = await Promise.allSettled([
+      safeRunAccountSync({
+        account: 'offerings',
+        config: offeringsConfig,
+        otherMerchantCode: cafeConfig?.merchantCode,
+        trigger: 'scheduled',
+        requestedBy: 'system:scheduler',
+        budgetMs: 480_000,
+        fetchPage,
+        store,
+        clock,
+      }),
+      safeRunAccountSync({
+        account: 'cafeteria',
+        config: cafeConfig,
+        otherMerchantCode: offeringsConfig?.merchantCode,
+        trigger: 'scheduled',
+        requestedBy: 'system:scheduler',
+        budgetMs: 480_000,
+        fetchPage,
+        store,
+        clock,
+      }),
+    ]);
+    incremental.forEach((settled) => {
+      if (settled.status === 'rejected') console.error('sumupSyncScheduled incremental', settled.reason);
+    });
+
+    // Daily 45-day sweep (S1.5), at most once a day per account.
+    const sweepTargets = [
+      { account: 'offerings', config: offeringsConfig, other: cafeConfig?.merchantCode },
+      { account: 'cafeteria', config: cafeConfig, other: offeringsConfig?.merchantCode },
+    ];
+    for (const target of sweepTargets) {
+      // eslint-disable-next-line no-await-in-loop
+      if (await shouldSweep(target.account)) {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await safeRunAccountSync({
+          account: target.account,
+          config: target.config,
+          otherMerchantCode: target.other,
+          trigger: 'sweep',
+          requestedBy: 'system:sweep',
+          budgetMs: Infinity,
+          sweep: true,
+          fetchPage,
+          store,
+          clock,
+        });
+        if (result.status === 'failed') console.error('sumupSyncScheduled sweep', target.account, result.errorMessage);
+      }
+    }
+
+    // Legacy backfill: always runs, regardless of the above (S1.3).
+    const legacyResult = await safeRunLegacyPage({
+      account: 'offerings',
+      config: offeringsConfig,
+      requestedBy: 'system:scheduler',
+      fetchPage,
+      store,
+      clock,
+    });
+    if (legacyResult.status === 'failed') console.error('sumupSyncScheduled legacy', legacyResult.errorMessage);
   },
 );
