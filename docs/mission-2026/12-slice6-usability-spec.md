@@ -269,7 +269,7 @@ Orden: primero las de Revisar, en orden cronológico; después las Info. Si no h
 1. Después del login se llega a `/finanzas`. `/dashboard` redirige ahí y los tests de auth están actualizados.
 2. Ya no existen la bienvenida, "Lo que viene", "Un mismo propósito", el tagline de Finanzas ni el ítem Dashboard.
 3. La pestaña y el título dicen "Ofrendas y Cafetería"; la ruta sigue siendo `/finanzas/ofrendas`.
-4. En el Resumen de septiembre 2026, sin hacer scroll a 1440×900, se ve la tabla por tipo de dinero: Efectivo $900.000; Tarjeta SumUp · bruto $2.891.000 con el desglose $165.500 / $1.922.700 / $802.800; Total $6.717.397, igual a `incomeTotal`.
+4. En el Resumen de septiembre 2026, sin hacer scroll a 1440×900, se ve la tabla por tipo de dinero: Efectivo = efectivo de Ofrendas ($460.000) + Cafetería ($440.000) + diezmos y otros ingresos en efectivo; Tarjeta SumUp · bruto $2.891.000 con el desglose $165.500 / $1.922.700 / $802.800; Total $6.717.397, igual a `incomeTotal`.
 5. La suma por método es igual al total de ingresos (test unitario de `incomeByMethod`).
 6. Cada tarjeta de área muestra SumUp bruto, efectivo y total, del día y del mes. En septiembre: Ofrendas $165.500 + $460.000 = $625.500; Cafetería $1.922.700 + $440.000 = $2.362.700.
 7. Ofrendas y Cafetería ya no lista pagos SumUp individuales ni usa `useSumUpTransactions`.
