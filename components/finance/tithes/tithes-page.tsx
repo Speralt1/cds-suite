@@ -31,37 +31,51 @@ export function TithesPage() {
     </DetailGuard>
   );
 }
-function ProfileCard({ profile }: { profile: TitheProfile }) {
+function ProfileRow({
+  profile,
+  onRegister,
+}: {
+  profile: TitheProfile;
+  onRegister: (profile: TitheProfile) => void;
+}) {
   const latest = useLatestAttribution(profile.id);
   return (
-    <Link href={profileHref(profile.id)} className="profile-card">
-      <div className="flex justify-between gap-2">
-        <h3>{profile.displayName}</h3>
-        <span
-          className={`status-pill shrink-0 self-start ${profile.active ? "" : "voided"}`}
-        >
-          {profile.active ? "Activo" : "Inactivo"}
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-muted">
+    <div className="profile-row">
+      <Link href={profileHref(profile.id)} className="profile-row-name">
+        {profile.displayName}
+      </Link>
+      <span className="profile-row-type">
         {profile.type === "family" ? "Familia" : "Persona"}
-      </p>
-      <p className="mt-5 text-xs">
-        Último registro:{" "}
-        {latest.loading ? "Consultando…" : dateLabel(latest.data[0]?.date)}
-      </p>
-      {latest.error && (
-        <p className="mt-2 text-xs text-danger">
-          No se pudo consultar el último registro.
-        </p>
+      </span>
+      <span className="profile-row-latest">
+        {latest.loading
+          ? "Consultando…"
+          : latest.error
+            ? "—"
+            : dateLabel(latest.data[0]?.date)}
+      </span>
+      <span
+        className={`status-pill shrink-0 ${profile.active ? "" : "voided"}`}
+      >
+        {profile.active ? "Activo" : "Inactivo"}
+      </span>
+      {profile.active && (
+        <button
+          type="button"
+          className="button-secondary profile-row-action"
+          onClick={() => onRegister(profile)}
+        >
+          Registrar
+        </button>
       )}
-    </Link>
+    </div>
   );
 }
 function Tithes() {
   const params = useSearchParams();
   const [period, setPeriod] = usePeriod();
   const [register, setRegister] = useState(params.get("registrar") === "1");
+  const [registerProfile, setRegisterProfile] = useState<TitheProfile | null>(null);
   const [create, setCreate] = useState(false);
   const [search, setSearch] = useState("");
   const [cursor, setCursor] = useState("");
@@ -91,7 +105,6 @@ function Tithes() {
           </button>
         }
       />
-      <PeriodPicker monthlyOnly value={period} onChange={setPeriod} />
       <Notice
         success={success}
         error={
@@ -102,6 +115,63 @@ function Tithes() {
           profiles.error
         }
       />
+      <div className="filters tithe-search">
+        <label>
+          Buscar persona o familia
+          <input
+            type="search"
+            autoFocus
+            placeholder="Escribe el inicio del nombre…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCursor("");
+            }}
+          />
+        </label>
+      </div>
+      <div className="section-heading mt-6">
+        <h2>Personas y familias</h2>
+        <button className="button-secondary" onClick={() => setCreate(true)}>
+          + Crear nueva ficha
+        </button>
+      </div>
+      {profiles.loading ? (
+        <Loading />
+      ) : profiles.error ? null : profiles.data.length ? (
+        <div className="profile-rows">
+          {profiles.data.slice(0, PAGE_SIZE).map((p) => (
+            <ProfileRow key={p.id} profile={p} onRegister={setRegisterProfile} />
+          ))}
+        </div>
+      ) : (
+        <Empty>
+          No hay fichas para esta búsqueda. Puedes crear la primera.
+        </Empty>
+      )}
+      <div className="mt-5 flex gap-3">
+        {cursor && (
+          <button className="button-secondary" onClick={() => setCursor("")}>
+            Volver al inicio
+          </button>
+        )}
+        {profiles.data.length > PAGE_SIZE && (
+          <button
+            className="button-secondary"
+            onClick={() =>
+              setCursor(
+                JSON.stringify([
+                  profiles.data[PAGE_SIZE - 1].searchName,
+                  profiles.data[PAGE_SIZE - 1].id,
+                ]),
+              )
+            }
+          >
+            Siguiente página
+          </button>
+        )}
+      </div>
+      <PeriodPicker monthlyOnly value={period} onChange={setPeriod} />
       <div className="kpi-grid tithe-kpis">
         <article className="kpi">
           <h3>Diezmos del mes</h3>
@@ -147,61 +217,6 @@ function Tithes() {
           </span>
         </article>
       </div>
-      <div className="section-heading mt-8">
-        <h2>Personas y familias</h2>
-        <button className="button-secondary" onClick={() => setCreate(true)}>
-          + Crear nueva ficha
-        </button>
-      </div>
-      <div className="filters">
-        <label>
-          Buscar por nombre
-          <input
-            type="search"
-            placeholder="Inicio del nombre de persona o familia"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCursor("");
-            }}
-          />
-        </label>
-      </div>
-      {profiles.loading ? (
-        <Loading />
-      ) : profiles.error ? null : profiles.data.length ? (
-        <div className="profile-grid">
-          {profiles.data.slice(0, PAGE_SIZE).map((p) => (
-            <ProfileCard key={p.id} profile={p} />
-          ))}
-        </div>
-      ) : (
-        <Empty>
-          No hay fichas para esta búsqueda. Puedes crear la primera.
-        </Empty>
-      )}
-      <div className="mt-5 flex gap-3">
-        {cursor && (
-          <button className="button-secondary" onClick={() => setCursor("")}>
-            Volver al inicio
-          </button>
-        )}
-        {profiles.data.length > PAGE_SIZE && (
-          <button
-            className="button-secondary"
-            onClick={() =>
-              setCursor(
-                JSON.stringify([
-                  profiles.data[PAGE_SIZE - 1].searchName,
-                  profiles.data[PAGE_SIZE - 1].id,
-                ]),
-              )
-            }
-          >
-            Siguiente página
-          </button>
-        )}
-      </div>
       {create && (
         <ProfileForm
           onClose={() => setCreate(false)}
@@ -210,6 +225,13 @@ function Tithes() {
       )}{" "}
       {register && (
         <TitheRegister onClose={() => setRegister(false)} onSaved={saved} />
+      )}
+      {registerProfile && (
+        <TitheRegister
+          initialProfile={registerProfile}
+          onClose={() => setRegisterProfile(null)}
+          onSaved={saved}
+        />
       )}
     </>
   );
