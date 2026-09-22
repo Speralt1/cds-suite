@@ -234,7 +234,25 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow get, list: if details();
         allow create, update, delete: if false;
+
+        match /versions/{versionId} {
+          allow get, list: if details();
+          allow create, update, delete: if false;
+        }
       }
+      match /adjustments/{adjustmentId} {
+        allow get, list: if details();
+        allow create, update, delete: if false;
+      }
+      match /_locks/{lockId} {
+        allow get, list: if false;
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /sumupSyncRuns/{runId} {
+      allow get, list: if details();
+      allow create, update, delete: if false;
     }
 
     function validCampaign(d) {
