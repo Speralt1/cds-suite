@@ -279,6 +279,13 @@ exports.sumupSyncNow = onRequest(
       return;
     }
 
+    // M5 — one absolute deadline computed from the moment this request
+    // started, shared by both accounts, instead of a budget each one measures
+    // from its own (slightly later) start. Manual runs get 25s of work,
+    // leaving headroom under Hosting/Cloud Run's own timeout.
+    const requestStartedAt = clock.now();
+    const deadlineAt = requestStartedAt + 25_000;
+
     let uid;
     try {
       uid = await requireFinanceUser(req);
@@ -290,17 +297,30 @@ exports.sumupSyncNow = onRequest(
       return;
     }
 
-    // Budget of 40s for the whole request (S1.7). Both accounts are isolated
-    // and the response is ALWAYS 200 JSON from here on, whatever happens.
-    const BUDGET_MS = 40_000;
     try {
       await ensureSumUpSystemCategory();
     } catch (error) {
       console.error('sumupSyncNow ensureSumUpSystemCategory', error);
     }
 
-    const offeringsConfig = sumupOfferings.value();
-    const cafeConfig = sumupCafe.value();
+    // MINOR — secrets can throw if the JSON they hold is malformed; from here
+    // on the response must still always be JSON (S1.7).
+    let offeringsConfig;
+    let cafeConfig;
+    try {
+      offeringsConfig = sumupOfferings.value();
+      cafeConfig = sumupCafe.value();
+    } catch (error) {
+      console.error('sumupSyncNow secrets', error);
+      res.status(200).json({
+        ok: false,
+        results: [
+          { account: 'offerings', runId: null, status: 'failed', counts: engine.emptyCounts(), errorClass: 'config_error' },
+          { account: 'cafeteria', runId: null, status: 'failed', counts: engine.emptyCounts(), errorClass: 'config_error' },
+        ],
+      });
+      return;
+    }
 
     const [offeringsResult, cafeResult] = await Promise.all([
       safeRunAccountSync({
@@ -309,7 +329,7 @@ exports.sumupSyncNow = onRequest(
         otherMerchantCode: cafeConfig?.merchantCode,
         trigger: 'manual',
         requestedBy: uid,
-        budgetMs: BUDGET_MS,
+        deadlineAt,
         fetchPage,
         store,
         clock,
@@ -320,7 +340,7 @@ exports.sumupSyncNow = onRequest(
         otherMerchantCode: offeringsConfig?.merchantCode,
         trigger: 'manual',
         requestedBy: uid,
-        budgetMs: BUDGET_MS,
+        deadlineAt,
         fetchPage,
         store,
         clock,
@@ -354,17 +374,31 @@ exports.sumupSyncScheduled = onSchedule(
     secrets: [sumupOfferings, sumupCafe],
   },
   async () => {
+    // M6 — the whole scheduled run must finish comfortably under the 540s
+    // timeout: incremental sync -> legacy -> sweep, in that order, each with
+    // a finite share of the remaining time.
+    const runStartedAt = clock.now();
+
     try {
       await ensureSumUpSystemCategory();
     } catch (error) {
       console.error('sumupSyncScheduled ensureSumUpSystemCategory', error);
     }
 
-    const offeringsConfig = sumupOfferings.value();
-    const cafeConfig = sumupCafe.value();
+    // MINOR — a malformed secret must not crash the scheduled invocation.
+    let offeringsConfig;
+    let cafeConfig;
+    try {
+      offeringsConfig = sumupOfferings.value();
+      cafeConfig = sumupCafe.value();
+    } catch (error) {
+      console.error('sumupSyncScheduled secrets', error);
+      return;
+    }
 
     // Incremental sync, isolated per account (S1.3): one account failing
-    // never stops the other, nor the legacy backfill below.
+    // never stops the other, nor the legacy backfill or sweep below.
+    const incrementalDeadline = runStartedAt + 180_000;
     const incremental = await Promise.allSettled([
       safeRunAccountSync({
         account: 'offerings',
@@ -372,7 +406,7 @@ exports.sumupSyncScheduled = onSchedule(
         otherMerchantCode: cafeConfig?.merchantCode,
         trigger: 'scheduled',
         requestedBy: 'system:scheduler',
-        budgetMs: 480_000,
+        deadlineAt: incrementalDeadline,
         fetchPage,
         store,
         clock,
@@ -383,7 +417,7 @@ exports.sumupSyncScheduled = onSchedule(
         otherMerchantCode: offeringsConfig?.merchantCode,
         trigger: 'scheduled',
         requestedBy: 'system:scheduler',
-        budgetMs: 480_000,
+        deadlineAt: incrementalDeadline,
         fetchPage,
         store,
         clock,
@@ -392,31 +426,6 @@ exports.sumupSyncScheduled = onSchedule(
     incremental.forEach((settled) => {
       if (settled.status === 'rejected') console.error('sumupSyncScheduled incremental', settled.reason);
     });
-
-    // Daily 45-day sweep (S1.5), at most once a day per account.
-    const sweepTargets = [
-      { account: 'offerings', config: offeringsConfig, other: cafeConfig?.merchantCode },
-      { account: 'cafeteria', config: cafeConfig, other: offeringsConfig?.merchantCode },
-    ];
-    for (const target of sweepTargets) {
-      // eslint-disable-next-line no-await-in-loop
-      if (await shouldSweep(target.account)) {
-        // eslint-disable-next-line no-await-in-loop
-        const result = await safeRunAccountSync({
-          account: target.account,
-          config: target.config,
-          otherMerchantCode: target.other,
-          trigger: 'sweep',
-          requestedBy: 'system:sweep',
-          budgetMs: Infinity,
-          sweep: true,
-          fetchPage,
-          store,
-          clock,
-        });
-        if (result.status === 'failed') console.error('sumupSyncScheduled sweep', target.account, result.errorMessage);
-      }
-    }
 
     // Legacy backfill: always runs, regardless of the above (S1.3).
     const legacyResult = await safeRunLegacyPage({
@@ -428,5 +437,34 @@ exports.sumupSyncScheduled = onSchedule(
       clock,
     });
     if (legacyResult.status === 'failed') console.error('sumupSyncScheduled legacy', legacyResult.errorMessage);
+
+    // Daily 45-day sweep (S1.5), at most once a day per account, last in
+    // line and with a finite budget + its own cursor (M6) so it can never
+    // block the incremental sync or the legacy backfill above, nor run past
+    // the scheduled function's own timeout.
+    const sweepDeadline = runStartedAt + 480_000;
+    const sweepTargets = [
+      { account: 'offerings', config: offeringsConfig, other: cafeConfig?.merchantCode },
+      { account: 'cafeteria', config: cafeConfig, other: offeringsConfig?.merchantCode },
+    ];
+    for (const target of sweepTargets) {
+      // eslint-disable-next-line no-await-in-loop
+      if (clock.now() < sweepDeadline && (await shouldSweep(target.account))) {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await safeRunAccountSync({
+          account: target.account,
+          config: target.config,
+          otherMerchantCode: target.other,
+          trigger: 'sweep',
+          requestedBy: 'system:sweep',
+          deadlineAt: sweepDeadline,
+          sweep: true,
+          fetchPage,
+          store,
+          clock,
+        });
+        if (result.status === 'failed') console.error('sumupSyncScheduled sweep', target.account, result.errorMessage);
+      }
+    }
   },
 );

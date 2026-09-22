@@ -9,7 +9,7 @@
  * (functions/sumup/firestore-store.js).
  *
  * See docs/mission-2026/02-atlas-sumup-audit.md §7 (S1.1-S1.13) for the spec
- * this implements.
+ * this implements, plus two rounds of Atlas review (B1, M1-M8, MINOR).
  */
 
 const core = require("./core");
@@ -18,6 +18,9 @@ const FORTY_FIVE_DAYS_MS = 45 * 24 * 60 * 60 * 1000;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const DEFAULT_PAGE_LIMIT_MAIN = 100;
 const DEFAULT_PAGE_LIMIT_LEGACY = 100;
+// M5 — never start a page fetch unless there's at least a 15s fetch timeout
+// plus a 5s safety margin left before the deadline.
+const PAGE_START_MARGIN_MS = 15_000 + 5_000;
 
 function emptyCounts() {
   return {
@@ -267,14 +270,15 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
  * @param {string} opts.account            'offerings' | 'cafeteria'
  * @param {{apiKey?: string, merchantCode?: string}} opts.config
  * @param {string} [opts.otherMerchantCode] the sibling account's merchantCode, for the collision guard
- * @param {'manual'|'scheduled'|'sweep'|'legacy'} opts.trigger
+ * @param {'manual'|'scheduled'|'sweep'} opts.trigger
  * @param {string} opts.requestedBy
- * @param {number} [opts.budgetMs]         wall-clock budget for this run (Infinity for sweep/legacy by default)
+ * @param {number} [opts.deadlineAt]       absolute clock.now() deadline (M5). Takes priority over budgetMs.
+ * @param {number} [opts.budgetMs]         wall-clock budget for this run, relative to start (used when deadlineAt is not given)
  * @param {number} [opts.leaseTtlMs]
  * @param {(params: {config, changesSince, order, limit, cursor}) => Promise<{items: any[], nextCursor: string|null}>} opts.fetchPage
  * @param {object} opts.store              see functions/sumup/firestore-store.js for the shape
  * @param {{now: () => number}} opts.clock
- * @param {boolean} [opts.sweep]
+ * @param {boolean} [opts.sweep]           full 45-day sweep: its own cursor field (sweepCursor) and preSplit filtering apply (M6)
  * @param {string} [opts.splitStartDate]
  */
 async function runAccountSync(opts) {
@@ -284,6 +288,7 @@ async function runAccountSync(opts) {
     otherMerchantCode,
     trigger,
     requestedBy,
+    deadlineAt,
     budgetMs = Infinity,
     leaseTtlMs = trigger === "manual" ? 60_000 : 9 * 60_000,
     fetchPage,
@@ -295,17 +300,37 @@ async function runAccountSync(opts) {
   } = opts;
 
   const startedAt = clock.now();
-  const runId = await store.createRun({
-    account,
-    provider: "sumup",
-    merchantCode: config?.merchantCode || null,
-    trigger,
-    requestedBy: requestedBy || "system",
-    status: "running",
-    startedAt,
-  });
+  const deadline = Number.isFinite(deadlineAt) ? deadlineAt : Number.isFinite(budgetMs) ? startedAt + budgetMs : Infinity;
+  // M6 — the sweep never shares its resumption cursor with the incremental sync.
+  const cursorField = sweep ? "sweepCursor" : "pendingCursor";
 
-  const lease = await store.acquireLease(account, { ttlMs: leaseTtlMs, runId, trigger, now: startedAt });
+  let runId;
+  let lease;
+  try {
+    runId = await store.createRun({
+      account,
+      provider: "sumup",
+      merchantCode: config?.merchantCode || null,
+      trigger,
+      requestedBy: requestedBy || "system",
+      status: "running",
+      startedAt,
+    });
+    lease = await store.acquireLease(account, { ttlMs: leaseTtlMs, runId, trigger, now: startedAt });
+  } catch (error) {
+    // createRun/acquireLease itself failed (e.g. Firestore outage) — nothing
+    // was leased, so there is nothing to release; just report it.
+    const errorClass = error.errorClass || core.classifyHttpError(error);
+    return {
+      account,
+      runId: runId || null,
+      status: "failed",
+      counts: emptyCounts(),
+      errorClass,
+      errorMessage: String(error.message || error),
+    };
+  }
+
   if (!lease.acquired) {
     const status = trigger === "manual" ? "already_running" : "skipped_locked";
     await store.updateRun(runId, { status, finishedAt: startedAt, durationMs: 0 });
@@ -329,24 +354,28 @@ async function runAccountSync(opts) {
 
     const integration = (await store.getIntegration(account)) || {};
     const now = startedAt;
+    const watermarkMs = integration.watermark ? new Date(integration.watermark).getTime() : now - FORTY_FIVE_DAYS_MS;
 
-    let changesSince;
-    let cursor = null;
-    if (sweep) {
-      changesSince = new Date(now - FORTY_FIVE_DAYS_MS).toISOString();
-    } else {
-      const watermarkMs = integration.watermark ? new Date(integration.watermark).getTime() : now - FORTY_FIVE_DAYS_MS;
-      changesSince = new Date(watermarkMs - FIFTEEN_MINUTES_MS).toISOString();
-      cursor = typeof integration.pendingCursor === "string" && integration.pendingCursor ? integration.pendingCursor : null;
+    function changesSinceFromWatermark() {
+      return sweep
+        ? new Date(now - FORTY_FIVE_DAYS_MS).toISOString()
+        : new Date(watermarkMs - FIFTEEN_MINUTES_MS).toISOString();
     }
 
-    let latestTimestampMs = integration.watermark ? new Date(integration.watermark).getTime() : now - FORTY_FIVE_DAYS_MS;
+    let changesSince = changesSinceFromWatermark();
+    let cursor =
+      typeof integration[cursorField] === "string" && integration[cursorField] ? integration[cursorField] : null;
+
+    let latestTimestampMs = watermarkMs;
     let pages = 0;
     let partial = false;
+    let retriedFromWatermark = false;
     const cursorIn = cursor;
 
-    while (true) {
-      if (Number.isFinite(budgetMs) && clock.now() - startedAt >= budgetMs) {
+    pageLoop: while (true) {
+      // M5 — never start a page unless there's enough budget left for a
+      // 15s fetch plus a 5s safety margin.
+      if (deadline - clock.now() < PAGE_START_MARGIN_MS) {
         partial = true;
         break;
       }
@@ -356,6 +385,17 @@ async function runAccountSync(opts) {
         page = await fetchPage({ config, changesSince, order: "ascending", limit: pageLimit, cursor });
       } catch (err) {
         const errorClass = err.errorClass || core.classifyHttpError(err);
+
+        // M7 — a client error against a RESUMED cursor likely means the
+        // cursor itself is stale/invalid. Reset it and retry once from the
+        // watermark (or from now-45d for a sweep) before giving up.
+        if (errorClass === "provider_client_error" && cursor && !retriedFromWatermark) {
+          retriedFromWatermark = true;
+          cursor = null;
+          changesSince = changesSinceFromWatermark();
+          continue pageLoop;
+        }
+
         const errorMessage = String(err.message || err);
         await store.setIntegration(account, {
           lastErrorClass: errorClass,
@@ -387,6 +427,15 @@ async function runAccountSync(opts) {
       const rawMap = await store.getRawBatch(account, ids);
 
       for (const normalized of normalizedItems) {
+        // M5 — also check the deadline mid-page. `cursor` still holds the
+        // value used to fetch the CURRENT page, so breaking here and
+        // persisting it makes the next run reprocess this same page
+        // (idempotent) instead of skipping whatever we didn't reach yet.
+        if (clock.now() >= deadline) {
+          partial = true;
+          break pageLoop;
+        }
+
         if (normalized.hasTimestamp) {
           const ts = new Date(normalized.timestamp).getTime();
           if (!Number.isNaN(ts) && ts > latestTimestampMs) latestTimestampMs = ts;
@@ -405,7 +454,7 @@ async function runAccountSync(opts) {
           rawSnapshotHash: rawId ? rawMap.get(rawId)?.snapshotHash || null : null,
         };
         const decision = core.classifyItem(normalized, existing, {
-          mode: sweep ? "sweep" : trigger === "legacy" ? "legacy" : "main",
+          mode: sweep ? "sweep" : "main",
           splitStartDate,
         });
 
@@ -425,7 +474,7 @@ async function runAccountSync(opts) {
     if (partial) {
       status = "partial";
       await store.setIntegration(account, {
-        pendingCursor: cursor || "",
+        [cursorField]: cursor || "",
         ...uiCompatPatch({ account, config, status: "partial", now: clock.now() }),
       });
     } else {
@@ -434,7 +483,7 @@ async function runAccountSync(opts) {
         lastErrorClass: null,
         lastSuccessfulSyncAt: clock.now(),
         lastRunId: runId,
-        pendingCursor: "",
+        [cursorField]: "",
         ...uiCompatPatch({ account, config, status: "completed", now: clock.now() }),
       };
       if (!sweep) {
@@ -473,33 +522,66 @@ async function runAccountSync(opts) {
       errorClass,
       errorMessage,
       sampleIds: runMeta.sampleIds,
+      window: { cursorOut: "" },
+      pages: 0,
     });
-    await store.releaseLease(account, runId);
     return { account, runId, status: "failed", counts, errorClass, errorMessage };
+  } finally {
+    // MINOR — always release, whatever path was taken above (the two
+    // explicit releaseLease calls in the try body are kept so the lease is
+    // freed as early as possible; this is the safety net for anything else).
+    if (runId) {
+      await store.releaseLease(account, runId);
+    }
   }
 }
 
 /**
- * runLegacyPage — preserves the previous `syncLegacyPage` behavior (one page
- * of unfiltered history per invocation, gated by a completion flag) while
- * reusing core.js for classification/ledger math and gaining a run record,
- * a lease and the human-edited guard. Only relevant for the 'offerings'
- * account (cafeteria has no legacy history to backfill — see audit R70/G8).
+ * runLegacyPage — the pre-Slice-1 backfill for `offerings`' history before
+ * 2026-09-09. Reuses core.js for classification/ledger math and gains a run
+ * record, a lease and the human-edited guard, but keeps the EXACT field
+ * names and two-phase (backfill / liquid-recalculation) state machine the
+ * original functions/index.js `syncLegacyPage` used, so it resumes correctly
+ * from whatever `sumupIntegrations/offerings` already holds in production
+ * (Slice 1 review M2).
  */
 async function runLegacyPage({ account, config, requestedBy, fetchPage, store, clock, leaseTtlMs = 9 * 60_000 }) {
   const startedAt = clock.now();
-  const runId = await store.createRun({
-    account,
-    provider: "sumup",
-    merchantCode: config?.merchantCode || null,
-    trigger: "legacy",
-    requestedBy: requestedBy || "system",
-    status: "running",
-    startedAt,
-  });
 
+  // Cheap short-circuit BEFORE creating a run or taking a lease: once fully
+  // backfilled and on the current liquid schema, there is nothing to do and
+  // no run doc should be created every hour for it (Slice 1 review MINOR).
+  const preCheckIntegration = (await store.getIntegration(account)) || {};
+  const preCheckLiquidVersion = Number(preCheckIntegration.liquidSchemaVersion || 1);
+  if (preCheckIntegration.historyBackfilledAt && preCheckLiquidVersion >= core.SUMUP_LIQUID_SCHEMA_VERSION) {
+    return { account, runId: null, status: "completed", counts: emptyCounts(), errorClass: null };
+  }
+
+  let runId;
+  let lease;
   const leaseKey = `${account}__legacy`;
-  const lease = await store.acquireLease(leaseKey, { ttlMs: leaseTtlMs, runId, trigger: "legacy", now: startedAt });
+  try {
+    runId = await store.createRun({
+      account,
+      provider: "sumup",
+      merchantCode: config?.merchantCode || null,
+      trigger: "legacy",
+      requestedBy: requestedBy || "system",
+      status: "running",
+      startedAt,
+    });
+    lease = await store.acquireLease(leaseKey, { ttlMs: leaseTtlMs, runId, trigger: "legacy", now: startedAt });
+  } catch (error) {
+    return {
+      account,
+      runId: runId || null,
+      status: "failed",
+      counts: emptyCounts(),
+      errorClass: error.errorClass || core.classifyHttpError(error),
+      errorMessage: String(error.message || error),
+    };
+  }
+
   if (!lease.acquired) {
     await store.updateRun(runId, { status: "skipped_locked", finishedAt: startedAt, durationMs: 0 });
     return { account, runId, status: "skipped_locked", counts: emptyCounts(), errorClass: null };
@@ -510,13 +592,10 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
 
   try {
     const integration = (await store.getIntegration(account)) || {};
-    if (integration.legacyBackfilledAt) {
-      await store.updateRun(runId, { status: "completed", finishedAt: clock.now(), durationMs: 0, counts, pages: 0 });
-      await store.releaseLease(leaseKey, runId);
-      return { account, runId, status: "completed", counts, errorClass: null };
-    }
-
-    const cursorIn = typeof integration.legacyCursor === "string" && integration.legacyCursor ? integration.legacyCursor : null;
+    const liquidSchemaVersion = Number(integration.liquidSchemaVersion || 1);
+    const recalculatingLiquid = liquidSchemaVersion < core.SUMUP_LIQUID_SCHEMA_VERSION;
+    const cursorField = recalculatingLiquid ? "liquidMigrationCursor" : "historyCursor";
+    const cursorIn = typeof integration[cursorField] === "string" && integration[cursorField] ? integration[cursorField] : null;
 
     let page;
     try {
@@ -531,7 +610,6 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
         errorClass,
         errorMessage: String(err.message || err),
       });
-      await store.releaseLease(leaseKey, runId);
       return { account, runId, status: "failed", counts, errorClass, errorMessage: String(err.message || err) };
     }
 
@@ -543,6 +621,7 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
     const financeMap = await store.getFinanceBatch(account, ids);
     const rawMap = await store.getRawBatch(account, ids);
 
+    let reviewed = 0;
     for (const normalized of normalizedItems) {
       const rawId = normalized.hasId ? core.safeId(normalized.id) : null;
       const existing = {
@@ -550,17 +629,53 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
         rawSnapshotHash: rawId ? rawMap.get(rawId)?.snapshotHash || null : null,
       };
       const decision = core.classifyItem(normalized, existing, { mode: "legacy" });
+      if (decision.action !== "ignored") reviewed += 1;
       if (decision.action === "ignored" || decision.action === "review") pushSample(runMeta, normalized.id);
       // eslint-disable-next-line no-await-in-loop
       await applyLedgerDecision({ account, normalized, decision, store, runId, now: startedAt, counts });
     }
 
-    const cursorOut = page.nextCursor || null;
-    const status = cursorOut ? "partial" : "completed";
-    if (cursorOut) {
-      await store.setIntegration(account, { legacyCursor: cursorOut });
+    const nextUrl = page.nextCursor || null;
+    const status = nextUrl ? "partial" : "completed";
+
+    if (recalculatingLiquid) {
+      const processed = Number(integration.liquidMigrationProcessed || 0) + reviewed;
+      if (!nextUrl) {
+        await store.setIntegration(account, {
+          liquidMigrationCursor: "",
+          liquidMigrationStatus: "completed",
+          liquidMigrationProcessed: processed,
+          liquidMigrationCompletedAt: clock.now(),
+          liquidSchemaVersion: core.SUMUP_LIQUID_SCHEMA_VERSION,
+          historyBackfilledAt: integration.historyBackfilledAt || clock.now(),
+          historyBackfillStatus: "completed",
+        });
+      } else {
+        await store.setIntegration(account, {
+          liquidMigrationCursor: nextUrl,
+          liquidMigrationStatus: "processing",
+          liquidMigrationProcessed: processed,
+          liquidMigrationStartedAt: integration.liquidMigrationStartedAt || clock.now(),
+        });
+      }
     } else {
-      await store.setIntegration(account, { legacyCursor: "", legacyBackfilledAt: clock.now() });
+      const totalProcessed = Number(integration.historyBackfillProcessed || 0) + reviewed;
+      if (!nextUrl) {
+        await store.setIntegration(account, {
+          historyCursor: "",
+          historyBackfillStatus: "completed",
+          historyBackfillProcessed: totalProcessed,
+          historyBackfilledAt: clock.now(),
+          liquidSchemaVersion: core.SUMUP_LIQUID_SCHEMA_VERSION,
+        });
+      } else {
+        await store.setIntegration(account, {
+          historyCursor: nextUrl,
+          historyBackfillStatus: "processing",
+          historyBackfillProcessed: totalProcessed,
+          historyBackfillStartedAt: integration.historyBackfillStartedAt || clock.now(),
+        });
+      }
     }
 
     await store.updateRun(runId, {
@@ -570,10 +685,9 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
       counts,
       errorClass: null,
       sampleIds: runMeta.sampleIds,
-      window: { cursorIn: cursorIn || "", cursorOut: cursorOut || "" },
+      window: { cursorIn: cursorIn || "", cursorOut: nextUrl || "" },
       pages: 1,
     });
-    await store.releaseLease(leaseKey, runId);
 
     return { account, runId, status, counts, errorClass: null };
   } catch (error) {
@@ -585,9 +699,14 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
       counts,
       errorClass,
       errorMessage: String(error.message || error),
+      window: { cursorOut: "" },
+      pages: 0,
     });
-    await store.releaseLease(leaseKey, runId);
     return { account, runId, status: "failed", counts, errorClass, errorMessage: String(error.message || error) };
+  } finally {
+    if (runId) {
+      await store.releaseLease(leaseKey, runId);
+    }
   }
 }
 

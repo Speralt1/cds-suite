@@ -466,7 +466,10 @@ describe("runAccountSync — paginación y watermark", () => {
     const fetchPage = async () => {
       call += 1;
       if (call === 1) {
-        clock.advance(50_000); // blow the 40s budget mid-run
+        // Leaves 15s of the 40s budget — under the 20s (15s fetch + 5s
+        // margin) M5 requires before starting another page, but not enough
+        // to trip the mid-item deadline check while processing this page.
+        clock.advance(25_000);
         return { items: page1, nextCursor: "cursor-2" };
       }
       return { items: page2, nextCursor: null };
