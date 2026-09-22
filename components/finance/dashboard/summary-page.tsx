@@ -649,6 +649,73 @@ export function SummaryPage() {
             saldo bancario.
           </p>
 
+          {/* Días por revisar y el calendario dependen de los días de culto
+              del mes, no de si ya hay movimientos registrados: deben poder
+              mostrar "Sin registros" incluso en un mes vacío. */}
+          {isMonthCalendarView && (
+            <section className="panel review-days">
+              <h3>Días por revisar ({review.length})</h3>
+              {review.length ? (
+                <ul>
+                  {review.map((item) => (
+                    <li key={`${item.date}-${item.kind}-${item.area || ""}`}>
+                      {item.kind === "missing-cash" ? (
+                        <TriangleAlert size={15} aria-hidden="true" />
+                      ) : (
+                        <CircleDashed size={15} aria-hidden="true" />
+                      )}
+                      <span>
+                        {item.label} — {dateLabelShort(item.date)}
+                      </span>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => setSelectedDay(item.date)}
+                      >
+                        Ver día
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="notice-ok">
+                  <CircleCheck size={15} aria-hidden="true" />
+                  Todo registrado en los días de culto de este mes.
+                </p>
+              )}
+            </section>
+          )}
+
+          {summaryView === "year" ? (
+            <p className="field-help mb-6">
+              Selecciona Mensual para ver el calendario.
+            </p>
+          ) : (
+            isMonthCalendarView && (
+              <section className="calendar-section">
+                <div className="calendar-wrap">
+                  <MonthCalendar
+                    year={period.year}
+                    month={period.month}
+                    transactions={latest.data}
+                    selected={effectiveSelectedDay}
+                    onSelect={setSelectedDay}
+                  />
+                </div>
+                <DayPanel
+                  date={effectiveSelectedDay}
+                  status={selectedDayStatus}
+                  transactions={latest.data}
+                  onRegisterCash={(area) => openCashModal(area, effectiveSelectedDay)}
+                  onViewDay={() => {
+                    setDailyDate(effectiveSelectedDay);
+                    setSummaryView("day");
+                  }}
+                />
+              </section>
+            )
+          )}
+
           {!total.transactionCount ? (
             <Empty>
               <h3>
@@ -708,70 +775,6 @@ export function SummaryPage() {
                     )}
                   </div>
                 </section>
-              )}
-
-              {isMonthCalendarView && (
-                <section className="panel review-days">
-                  <h3>Días por revisar ({review.length})</h3>
-                  {review.length ? (
-                    <ul>
-                      {review.map((item) => (
-                        <li key={`${item.date}-${item.kind}-${item.area || ""}`}>
-                          {item.kind === "missing-cash" ? (
-                            <TriangleAlert size={15} aria-hidden="true" />
-                          ) : (
-                            <CircleDashed size={15} aria-hidden="true" />
-                          )}
-                          <span>
-                            {item.label} — {dateLabelShort(item.date)}
-                          </span>
-                          <button
-                            type="button"
-                            className="button-secondary"
-                            onClick={() => setSelectedDay(item.date)}
-                          >
-                            Ver día
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="notice-ok">
-                      <CircleCheck size={15} aria-hidden="true" />
-                      Todo registrado en los días de culto de este mes.
-                    </p>
-                  )}
-                </section>
-              )}
-
-              {summaryView === "year" ? (
-                <p className="field-help mb-6">
-                  Selecciona Mensual para ver el calendario.
-                </p>
-              ) : (
-                isMonthCalendarView && (
-                  <section className="calendar-section">
-                    <div className="calendar-wrap">
-                      <MonthCalendar
-                        year={period.year}
-                        month={period.month}
-                        transactions={latest.data}
-                        selected={effectiveSelectedDay}
-                        onSelect={setSelectedDay}
-                      />
-                    </div>
-                    <DayPanel
-                      date={effectiveSelectedDay}
-                      status={selectedDayStatus}
-                      transactions={latest.data}
-                      onRegisterCash={(area) => openCashModal(area, effectiveSelectedDay)}
-                      onViewDay={() => {
-                        setDailyDate(effectiveSelectedDay);
-                        setSummaryView("day");
-                      }}
-                    />
-                  </section>
-                )
               )}
 
               <FinanceCharts summaries={summaries.data} period={period} />
