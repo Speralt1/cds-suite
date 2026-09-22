@@ -152,7 +152,50 @@ export function useSumUpTransactions(account: SumUpAccount, max = 50) {
   return state;
 }
 
-export async function requestSumUpSync(user: User) {
+export type SumUpSyncStatus =
+  | "completed"
+  | "partial"
+  | "already_running"
+  | "skipped_locked"
+  | "abandoned"
+  | "failed";
+
+export type SumUpSyncErrorClass =
+  | "auth_error"
+  | "rate_limited"
+  | "provider_client_error"
+  | "provider_unavailable"
+  | "config_error";
+
+export interface SumUpSyncCounts {
+  fetched: number;
+  created: number;
+  updated: number;
+  voided: number;
+  reactivated: number;
+  unchanged: number;
+  review: number;
+  chargebacks: number;
+  ignored: Record<string, number>;
+}
+
+export interface SumUpSyncAccountResult {
+  account: SumUpAccount;
+  runId: string | null;
+  status: SumUpSyncStatus;
+  counts: SumUpSyncCounts;
+  errorClass: SumUpSyncErrorClass | null;
+}
+
+export interface SumUpSyncResponse {
+  ok: boolean;
+  results: SumUpSyncAccountResult[];
+}
+
+/** Response is always JSON from the backend (S1.7). A non-JSON body only
+ *  happens if the request never reached the function (proxy/network layer),
+ *  so we never surface that raw text to the person using the app. */
+export async function requestSumUpSync(user: User): Promise<SumUpSyncResponse> {
   const token = await user.getIdToken();
   const response = await fetch(
     "/api/sumup-sync",
@@ -163,28 +206,67 @@ export async function requestSumUpSync(user: User) {
     },
   );
   const raw = await response.text();
-  let body: Record<string, unknown> = {};
+  let body: Partial<SumUpSyncResponse> & { error?: string } = {};
+  let parsed = false;
 
   try {
-    body = raw
-      ? (JSON.parse(raw) as Record<string, unknown>)
-      : {};
+    if (raw) {
+      body = JSON.parse(raw) as Partial<SumUpSyncResponse> & { error?: string };
+      parsed = true;
+    }
   } catch {
     body = {};
   }
 
   if (!response.ok) {
-    const backendError =
-      typeof body.error === "string"
-        ? body.error
-        : "";
-
+    const backendError = typeof body.error === "string" ? body.error : "";
     throw new Error(
       backendError ||
-        raw ||
-        `No se pudo sincronizar SumUp (HTTP ${response.status}).`,
+        (parsed
+          ? `No se pudo sincronizar SumUp (HTTP ${response.status}).`
+          : `No se pudo contactar el servicio de sincronización (HTTP ${response.status}).`),
     );
   }
 
-  return body;
+  if (!parsed || !Array.isArray(body.results)) {
+    throw new Error("La sincronización respondió con un formato inesperado.");
+  }
+
+  return { ok: body.ok !== false, results: body.results };
+}
+
+const SYNC_STATUS_LABEL: Record<SumUpSyncStatus, string> = {
+  completed: "Completado",
+  partial: "Parcial — continúa automáticamente",
+  already_running: "Ya en curso",
+  skipped_locked: "Ya en curso",
+  abandoned: "Interrumpido — se reintentará",
+  failed: "Error",
+};
+
+const SYNC_ERROR_CLASS_LABEL: Record<SumUpSyncErrorClass, string> = {
+  auth_error: "credenciales inválidas",
+  rate_limited: "límite de solicitudes de SumUp",
+  provider_client_error: "solicitud rechazada por SumUp",
+  provider_unavailable: "SumUp no respondió a tiempo",
+  config_error: "configuración de la cuenta",
+};
+
+const SYNC_ACCOUNT_LABEL: Record<SumUpAccount, string> = {
+  offerings: "Ofrendas",
+  cafeteria: "Cafetería",
+};
+
+/** Turns one account's sync result into a short, human Spanish status line. Never HTML, never raw backend text. */
+export function describeSumUpSyncResult(result: SumUpSyncAccountResult): string {
+  const label = SYNC_STATUS_LABEL[result.status] || "Estado desconocido";
+  const account = SYNC_ACCOUNT_LABEL[result.account] || result.account;
+  if (result.status === "failed" && result.errorClass) {
+    return `${account}: error — ${SYNC_ERROR_CLASS_LABEL[result.errorClass] || "error desconocido"}.`;
+  }
+  if (result.status === "completed") {
+    const total = result.counts.created + result.counts.updated + result.counts.voided + result.counts.reactivated;
+    return `${account}: ${label} · ${total} cambios de ${result.counts.fetched} revisados.`;
+  }
+  return `${account}: ${label}.`;
 }

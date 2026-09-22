@@ -11,6 +11,7 @@ import { useTransactions } from "@/lib/finance/hooks";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
 import { cashTransactionId, saveDailyCash, type CashArea } from "@/lib/offerings/cash";
 import {
+  describeSumUpSyncResult,
   requestSumUpSync,
   saveGivingSettings,
   useGivingSettings,
@@ -476,21 +477,10 @@ export function OfferingsPage() {
     setSyncMessage("");
     try {
       const result = await requestSumUpSync(user);
-      const reviewed = Array.isArray(result.results)
-        ? result.results.reduce((sum: number, item: { reviewed?: number }) => sum + Number(item.reviewed || 0), 0)
-        : 0;
-      const backfilled = Array.isArray(result.results)
-        ? result.results.some(
-            (item: { fullHistory?: boolean }) =>
-              item.fullHistory === true,
-          )
-        : false;
-
-      setSyncMessage(
-        backfilled
-          ? `Histórico SumUp conciliado · ${reviewed} pagos revisados. La separación Ofrendas/Cafetería comienza el 09/09/2026.`
-          : `Sincronización completa · ${reviewed} pagos físicos revisados.`,
-      );
+      const lines = result.results.map(describeSumUpSyncResult).join(" ");
+      const allFailed = result.results.length > 0 && result.results.every((item) => item.status === "failed");
+      if (allFailed) setSyncError(lines);
+      else setSyncMessage(lines);
     } catch (error) {
       setSyncError(errorMessage(error));
     } finally {
