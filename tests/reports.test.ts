@@ -305,7 +305,7 @@ it("septiembre 2026: alertas A1/A2/A3/A4/A5 con textos exactos y orden correcto"
     "Los montos SumUp están en bruto: la comisión aún no está disponible, por lo que lo depositado será menor.",
   );
   expect(infoTexts[1]).toBe(
-    "SumUp histórico sin separar (Septiembre 2026): $80.000. No se atribuye a Ofrendas ni Cafetería.",
+    "SumUp histórico sin separar (03/09): $80.000. No se atribuye a Ofrendas ni Cafetería.",
   );
 });
 
@@ -345,6 +345,124 @@ it("sin alertas de revisión: usa el texto de reemplazo (mes limpio, con gastos)
     { today: "2026-09-01" },
   );
   expect(r.alerts.revisar).toHaveLength(0);
+});
+
+// M1 (Atlas): "No comparable" depends on the PREVIOUS month, not the current
+// one. SumUp only started separating areas on 09/09/2026, so any previous
+// month up to and including September 2026 (even 1-8 sept) is not
+// comparable; from October onward as the previous month it is comparable.
+function areaTx(period: string, day: string, amount: number): FinanceTransaction {
+  return {
+    ...tithe,
+    id: `area_${period}_${day}_${Math.random()}`,
+    period,
+    day,
+    date: parseDate(`${period}-${day.padStart(2, "0")}`),
+    category: "Ofrendas",
+    paymentMethod: "transfer",
+    source: "general",
+    type: "income",
+    amount,
+    description: "Ofrendas",
+  };
+}
+function summaryFor(period: string, items: FinanceTransaction[]) {
+  return items
+    .filter((t) => t.period === period)
+    .reduce((s, t) => applyImpact(s, t, 1), emptySummary(period));
+}
+
+it("M1: mes anterior septiembre u octubre 2026 -> Ofrendas/Cafetería no comparable", () => {
+  // Report for October 2026; previous month is September 2026 (<= "2026-09").
+  const octTx = [areaTx("2026-10", "5", 100000)];
+  const sepTx = [areaTx("2026-09", "5", 90000)];
+  const r = buildReport(
+    { year: 2026, month: 10, view: "month" },
+    [summaryFor("2026-10", octTx)],
+    octTx,
+    "Tesorería",
+    new Date("2026-10-15T12:00:00Z"),
+    {
+      today: "2026-10-15",
+      previousTransactions: sepTx,
+      previousSummaries: [summaryFor("2026-09", sepTx)],
+    },
+  );
+  const ofrendas = r.bySource.find((row) => row.category === "Ofrendas");
+  expect(ofrendas?.notComparable).toBe(true);
+  expect(ofrendas?.previousTotal).toBeNull();
+
+  // Report for September 2026; previous month is August 2026 (<= "2026-09").
+  const rSept = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    {
+      today: TODAY,
+      previousTransactions: [areaTx("2026-08", "5", 50000)],
+      previousSummaries: [summaryFor("2026-08", [areaTx("2026-08", "5", 50000)])],
+    },
+  );
+  const ofrendasSept = rSept.bySource.find((row) => row.category === "Ofrendas");
+  expect(ofrendasSept?.notComparable).toBe(true);
+});
+
+it("M1: mes anterior noviembre en adelante -> Ofrendas/Cafetería comparable", () => {
+  // Report for November 2026; previous month is October 2026 ("2026-10" > "2026-09").
+  const novTx = [areaTx("2026-11", "5", 120000)];
+  const octTx = [areaTx("2026-10", "5", 100000)];
+  const r = buildReport(
+    { year: 2026, month: 11, view: "month" },
+    [summaryFor("2026-11", novTx)],
+    novTx,
+    "Tesorería",
+    new Date("2026-11-15T12:00:00Z"),
+    {
+      today: "2026-11-15",
+      previousTransactions: octTx,
+      previousSummaries: [summaryFor("2026-10", octTx)],
+    },
+  );
+  const ofrendas = r.bySource.find((row) => row.category === "Ofrendas");
+  expect(ofrendas?.notComparable).toBe(false);
+  expect(ofrendas?.previousTotal).toBe(100000);
+});
+
+it("días de culto: estado 'Con ingresos'/'—' (sin lenguaje de cuadre) y solo incluye días fuera de culto con ingresos de área", () => {
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  const statusLabels = r.worshipDays.map((d) => d.statusLabel);
+  expect(statusLabels).not.toContain("OK");
+  // Day 20 (sunday, >= split) has cash income and no missing-cash issue.
+  const day20 = r.worshipDays.find((d) => d.date === "2026-09-20");
+  expect(day20?.statusLabel).toBe("Con ingresos");
+  // Every worship day up to today must be present even without income.
+  expect(r.worshipDays.some((d) => d.date === "2026-09-09")).toBe(true);
+  // Day 5 (friday, not a worship day) only appears because of the tithe,
+  // which is not Ofrendas/Cafetería area income, so it must be excluded.
+  expect(r.worshipDays.some((d) => d.date === "2026-09-05")).toBe(false);
+  // Day 3 (thursday, not worship) has legacy SumUp but not area income either.
+  expect(r.worshipDays.some((d) => d.date === "2026-09-03")).toBe(false);
+});
+
+it("por fuente: 'mes anterior' es null (se muestra como '—') cuando no hay datos del mes anterior, no $0", () => {
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY }, // no previousTransactions/previousSummaries at all
+  );
+  for (const row of r.bySource) expect(row.previousTotal).toBeNull();
 });
 
 it("vista anual: lista los meses sin gastos registrados", () => {

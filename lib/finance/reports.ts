@@ -145,7 +145,8 @@ function sourceRowFor(
   category: string,
   active: FinanceTransaction[],
   previousActiveIncome: FinanceTransaction[] | undefined,
-  periodBeforeSplit: boolean,
+  previousPeriodNotComparable: boolean,
+  hasPreviousPeriodData: boolean,
 ): SourceRow {
   const items = active.filter((t) => t.category === category);
   const sumUp = items
@@ -167,11 +168,11 @@ function sourceRowFor(
   const total = sumUp + cash + transfer + other;
 
   const isAreaCategory = (AREA_CATEGORIES as readonly string[]).includes(category);
-  const notComparable = isAreaCategory && periodBeforeSplit;
+  const notComparable = isAreaCategory && previousPeriodNotComparable;
   const previousTotal =
-    notComparable || !previousActiveIncome
+    notComparable || !hasPreviousPeriodData
       ? null
-      : previousActiveIncome
+      : (previousActiveIncome || [])
           .filter((t) => t.category === category)
           .reduce((s, t) => s + t.amount, 0);
 
@@ -186,7 +187,6 @@ function buildWorshipDays(
 ): WorshipDayRow[] {
   const calendar = buildMonthCalendar(transactions, year, month, todayStr);
   return calendar.days
-    .filter((d) => (d.isWorshipDay && d.date <= todayStr) || d.totalIncome > 0)
     .map((d) => {
       const period = d.date.slice(0, 7);
       const day = String(Number(d.date.slice(8, 10)));
@@ -206,14 +206,19 @@ function buildWorshipDays(
       const tithe = dayTx
         .filter((t) => t.type === "income" && t.source === "tithe")
         .reduce((s, t) => s + t.amount, 0);
-      return {
+      const offeringsSumUp = sumOf("Ofrendas", "card", true);
+      const offeringsCash = sumOf("Ofrendas", "cash");
+      const cafeSumUp = sumOf("Cafetería", "card", true);
+      const cafeCash = sumOf("Cafetería", "cash");
+      const areaIncome = offeringsSumUp + offeringsCash + cafeSumUp + cafeCash;
+      const row: WorshipDayRow = {
         date: d.date,
         label: shortDate(d.date),
         isWorshipDay: d.isWorshipDay,
-        offeringsSumUp: sumOf("Ofrendas", "card", true),
-        offeringsCash: sumOf("Ofrendas", "cash"),
-        cafeSumUp: sumOf("Cafetería", "card", true),
-        cafeCash: sumOf("Cafetería", "cash"),
+        offeringsSumUp,
+        offeringsCash,
+        cafeSumUp,
+        cafeCash,
         tithe,
         total: d.totalIncome,
         statusLabel: d.missingCashAreas.length
@@ -222,9 +227,29 @@ function buildWorshipDays(
             : `Falta efectivo · ${d.missingCashAreas[0]}`
           : d.noRecords
             ? "Sin registros"
-            : "OK",
+            : d.date < SPLIT
+              ? "—"
+              : "Con ingresos",
       };
-    });
+      return { row, isWorshipDay: d.isWorshipDay, date: d.date, areaIncome };
+    })
+    .filter((d) => (d.isWorshipDay && d.date <= todayStr) || d.areaIncome > 0)
+    .map((d) => d.row);
+}
+
+function ddmm(date: string) {
+  const [, month, day] = date.split("-");
+  return `${day}/${month}`;
+}
+
+function legacyDateRange(legacyIncome: FinanceTransaction[]): string {
+  if (!legacyIncome.length) return "";
+  const dates = legacyIncome
+    .map((t) => `${t.period}-${t.day.padStart(2, "0")}`)
+    .sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  return first === last ? ddmm(first) : `${ddmm(first)}–${ddmm(last)}`;
 }
 
 function buildAlerts(
@@ -236,7 +261,7 @@ function buildAlerts(
   expenseTotal: number,
   sumUpAmount: number,
   legacyAmount: number,
-  periodLbl: string,
+  legacyRange: string,
 ): { revisar: AlertItem[]; info: AlertItem[] } {
   const review = reviewDays(transactions, year, month, todayStr);
   const revisar: AlertItem[] = review.map((item) => {
@@ -274,7 +299,7 @@ function buildAlerts(
     info.push({ code: "A4", tone: "info", text, pdfText: `[Info] ${text}` });
   }
   if (legacyAmount > 0) {
-    const text = `SumUp histórico sin separar (${periodLbl}): ${clp(legacyAmount)}. No se atribuye a Ofrendas ni Cafetería.`;
+    const text = `SumUp histórico sin separar (${legacyRange}): ${clp(legacyAmount)}. No se atribuye a Ofrendas ni Cafetería.`;
     info.push({ code: "A5", tone: "info", text, pdfText: `[Info] ${text}` });
   }
 
@@ -417,9 +442,9 @@ export function buildReport(
   const label = periodLabel(period);
   const todayStr = options.today || new Date().toISOString().slice(0, 10);
   const byMethod = incomeByMethod(selected);
-  const legacyAmount = activeIncome
-    .filter((t) => t.category === LEGACY_CATEGORY)
-    .reduce((s, t) => s + t.amount, 0);
+  const legacyIncome = activeIncome.filter((t) => t.category === LEGACY_CATEGORY);
+  const legacyAmount = legacyIncome.reduce((s, t) => s + t.amount, 0);
+  const legacyRange = legacyDateRange(legacyIncome);
 
   const previousActiveIncome = (options.previousTransactions || []).filter(
     (t) => t.status === "active" && t.type === "income",
@@ -439,15 +464,27 @@ export function buildReport(
       : null,
   };
 
-  const periodBeforeSplit =
-    period.view === "month" && periodId(period.year, period.month) < SPLIT_MONTH;
+  // M1 fix: "no comparable" depends on the PREVIOUS month (SumUp only started
+  // separating Ofrendas/Cafetería on 09/09/2026; the 1st-8th of that same
+  // month still lack separation, hence the "<=").
+  const previousPeriodSelection = previousPeriod(period);
+  const previousPeriodNotComparable =
+    period.view === "month" &&
+    periodId(previousPeriodSelection.year, previousPeriodSelection.month) <=
+      SPLIT_MONTH;
   const bySource =
     period.view === "month"
       ? Object.keys(summary.incomeByCategory)
           .filter((category) => summary.incomeByCategory[category] > 0)
           .sort((a, b) => summary.incomeByCategory[b] - summary.incomeByCategory[a])
           .map((category) =>
-            sourceRowFor(category, activeIncome, previousActiveIncome, periodBeforeSplit),
+            sourceRowFor(
+              category,
+              activeIncome,
+              previousActiveIncome,
+              previousPeriodNotComparable,
+              hasPreviousData,
+            ),
           )
       : [];
 
@@ -467,7 +504,7 @@ export function buildReport(
           summary.expenseTotal,
           byMethod.sumUpAmount,
           legacyAmount,
-          label,
+          legacyRange,
         )
       : (() => {
           const monthsWithoutExpenses = monthly
@@ -485,7 +522,7 @@ export function buildReport(
             info.push({ code: "A4", tone: "info", text, pdfText: `[Info] ${text}` });
           }
           if (legacyAmount > 0) {
-            const text = `SumUp histórico sin separar (${label}): ${clp(legacyAmount)}. No se atribuye a Ofrendas ni Cafetería.`;
+            const text = `SumUp histórico sin separar (${legacyRange}): ${clp(legacyAmount)}. No se atribuye a Ofrendas ni Cafetería.`;
             info.push({ code: "A5", tone: "info", text, pdfText: `[Info] ${text}` });
           }
           return { revisar, info };
@@ -511,12 +548,10 @@ export function buildReport(
       ? monthly.map((s, i) => {
           const monthTx = selected.filter((t) => t.period === s.id);
           const method = incomeByMethod(monthTx);
-          const monthCalendar = buildMonthCalendar(monthTx, period.year, i + 1, todayStr);
           const monthReview = reviewDays(monthTx, period.year, i + 1, todayStr);
           const alertCount =
             monthReview.length +
             (s.expenseTotal === 0 && s.incomeTotal > 0 ? 1 : 0);
-          void monthCalendar;
           return {
             label: MONTHS[i],
             income: s.incomeTotal,
