@@ -808,6 +808,83 @@ button:disabled {
   min-height: 44px;
 }
 
+.tithe-contrib-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.tithe-contrib-strip div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tithe-contrib-strip span {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.tithe-contrib-strip strong {
+  font-size: 16px;
+}
+
+.tithe-history-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: white;
+}
+.tithe-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tithe-history-table th,
+.tithe-history-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  white-space: nowrap;
+}
+.tithe-history-table thead th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  background: #f0f3ed;
+}
+.tithe-history-group th {
+  background: var(--color-canvas);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+  white-space: normal;
+}
+.tithe-history-table tr.is-voided td {
+  color: var(--color-muted);
+}
+.tithe-voided {
+  text-decoration: line-through;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tithe-history-note {
+  white-space: normal;
+  max-width: 220px;
+  color: var(--color-muted);
+}
+.receipt-button {
+  min-height: 40px;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+@media (max-width: 640px) {
+  .tithe-contrib-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .check-label {
   flex-direction: row !important;
   align-items: flex-start;
