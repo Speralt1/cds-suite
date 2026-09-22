@@ -1,6 +1,6 @@
 import { WORSHIP_WEEKDAYS } from "./constants";
 import { clpShort } from "./formatters";
-import type { FinanceTransaction } from "./types";
+import type { FinanceTransaction, TitheAttribution } from "./types";
 
 // Date SumUp started separating Ofrendas y Cafetería into different
 // merchants. Before this date every SumUp charge lands in the shared
@@ -305,6 +305,67 @@ export function reviewDays(
       items.push({ date: d.date, kind: "no-records", label: "Sin registros" });
   }
   return items.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface AttributionMonthGroup {
+  period: string;
+  label: string;
+  count: number;
+  subtotal: number;
+  items: TitheAttribution[];
+}
+
+// Groups a profile's (already date-desc sorted) attribution history by
+// month for the ficha's "Historial {año}" table (§C3). `subtotal` only
+// counts active attributions ("Lo anulado no suma"); `count` is every row
+// shown in the group, active or voided.
+export function groupAttributionsByMonth(
+  attributions: TitheAttribution[],
+): AttributionMonthGroup[] {
+  const groups: AttributionMonthGroup[] = [];
+  const byPeriod = new Map<string, AttributionMonthGroup>();
+  for (const item of attributions) {
+    let group = byPeriod.get(item.period);
+    if (!group) {
+      group = { period: item.period, label: item.period, count: 0, subtotal: 0, items: [] };
+      byPeriod.set(item.period, group);
+      groups.push(group);
+    }
+    group.count++;
+    group.items.push(item);
+    if (item.status === "active") group.subtotal += item.amount;
+  }
+  return groups;
+}
+
+export interface TitheAggregates {
+  thisMonth: number;
+  thisYear: number;
+  thisYearCount: number;
+  last12Months: number;
+}
+
+// "Aportes" strip (§C3): reads only already-loaded active attributions —
+// `last12` should cover the trailing 12 months (for thisMonth/last12Months)
+// and `currentYear` the calendar year currently loaded for "Este año" (the
+// caller passes undefined when the loaded year isn't the current one, since
+// no new query is made just for this strip). "Último registro" is read
+// straight from useLatestAttribution by the caller, not computed here.
+export function titheAggregates(
+  last12: TitheAttribution[],
+  currentYear: TitheAttribution[] | undefined,
+  todayStr: string,
+): TitheAggregates {
+  const currentPeriod = todayStr.slice(0, 7);
+  const activeLast12 = last12.filter((a) => a.status === "active");
+  const thisMonth = activeLast12
+    .filter((a) => a.period === currentPeriod)
+    .reduce((s, a) => s + a.amount, 0);
+  const last12Months = activeLast12.reduce((s, a) => s + a.amount, 0);
+  const activeYear = (currentYear || []).filter((a) => a.status === "active");
+  const thisYear = activeYear.reduce((s, a) => s + a.amount, 0);
+  const thisYearCount = activeYear.length;
+  return { thisMonth, thisYear, thisYearCount, last12Months };
 }
 
 // Default selected day for the calendar/panel (§D "Selección por defecto"):

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildMonthCalendar,
   dayStatus,
+  groupAttributionsByMonth,
   incomeByMethod,
   isSumUpTransaction,
   reviewDays,
+  titheAggregates,
 } from "@/lib/finance/insights";
-import type { FinanceTransaction } from "@/lib/finance/types";
+import type { FinanceTransaction, TitheAttribution } from "@/lib/finance/types";
 
 // Minimal active-income transaction builder for pure-function tests: only
 // the fields incomeByMethod / dayStatus read are populated.
@@ -214,6 +216,65 @@ describe("dayStatus — Sin registros", () => {
       today,
     );
     expect(status.noRecords).toBe(false);
+  });
+});
+
+function attribution(
+  partial: Partial<TitheAttribution> & { period: string; amount: number; day: string },
+): TitheAttribution {
+  return {
+    id: partial.id || `attr_${Math.random()}`,
+    transactionId: partial.transactionId || `tx_${Math.random()}`,
+    profileId: "profile_1",
+    status: "active",
+    note: "",
+    createdBy: "user_1",
+    createdAt: undefined as never,
+    updatedBy: "user_1",
+    updatedAt: undefined as never,
+    date: {
+      toDate: () => new Date(`${partial.period}-${partial.day.padStart(2, "0")}T12:00:00.000Z`),
+    } as never,
+    ...partial,
+  };
+}
+
+describe("groupAttributionsByMonth", () => {
+  it("groups by month, sums only active amounts, and counts every row", () => {
+    const groups = groupAttributionsByMonth([
+      attribution({ period: "2026-09", day: "16", amount: 60000 }),
+      attribution({ period: "2026-09", day: "9", amount: 60000, status: "voided" }),
+      attribution({ period: "2026-08", day: "30", amount: 50000 }),
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ period: "2026-09", count: 2, subtotal: 60000 });
+    expect(groups[1]).toMatchObject({ period: "2026-08", count: 1, subtotal: 50000 });
+  });
+});
+
+describe("titheAggregates", () => {
+  it("computes thisMonth/last12Months from active rows and thisYear from the current-year set", () => {
+    const today = "2026-09-22";
+    const last12 = [
+      attribution({ period: "2026-09", day: "16", amount: 30000 }),
+      attribution({ period: "2026-09", day: "9", amount: 30000, status: "voided" }),
+      attribution({ period: "2026-08", day: "1", amount: 20000 }),
+    ];
+    const currentYear = [
+      ...last12,
+      attribution({ period: "2026-01", day: "5", amount: 10000 }),
+    ];
+    const result = titheAggregates(last12, currentYear, today);
+    expect(result.thisMonth).toBe(30000);
+    expect(result.last12Months).toBe(50000);
+    expect(result.thisYear).toBe(60000);
+    expect(result.thisYearCount).toBe(3);
+  });
+
+  it("returns 0 for thisYear when the current-year data isn't loaded", () => {
+    const result = titheAggregates([], undefined, "2026-09-22");
+    expect(result.thisYear).toBe(0);
+    expect(result.thisYearCount).toBe(0);
   });
 });
 
