@@ -34,6 +34,24 @@ function emptyCounts() {
   };
 }
 
+/** Strips characters that could ever render as markup, so lastError is always plain text (never HTML) in the UI. */
+function sanitizeErrorMessage(message) {
+  return String(message || "").replace(/[<>]/g, "").slice(0, 500);
+}
+
+/** M8 — fields components/finance/offerings/offerings-page.tsx and lib/offerings/client.ts read for the account status pill. */
+function uiCompatPatch({ account, config, status, errorMessage, now }) {
+  return {
+    account,
+    label: account === "offerings" ? "Ofrendas" : "Cafetería",
+    configured: !!(config?.apiKey && config?.merchantCode),
+    merchantCode: config?.merchantCode || null,
+    lastSyncAt: now,
+    lastSyncStatus: status === "failed" ? "error" : status === "partial" ? "partial" : "ok",
+    lastError: status === "failed" ? sanitizeErrorMessage(errorMessage) : "",
+  };
+}
+
 function pushSample(run, id) {
   if (!run.sampleIds) run.sampleIds = [];
   if (run.sampleIds.length < 20 && id) run.sampleIds.push(id);
@@ -338,21 +356,25 @@ async function runAccountSync(opts) {
         page = await fetchPage({ config, changesSince, order: "ascending", limit: pageLimit, cursor });
       } catch (err) {
         const errorClass = err.errorClass || core.classifyHttpError(err);
-        await store.setIntegration(account, { lastErrorClass: errorClass });
+        const errorMessage = String(err.message || err);
+        await store.setIntegration(account, {
+          lastErrorClass: errorClass,
+          ...uiCompatPatch({ account, config, status: "failed", errorMessage, now: clock.now() }),
+        });
         await store.updateRun(runId, {
           status: "failed",
           finishedAt: clock.now(),
           durationMs: clock.now() - startedAt,
           counts,
           errorClass,
-          errorMessage: String(err.message || err),
+          errorMessage,
           httpStatus: err.status || null,
           sampleIds: runMeta.sampleIds,
           window: { changesSince, cursorIn, cursorOut: cursor },
           pages,
         });
         await store.releaseLease(account, runId);
-        return { account, runId, status: "failed", counts, errorClass, errorMessage: String(err.message || err) };
+        return { account, runId, status: "failed", counts, errorClass, errorMessage };
       }
 
       pages += 1;
@@ -402,10 +424,19 @@ async function runAccountSync(opts) {
     let status;
     if (partial) {
       status = "partial";
-      await store.setIntegration(account, { pendingCursor: cursor || "" });
+      await store.setIntegration(account, {
+        pendingCursor: cursor || "",
+        ...uiCompatPatch({ account, config, status: "partial", now: clock.now() }),
+      });
     } else {
       status = "completed";
-      const patch = { lastErrorClass: null, lastSuccessfulSyncAt: clock.now(), lastRunId: runId, pendingCursor: "" };
+      const patch = {
+        lastErrorClass: null,
+        lastSuccessfulSyncAt: clock.now(),
+        lastRunId: runId,
+        pendingCursor: "",
+        ...uiCompatPatch({ account, config, status: "completed", now: clock.now() }),
+      };
       if (!sweep) {
         patch.watermark = new Date(latestTimestampMs).toISOString();
       } else {
@@ -429,18 +460,22 @@ async function runAccountSync(opts) {
     return { account, runId, status, counts, errorClass: null };
   } catch (error) {
     const errorClass = error.errorClass || "provider_unavailable";
-    await store.setIntegration(account, { lastErrorClass: errorClass });
+    const errorMessage = String(error.message || error);
+    await store.setIntegration(account, {
+      lastErrorClass: errorClass,
+      ...uiCompatPatch({ account, config, status: "failed", errorMessage, now: clock.now() }),
+    });
     await store.updateRun(runId, {
       status: "failed",
       finishedAt: clock.now(),
       durationMs: clock.now() - startedAt,
       counts,
       errorClass,
-      errorMessage: String(error.message || error),
+      errorMessage,
       sampleIds: runMeta.sampleIds,
     });
     await store.releaseLease(account, runId);
-    return { account, runId, status: "failed", counts, errorClass, errorMessage: String(error.message || error) };
+    return { account, runId, status: "failed", counts, errorClass, errorMessage };
   }
 }
 

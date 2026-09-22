@@ -148,6 +148,53 @@ describe("M4 — el libro solo cambia por amount/category/day; un cambio de hash
   });
 });
 
+describe("M8 — compatibilidad con la UI de offerings-page.tsx", () => {
+  it("una corrida exitosa deja lastSyncAt/lastSyncStatus/configured/label/merchantCode en sumupIntegrations/{account}", async () => {
+    const store = new MemoryStore();
+    const clock = makeClock(Date.parse("2026-09-16T12:00:00Z"));
+    await engine.runAccountSync({
+      account: "offerings",
+      config: CONFIG,
+      trigger: "manual",
+      requestedBy: "uid-1",
+      fetchPage: async () => ({ items: [], nextCursor: null }),
+      store,
+      clock,
+    });
+    const integration = store.integrations.get("offerings") as Record<string, unknown>;
+    expect(integration).toMatchObject({
+      configured: true,
+      label: "Ofrendas",
+      merchantCode: "MC-OFFERINGS",
+      lastSyncStatus: "ok",
+      lastError: "",
+    });
+    expect(integration.lastSyncAt).toBe(clock.now());
+  });
+
+  it("una corrida fallida deja lastSyncStatus 'error' y lastError sin HTML", async () => {
+    const store = new MemoryStore();
+    const clock = makeClock(Date.parse("2026-09-16T12:00:00Z"));
+    const result = await engine.runAccountSync({
+      account: "offerings",
+      config: CONFIG,
+      trigger: "manual",
+      requestedBy: "uid-1",
+      fetchPage: async () => {
+        const err = new Error("SumUp 503: <html><body>down</body></html>");
+        (err as { status?: number }).status = 503;
+        throw err;
+      },
+      store,
+      clock,
+    });
+    expect(result.status).toBe("failed");
+    const integration = store.integrations.get("offerings") as Record<string, unknown>;
+    expect(integration.lastSyncStatus).toBe("error");
+    expect(String(integration.lastError)).not.toMatch(/[<>]/);
+  });
+});
+
 describe("M3 — el sweep también ignora ítems anteriores al 2026-09-09", () => {
   it("un ítem pre-split se ignora igual en modo sweep que en modo main", () => {
     const normalized = core.normalizeItem(txItem({ timestamp: "2026-01-01T15:00:00Z" }), "offerings");
