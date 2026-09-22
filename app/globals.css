@@ -2509,6 +2509,20 @@ button:disabled {
   margin-top: 5px;
 }
 
+.summary-sumup-breakdown {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.summary-sumup-breakdown li {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
 .summary-sumup-only-note {
   margin-top: 12px;
   color: var(--color-muted);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banknote, CreditCard, ExternalLink, RefreshCw, Settings2, WalletCards } from "lucide-react";
+import { Banknote, CreditCard, ExternalLink, Lock, RefreshCw, Settings2, Undo2, WalletCards } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useAccess } from "@/lib/auth/access-provider";
 import { getFirebaseServices } from "@/lib/firebase";
@@ -9,7 +9,7 @@ import { canSeeDetails } from "@/lib/finance/permissions";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import { useTransactions } from "@/lib/finance/hooks";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
-import { cashTransactionId, saveDailyCash, type CashArea } from "@/lib/offerings/cash";
+import { findActiveDailyCash, saveDailyCash, type CashArea } from "@/lib/offerings/cash";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -185,6 +185,7 @@ function CashModal({
   area,
   date,
   existing,
+  allTransactionsForDay,
   loading,
   onDateChange,
   onClose,
@@ -192,6 +193,7 @@ function CashModal({
   area: CashArea;
   date: string;
   existing?: FinanceTransaction;
+  allTransactionsForDay: FinanceTransaction[];
   loading: boolean;
   onDateChange: (date: string) => void;
   onClose: () => void;
@@ -219,6 +221,7 @@ function CashModal({
         Number(amount),
         note,
         existing,
+        allTransactionsForDay,
       );
       onClose();
     } catch (error) {
@@ -342,7 +345,7 @@ function DailyCashCard({
 
       <div className="daily-cash-lines">
         <div>
-          <span><CreditCard size={15} />Tarjeta SumUp · líquido</span>
+          <span><CreditCard size={15} />Tarjeta SumUp · bruto</span>
           <strong>{clp(cardAmount)}</strong>
         </div>
         <div>
@@ -352,15 +355,16 @@ function DailyCashCard({
       </div>
 
       <div className="daily-cash-total">
-        <span>Total del día</span>
+        <span>Total del día (tarjeta bruto + efectivo)</span>
         <strong>{clp(cardAmount + cashAmount)}</strong>
       </div>
+      <p className="field-help">Comisión SumUp aún no disponible.</p>
 
       <div className="daily-cash-month-total">
         <div>
           <span>Acumulado del mes</span>
           <small>
-            Tarjeta líquida {clp(monthCardAmount)} · Efectivo {clp(monthCashAmount)}
+            Tarjeta {clp(monthCardAmount)} bruto · Efectivo {clp(monthCashAmount)}
           </small>
         </div>
         <strong>{clp(monthCardAmount + monthCashAmount)}</strong>
@@ -402,16 +406,16 @@ export function OfferingsPage() {
     return <Empty>Esta sección está reservada para Administración, Pastor y Finanzas.</Empty>;
   }
 
-  const offeringCash = financeTransactions.data.find(
-    (item) =>
-      item.id === cashTransactionId("offerings", selectedDate) &&
-      item.status === "active",
+  const offeringCash = findActiveDailyCash(
+    financeTransactions.data,
+    "offerings",
+    selectedDate,
   );
 
-  const cafeCash = financeTransactions.data.find(
-    (item) =>
-      item.id === cashTransactionId("cafeteria", selectedDate) &&
-      item.status === "active",
+  const cafeCash = findActiveDailyCash(
+    financeTransactions.data,
+    "cafeteria",
+    selectedDate,
   );
 
   const separationActive =
@@ -585,7 +589,7 @@ export function OfferingsPage() {
               <div>
                 <span>
                   <CreditCard size={15} />
-                  Tarjeta SumUp · líquido del día
+                  Tarjeta SumUp · bruto del día
                 </span>
                 <strong>{clp(legacyCardDay)}</strong>
               </div>
@@ -632,7 +636,13 @@ export function OfferingsPage() {
                 </div>
                 <div className="campaign-contribution-amount">
                   <strong>{clp(item.netAmount)}</strong>
-                  <span className="status-pill">{item.status === "REFUNDED" ? "Reembolsado" : "Conciliado"}</span>
+                  <span className="status-pill">
+                    {item.status === "REFUNDED" ? (
+                      <><Undo2 size={13} />Reembolsado</>
+                    ) : (
+                      <><Lock size={13} />Importado</>
+                    )}
+                  </span>
                 </div>
               </div>
             ))}
@@ -655,6 +665,7 @@ export function OfferingsPage() {
           area={cashArea}
           date={selectedDate}
           existing={cashArea === "offerings" ? offeringCash : cafeCash}
+          allTransactionsForDay={financeTransactions.data}
           loading={financeTransactions.loading}
           onDateChange={setSelectedDate}
           onClose={() => setCashArea(null)}

@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
 import { voidTransaction } from "@/lib/finance/transactions";
@@ -8,6 +9,10 @@ import { PAYMENT_METHODS } from "@/lib/finance/constants";
 import type { FinanceTransaction } from "@/lib/finance/types";
 import { Modal, Notice, TypeIcon } from "../shared";
 import { TransactionForm } from "../forms/transaction-form";
+
+function isSumUpImported(t: FinanceTransaction) {
+  return t.id.startsWith("sumup_") || t.createdBy === "system:sumup";
+}
 export function TransactionList({
   items,
   onSaved = () => {},
@@ -64,7 +69,16 @@ export function TransactionList({
                 <button onClick={() => setSelected({ t, action: "view" })}>
                   Ver
                 </button>
-                {t.status === "active" && (
+                {t.status === "active" && isSumUpImported(t) && (
+                  <span
+                    className="status-pill"
+                    title="Los movimientos importados se corrigen en SumUp; el sistema los actualiza automáticamente."
+                  >
+                    <Lock size={13} />
+                    SumUp · solo lectura
+                  </span>
+                )}
+                {t.status === "active" && !isSumUpImported(t) && (
                   <>
                     <button onClick={() => setSelected({ t, action: "edit" })}>
                       Editar

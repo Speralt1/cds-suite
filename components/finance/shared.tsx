@@ -79,11 +79,12 @@ export function PeriodPicker({
               onChange({ ...value, year: Number(e.target.value) })
             }
           >
-            {Array.from({ length: 100 }, (_, i) => 2000 + i)
-              .reverse()
-              .map((y) => (
-                <option key={y}>{y}</option>
-              ))}
+            {Array.from(
+              { length: new Date().getFullYear() + 1 - 2024 + 1 },
+              (_, i) => new Date().getFullYear() + 1 - i,
+            ).map((y) => (
+              <option key={y}>{y}</option>
+            ))}
           </select>
         </label>
       </div>

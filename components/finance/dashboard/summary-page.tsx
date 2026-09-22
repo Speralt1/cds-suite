@@ -143,6 +143,15 @@ export function SummaryPage() {
     0,
   );
 
+  const sumUpByCategory = sumUpTransactions.reduce<Record<string, number>>(
+    (groups, transaction) => {
+      const key = transaction.category || "Sin categoría";
+      groups[key] = (groups[key] || 0) + transaction.amount;
+      return groups;
+    },
+    {},
+  );
+
   const latestNonSumUp = movementItems
     .filter(
       (transaction) =>
@@ -161,7 +170,7 @@ export function SummaryPage() {
     <>
       <FinancePageHeader
         title="Resumen financiero"
-        subtitle="Información confirmada en Firestore."
+        subtitle="Totales calculados a partir de los movimientos registrados."
       />
 
       <div className="summary-period-controls">
@@ -359,7 +368,7 @@ export function SummaryPage() {
                         ? "SUMUP · TOTAL DEL DÍA"
                         : "SUMUP · TOTAL DEL PERÍODO"}
                     </span>
-                    <h3>Recaudación SumUp</h3>
+                    <h3>Recaudación SumUp · bruto</h3>
                     <p>
                       Incluye Ofrendas, Cafetería y, cuando corresponda, el
                       histórico anterior al 09/09/2026 sin separación.
@@ -371,6 +380,13 @@ export function SummaryPage() {
                     <span>
                       {sumUpTransactions.length} movimientos agrupados
                     </span>
+                    <ul className="summary-sumup-breakdown">
+                      {Object.entries(sumUpByCategory).map(([category, amount]) => (
+                        <li key={category}>
+                          {category} · {clp(amount)} bruto
+                        </li>
+                      ))}
+                    </ul>
                     <Link
                       className="button-secondary"
                       href="/finanzas/movimientos"
