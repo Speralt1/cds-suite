@@ -1,0 +1,189 @@
+/*
+ * Design Lock 2026 (borrador) — tokens escopados con prefijo --p26-.
+ * Ver docs/mission-2026/08-designer-ux-audit-design-lock.md §4.
+ * Estos tokens NUNCA deben afectar los estilos globales de la app actual:
+ * se aplican solo dentro de .p26-scope.
+ */
+
+.p26-scope {
+  --p26-canvas: #f8f9f6;
+  --p26-surface: #ffffff;
+  --p26-ink: #233c33;
+  --p26-muted: #5f6e65;
+  --p26-line: #e2e7df;
+  --p26-line-strong: #cbd4ca;
+  --p26-primary: #285b45;
+  --p26-primary-hover: #1e4936;
+  --p26-primary-soft: #eaf1e9;
+
+  --p26-success: #1f6b45;
+  --p26-success-soft: #e3f1e8;
+  --p26-warning: #8a5a00;
+  --p26-warning-soft: #fbf0d9;
+  --p26-danger: #a02e2e;
+  --p26-danger-soft: #f8e6e4;
+  --p26-info: #245a86;
+  --p26-info-soft: #e5eef6;
+  --p26-review: #9a4a12;
+  --p26-review-soft: #fbeadc;
+  --p26-neutral: #5f6e65;
+  --p26-neutral-soft: #eef0ec;
+
+  --p26-radius-control: 6px;
+  --p26-radius-button: 8px;
+  --p26-radius-panel: 12px;
+  --p26-radius-badge: 999px;
+
+  --p26-space-1: 4px;
+  --p26-space-2: 8px;
+  --p26-space-3: 12px;
+  --p26-space-4: 16px;
+  --p26-space-5: 20px;
+  --p26-space-6: 24px;
+
+  --p26-font-table: 13px;
+  --p26-font-body: 14px;
+  --p26-font-input: 16px;
+
+  background: var(--p26-canvas);
+  color: var(--p26-ink);
+  min-height: 100dvh;
+}
+
+.p26-scope * {
+  box-sizing: border-box;
+}
+
+.p26-scope :focus-visible {
+  outline: 3px solid var(--p26-info);
+  outline-offset: 2px;
+}
+
+/* Banner de vista previa */
+.p26-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--p26-space-2);
+  padding: var(--p26-space-2) var(--p26-space-4);
+  background: var(--p26-warning-soft);
+  color: var(--p26-warning);
+  font-size: var(--p26-font-body);
+  font-weight: 500;
+  border-bottom: 1px solid var(--p26-line-strong);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+/* Money */
+.p26-money {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--p26-space-1);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+.p26-money__value {
+  font-weight: 500;
+}
+.p26-money--negative .p26-money__value {
+  color: var(--p26-danger);
+}
+.p26-money__basis {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--p26-muted);
+  text-transform: none;
+}
+
+/* Status badge */
+.p26-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: var(--p26-radius-badge);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.p26-badge__icon {
+  flex: none;
+}
+.p26-badge__text--strike {
+  text-decoration: line-through;
+}
+.p26-badge--success { background: var(--p26-success-soft); color: var(--p26-success); }
+.p26-badge--warning { background: var(--p26-warning-soft); color: var(--p26-warning); }
+.p26-badge--danger { background: var(--p26-danger-soft); color: var(--p26-danger); }
+.p26-badge--info { background: var(--p26-info-soft); color: var(--p26-info); }
+.p26-badge--review { background: var(--p26-review-soft); color: var(--p26-review); }
+.p26-badge--neutral { background: var(--p26-neutral-soft); color: var(--p26-neutral); }
+
+/* Buttons */
+.p26-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--p26-space-2);
+  border-radius: var(--p26-radius-button);
+  font-size: var(--p26-font-body);
+  font-weight: 500;
+  height: 36px;
+  padding: 0 var(--p26-space-4);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.p26-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.p26-button--primary { background: var(--p26-primary); color: #fff; }
+.p26-button--primary:hover:not(:disabled) { background: var(--p26-primary-hover); }
+.p26-button--secondary { background: var(--p26-surface); color: var(--p26-ink); border-color: var(--p26-line-strong); }
+.p26-button--ghost { background: transparent; color: var(--p26-ink); }
+.p26-button--destructive { background: var(--p26-danger-soft); color: var(--p26-danger); }
+@media (max-width: 767px) {
+  .p26-button--mobile-lg { height: 44px; }
+}
+
+/* Table */
+.p26-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--p26-font-table);
+}
+.p26-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--p26-surface);
+  text-align: left;
+  font-weight: 500;
+  color: var(--p26-muted);
+  border-bottom: 1px solid var(--p26-line-strong);
+  padding: var(--p26-space-2) var(--p26-space-3);
+}
+.p26-table tbody td {
+  border-bottom: 1px solid var(--p26-line);
+  padding: 0 var(--p26-space-3);
+  height: 40px;
+}
+.p26-table tbody tr:hover {
+  background: var(--p26-primary-soft);
+}
+.p26-table .p26-num {
+  text-align: right;
+}
+.p26-table tfoot td {
+  font-weight: 600;
+  border-top: 1px solid var(--p26-line-strong);
+  padding: var(--p26-space-2) var(--p26-space-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p26-scope * {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
