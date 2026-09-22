@@ -2824,6 +2824,18 @@ button:disabled {
 .summary-actions > .button-ghost {
   flex: 1 1 auto;
 }
+@media (min-width: 1024px) {
+  .summary-actions {
+    align-items: center;
+  }
+  .summary-action-primary {
+    width: auto;
+  }
+  .summary-actions > .button-secondary,
+  .summary-actions > .button-ghost {
+    flex: 0 0 auto;
+  }
+}
 
 .notice-warning,
 .notice-ok {
