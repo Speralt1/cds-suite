@@ -129,3 +129,247 @@ it("genera PDF A4 con datos reales de prueba, anual y vacío", () => {
     }
   }
 });
+
+// September 2026 fixture matching the spec's worked example dates
+// (SPLIT = 2026-09-09, 13/16/20 sep). No expenses, so A3 always fires.
+function sept(day: string): FinanceTransaction["date"] {
+  return parseDate(`2026-09-${day}`);
+}
+function septTx(
+  overrides: Partial<FinanceTransaction> & { day: string; amount: number },
+): FinanceTransaction {
+  const { day, ...rest } = overrides;
+  return {
+    ...tithe,
+    id: `tx_${Math.random()}`,
+    ...rest,
+    period: "2026-09",
+    date: sept(day.padStart(2, "0")),
+    day: String(Number(day)),
+  };
+}
+function clpText(value: number) {
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+const septemberFixture: FinanceTransaction[] = [
+  septTx({
+    id: "tithe_1",
+    day: "5",
+    amount: 200000,
+    category: "Diezmos",
+    paymentMethod: "transfer",
+    source: "tithe",
+    type: "income",
+    description: "Diezmo",
+  }),
+  septTx({
+    id: "sumup_off_16",
+    day: "16",
+    amount: 45000,
+    category: "Ofrendas",
+    paymentMethod: "card",
+    source: "general",
+    type: "income",
+    createdBy: "system:sumup",
+    description: "SumUp Ofrendas",
+  }),
+  septTx({
+    id: "sumup_cafe_16",
+    day: "16",
+    amount: 210000,
+    category: "Cafetería",
+    paymentMethod: "card",
+    source: "general",
+    type: "income",
+    createdBy: "system:sumup",
+    description: "SumUp Cafetería",
+  }),
+  septTx({
+    id: "cafe_cash_13",
+    day: "13",
+    amount: 30000,
+    category: "Cafetería",
+    paymentMethod: "cash",
+    source: "general",
+    type: "income",
+    description: "Cafetería efectivo",
+  }),
+  septTx({
+    id: "sumup_legacy_3",
+    day: "3",
+    amount: 80000,
+    category: "SumUp histórico sin separar",
+    paymentMethod: "card",
+    source: "general",
+    type: "income",
+    createdBy: "system:sumup",
+    description: "SumUp histórico",
+  }),
+  septTx({
+    id: "off_cash_20",
+    day: "20",
+    amount: 20000,
+    category: "Ofrendas",
+    paymentMethod: "cash",
+    source: "general",
+    type: "income",
+    description: "Ofrendas efectivo",
+  }),
+];
+const septemberPeriod: PeriodSelection = { year: 2026, month: 9, view: "month" };
+const septemberSummary = septemberFixture.reduce(
+  (s, t) => applyImpact(s, t, 1),
+  emptySummary("2026-09"),
+);
+const TODAY = "2026-09-22";
+
+it("septiembre 2026: narrative incluye cifras, sin gastos, y sin comparación cuando no hay mes anterior", () => {
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  expect(r.narrative).toContain(clpText(r.summary.incomeTotal));
+  expect(r.narrative).toContain("No se registraron gastos.");
+  expect(r.narrative).toContain("No hay datos del mes anterior para comparar.");
+  expect(r.narrative).toContain(`Hay ${r.alerts.revisar.length} alertas para revisar`);
+});
+
+it("septiembre 2026: comparación con mes anterior dice subieron o bajaron", () => {
+  const lowerPrevious = septemberSummary.incomeTotal / 2;
+  const previousSummary = { ...emptySummary("2026-08"), incomeTotal: lowerPrevious };
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY, previousSummaries: [previousSummary] },
+  );
+  expect(r.comparison.available).toBe(true);
+  expect(r.comparison.variationPercent).toBeGreaterThan(0);
+  expect(r.narrative).toMatch(/subieron un [\d,.]+ %/);
+});
+
+it("septiembre 2026: byMethod suma igual al total y al incomeTotal", () => {
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  const sum = r.byMethod.rows.reduce((s, row) => s + row.amount, 0);
+  expect(sum).toBe(r.byMethod.total);
+  expect(r.byMethod.total).toBe(r.summary.incomeTotal);
+});
+
+it("septiembre 2026: alertas A1/A2/A3/A4/A5 con textos exactos y orden correcto", () => {
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  const revisarTexts = r.alerts.revisar.map((a) => a.text);
+  expect(revisarTexts).toContain("Sin registros — 9 sep (día de culto).");
+  expect(revisarTexts).toContain(
+    "Falta efectivo · Ofrendas — 16 sep: SumUp $45.000 en bruto, sin efectivo registrado.",
+  );
+  expect(revisarTexts).toContain(
+    "Falta efectivo · Cafetería — 16 sep: SumUp $210.000 en bruto, sin efectivo registrado.",
+  );
+  expect(revisarTexts[revisarTexts.length - 1]).toBe(
+    "No se registraron gastos en el mes — verificar si faltan egresos.",
+  );
+  // Chronological before the period-level A3.
+  expect(revisarTexts.indexOf("Sin registros — 9 sep (día de culto).")).toBeLessThan(
+    revisarTexts.indexOf(
+      "Falta efectivo · Ofrendas — 16 sep: SumUp $45.000 en bruto, sin efectivo registrado.",
+    ),
+  );
+
+  const infoTexts = r.alerts.info.map((a) => a.text);
+  expect(infoTexts[0]).toBe(
+    "Los montos SumUp están en bruto: la comisión aún no está disponible, por lo que lo depositado será menor.",
+  );
+  expect(infoTexts[1]).toBe(
+    "SumUp histórico sin separar (Septiembre 2026): $80.000. No se atribuye a Ofrendas ni Cafetería.",
+  );
+});
+
+it("sin alertas de revisión: usa el texto de reemplazo (mes limpio, con gastos)", () => {
+  const cleanFixture: FinanceTransaction[] = [
+    septTx({
+      id: "clean_income",
+      day: "1",
+      amount: 10000,
+      category: "Ofrendas",
+      paymentMethod: "transfer",
+      source: "general",
+      type: "income",
+      description: "Transferencia",
+    }),
+    septTx({
+      id: "clean_expense",
+      day: "1",
+      amount: 5000,
+      category: "Administración",
+      paymentMethod: "transfer",
+      source: "general",
+      type: "expense",
+      description: "Gasto de prueba",
+    }),
+  ];
+  const cleanSummary = cleanFixture.reduce(
+    (s, t) => applyImpact(s, t, 1),
+    emptySummary("2026-09"),
+  );
+  const r = buildReport(
+    septemberPeriod,
+    [cleanSummary],
+    cleanFixture,
+    "Tesorería",
+    new Date("2026-09-01T12:00:00Z"),
+    { today: "2026-09-01" },
+  );
+  expect(r.alerts.revisar).toHaveLength(0);
+});
+
+it("vista anual: lista los meses sin gastos registrados", () => {
+  const yearFixture: FinanceTransaction[] = [
+    { ...tithe, id: "y1", period: "2026-01", day: "5", date: parseDate("2026-01-05"), amount: 50000, category: "Diezmos", paymentMethod: "transfer", source: "tithe", type: "income" },
+    { ...tithe, id: "y2", period: "2026-02", day: "5", date: parseDate("2026-02-05"), amount: 40000, category: "Diezmos", paymentMethod: "transfer", source: "tithe", type: "income" },
+    { ...tithe, id: "y2e", period: "2026-02", day: "6", date: parseDate("2026-02-06"), amount: 10000, category: "Administración", paymentMethod: "transfer", source: "general", type: "expense" },
+  ];
+  const yearSummaries = Array.from({ length: 12 }, (_, i) =>
+    yearFixture
+      .filter((t) => t.period === periodId(2026, i + 1))
+      .reduce((s, t) => applyImpact(s, t, 1), emptySummary(periodId(2026, i + 1))),
+  );
+  const r = buildReport(
+    { year: 2026, month: 1, view: "year" },
+    yearSummaries,
+    yearFixture,
+    "Tesorería",
+    new Date("2026-12-31T12:00:00Z"),
+    { today: "2026-12-31" },
+  );
+  expect(r.comparison.available).toBe(false);
+  expect(r.bySource).toEqual([]);
+  const monthsAlert = r.alerts.revisar.find((a) => a.code === "A3");
+  expect(monthsAlert?.text).toContain("Enero");
+  expect(monthsAlert?.text).not.toContain("Febrero");
+  expect(r.monthlyByMethod).toHaveLength(12);
+});
