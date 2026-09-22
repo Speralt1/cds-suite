@@ -4,12 +4,11 @@ import { useState } from "react";
 import { Banknote, CreditCard, ExternalLink, Lock, RefreshCw, Settings2, Undo2, WalletCards } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useAccess } from "@/lib/auth/access-provider";
-import { getFirebaseServices } from "@/lib/firebase";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import { useTransactions } from "@/lib/finance/hooks";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
-import { findActiveDailyCash, saveDailyCash, type CashArea } from "@/lib/offerings/cash";
+import { findActiveDailyCash, type CashArea } from "@/lib/offerings/cash";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -21,6 +20,7 @@ import {
   type SumUpIntegration,
 } from "@/lib/offerings/client";
 import { Empty, FinancePageHeader, Loading, Modal, Notice } from "@/components/finance/shared";
+import { CashModal } from "@/components/finance/offerings/cash-modal";
 
 const SUMUP_SPLIT_START_DATE = "2026-09-09";
 const SUMUP_LEGACY_CATEGORY =
@@ -180,141 +180,6 @@ function GivingSettingsModal({ current, onClose }: { current: GivingSettings | n
   );
 }
 
-
-function CashModal({
-  area,
-  date,
-  existing,
-  allTransactionsForDay,
-  loading,
-  onDateChange,
-  onClose,
-}: {
-  area: CashArea;
-  date: string;
-  existing?: FinanceTransaction;
-  allTransactionsForDay: FinanceTransaction[];
-  loading: boolean;
-  onDateChange: (date: string) => void;
-  onClose: () => void;
-}) {
-  const { user } = useAuth();
-  const label = area === "offerings" ? "Ofrendas" : "Cafetería";
-  const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
-  const [note, setNote] = useState(existing?.note || "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!user || busy || loading) return;
-
-    setBusy(true);
-    setError("");
-
-    try {
-      await saveDailyCash(
-        getFirebaseServices().db,
-        user.uid,
-        area,
-        date,
-        Number(amount),
-        note,
-        existing,
-        allTransactionsForDay,
-      );
-      onClose();
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal
-      title={`${existing ? "Editar" : "Ingresar"} efectivo · ${label}`}
-      onClose={onClose}
-      busy={busy}
-    >
-      <form className="finance-form" onSubmit={submit}>
-        <fieldset disabled={busy || loading}>
-          <label>
-            Fecha correspondiente
-            <input
-              type="date"
-              min={SUMUP_SPLIT_START_DATE}
-              max="2099-12-31"
-              value={date}
-              required
-              onChange={(e) =>
-                onDateChange(e.target.value)
-              }
-            />
-            <span className="field-help">
-              Puedes registrar hoy el efectivo de un día anterior.
-            </span>
-          </label>
-
-          <div className="notice success">
-            <p>
-              Se registrará como ingreso de {label} en efectivo
-              correspondiente al {date} y se sumará automáticamente
-              a Finanzas.
-            </p>
-          </div>
-
-          <label>
-            Efectivo recaudado
-            <input
-              required
-              data-autofocus
-              inputMode="numeric"
-              pattern="[0-9]+"
-              value={amount}
-              placeholder="0"
-              onChange={(e) =>
-                setAmount(e.target.value.replace(/\D/g, ""))
-              }
-            />
-          </label>
-
-          <label>
-            Nota (opcional)
-            <textarea
-              rows={2}
-              value={note}
-              maxLength={500}
-              placeholder={area === "offerings" ? "Ej. Servicio domingo AM" : "Ej. Ventas domingo AM"}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </label>
-
-          <Notice error={error} />
-        </fieldset>
-
-        <div className="form-footer">
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={onClose}
-            disabled={busy}
-          >
-            Cancelar
-          </button>
-
-          <button className="button-primary" disabled={busy || loading}>
-            {busy
-              ? "Guardando…"
-              : existing
-                ? "Actualizar efectivo"
-                : "Registrar efectivo"}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
 
 function DailyCashCard({
   title,
@@ -664,9 +529,9 @@ export function OfferingsPage() {
           }`}
           area={cashArea}
           date={selectedDate}
-          existing={cashArea === "offerings" ? offeringCash : cafeCash}
           allTransactionsForDay={financeTransactions.data}
           loading={financeTransactions.loading}
+          onAreaChange={setCashArea}
           onDateChange={setSelectedDate}
           onClose={() => setCashArea(null)}
         />
