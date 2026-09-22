@@ -9,6 +9,8 @@
   --color-line: #e2e7df;
   --color-sand: #f0ece2;
   --color-danger: #a02e2e;
+  --color-warning: #9a6a1f;
+  --color-warning-soft: #fbf1de;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
@@ -2669,5 +2671,279 @@ button:disabled {
 
   .daily-cash-month-total {
     align-items: flex-end;
+  }
+}
+
+/* Slice 6 — Resumen (§C1): acciones, ingresos por tipo de dinero, por
+   fuente, días por revisar y calendario + panel del día. */
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.button-ghost {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.button-ghost:hover {
+  background: var(--color-primary-soft);
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.summary-action-primary {
+  width: 100%;
+}
+.summary-actions > .button-secondary,
+.summary-actions > .button-ghost {
+  flex: 1 1 auto;
+}
+
+.notice-warning,
+.notice-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+.notice-warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+.notice-ok {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.income-method-panel,
+.review-days,
+.source-block {
+  margin-bottom: 20px;
+}
+
+.income-method-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 13px;
+}
+.income-method-table th,
+.income-method-table td {
+  padding: 9px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-line);
+}
+.income-method-table td {
+  text-align: right;
+}
+.income-method-table th[scope="row"] {
+  font-weight: 500;
+}
+.income-method-total th,
+.income-method-total td {
+  border-top: 2px solid var(--color-line);
+  border-bottom: none;
+}
+.income-method-breakdown td {
+  border-bottom: 1px solid var(--color-line);
+  padding-top: 0;
+  padding-bottom: 12px;
+  font-size: 11px;
+  color: var(--color-muted);
+  text-align: left;
+}
+
+.source-block {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+}
+.source-block-expense p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.source-block-expense strong {
+  font-size: 15px;
+}
+
+.review-days ul {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.review-days li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--color-warning);
+}
+.review-days li span {
+  flex: 1;
+  color: var(--color-ink);
+}
+
+.calendar-section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.calendar-wrap {
+  overflow-x: auto;
+}
+
+.calendar-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.calendar-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  padding: 6px 2px;
+  text-align: center;
+}
+.calendar-table td {
+  padding: 2px;
+}
+.calendar-cell {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 2px;
+  font-size: 10px;
+  color: var(--color-ink);
+}
+.calendar-cell-day {
+  font-size: 13px;
+  font-weight: 500;
+}
+.calendar-cell-status {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+}
+.calendar-cell.is-future {
+  color: var(--color-muted);
+}
+.calendar-cell.has-warning {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+.calendar-cell.has-empty {
+  color: var(--color-muted);
+}
+.calendar-cell.is-today {
+  border: 2px solid var(--color-primary);
+}
+.calendar-cell[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+}
+
+.day-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.day-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin: 0;
+}
+.day-panel-status.status-warning {
+  color: var(--color-warning);
+}
+.day-panel-status.status-muted {
+  color: var(--color-muted);
+}
+.day-panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.day-panel-table th,
+.day-panel-table td {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--color-line);
+  text-align: right;
+}
+.day-panel-table th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+.day-panel-table tfoot th,
+.day-panel-table tfoot td {
+  border-top: 2px solid var(--color-line);
+  border-bottom: none;
+}
+.day-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.day-panel-actions .button-secondary {
+  flex: 1 1 auto;
+}
+
+@media (min-width: 1024px) {
+  .calendar-section {
+    grid-template-columns: 3fr 2fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .summary-actions {
+    flex-direction: column;
+  }
+  .summary-actions .button-secondary,
+  .summary-actions .button-ghost {
+    width: 100%;
+  }
+  .source-block {
+    grid-template-columns: 1fr;
+  }
+  .calendar-cell {
+    min-height: 44px;
   }
 }
