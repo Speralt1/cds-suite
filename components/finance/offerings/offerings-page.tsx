@@ -17,7 +17,7 @@ import { useAccess } from "@/lib/auth/access-provider";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import { useTransactions } from "@/lib/finance/hooks";
-import { buildMonthCalendar, SPLIT } from "@/lib/finance/insights";
+import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/insights";
 import { WORSHIP_WEEKDAYS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
 import { findActiveDailyCash, type CashArea } from "@/lib/offerings/cash";
@@ -47,11 +47,15 @@ function shiftDate(date: string, deltaDays: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// `sumUpOnly` restricts "card" sums to actual SumUp transactions (same rule
+// as `dayStatus`/`incomeByMethod`), so "Tarjeta SumUp" never silently counts
+// a non-SumUp card payment. It has no effect for `paymentMethod === "cash"`.
 function sumFinanceDay(
   items: FinanceTransaction[],
   date: string,
   category: string,
   paymentMethod: "cash" | "card",
+  sumUpOnly = false,
 ) {
   const period = date.slice(0, 7);
   const day = String(Number(date.slice(8, 10)));
@@ -63,7 +67,10 @@ function sumFinanceDay(
       item.period !== period ||
       item.day !== day ||
       item.category !== category ||
-      item.paymentMethod !== paymentMethod
+      item.paymentMethod !== paymentMethod ||
+      (sumUpOnly &&
+        paymentMethod === "card" &&
+        !isSumUpTransaction(item.id, item.createdBy))
     ) {
       return sum;
     }
@@ -76,13 +83,17 @@ function sumFinanceMonth(
   items: FinanceTransaction[],
   category: string,
   paymentMethod: "cash" | "card",
+  sumUpOnly = false,
 ) {
   return items.reduce((sum, item) => {
     if (
       item.status !== "active" ||
       item.type !== "income" ||
       item.category !== category ||
-      item.paymentMethod !== paymentMethod
+      item.paymentMethod !== paymentMethod ||
+      (sumUpOnly &&
+        paymentMethod === "card" &&
+        !isSumUpTransaction(item.id, item.createdBy))
     ) {
       return sum;
     }
@@ -328,14 +339,16 @@ export function OfferingsPage() {
 
   const separationActive = selectedDate >= SPLIT;
 
-  const offeringCardDay = sumFinanceDay(financeTransactions.data, selectedDate, "Ofrendas", "card");
-  const cafeCardDay = sumFinanceDay(financeTransactions.data, selectedDate, "Cafetería", "card");
-  const offeringCardMonth = sumFinanceMonth(financeTransactions.data, "Ofrendas", "card");
+  const offeringCardDay = sumFinanceDay(financeTransactions.data, selectedDate, "Ofrendas", "card", true);
+  const offeringCashDay = sumFinanceDay(financeTransactions.data, selectedDate, "Ofrendas", "cash");
+  const cafeCardDay = sumFinanceDay(financeTransactions.data, selectedDate, "Cafetería", "card", true);
+  const cafeCashDay = sumFinanceDay(financeTransactions.data, selectedDate, "Cafetería", "cash");
+  const offeringCardMonth = sumFinanceMonth(financeTransactions.data, "Ofrendas", "card", true);
   const offeringCashMonth = sumFinanceMonth(financeTransactions.data, "Ofrendas", "cash");
-  const cafeCardMonth = sumFinanceMonth(financeTransactions.data, "Cafetería", "card");
+  const cafeCardMonth = sumFinanceMonth(financeTransactions.data, "Cafetería", "card", true);
   const cafeCashMonth = sumFinanceMonth(financeTransactions.data, "Cafetería", "cash");
-  const legacyCardDay = sumFinanceDay(financeTransactions.data, selectedDate, SUMUP_LEGACY_CATEGORY, "card");
-  const legacyCardMonth = sumFinanceMonth(financeTransactions.data, SUMUP_LEGACY_CATEGORY, "card");
+  const legacyCardDay = sumFinanceDay(financeTransactions.data, selectedDate, SUMUP_LEGACY_CATEGORY, "card", true);
+  const legacyCardMonth = sumFinanceMonth(financeTransactions.data, SUMUP_LEGACY_CATEGORY, "card", true);
 
   const monthHasLegacyDays = selectedDate.slice(0, 7) <= SPLIT_MONTH;
   const monthIncludesSplit = selectedDate.slice(0, 7) === SPLIT_MONTH;
@@ -362,9 +375,9 @@ export function OfferingsPage() {
   const monthDaysRows = calendar.days
     .map((day) => ({
       day,
-      offeringsCard: sumFinanceDay(financeTransactions.data, day.date, "Ofrendas", "card"),
+      offeringsCard: sumFinanceDay(financeTransactions.data, day.date, "Ofrendas", "card", true),
       offeringsCash: sumFinanceDay(financeTransactions.data, day.date, "Ofrendas", "cash"),
-      cafeCard: sumFinanceDay(financeTransactions.data, day.date, "Cafetería", "card"),
+      cafeCard: sumFinanceDay(financeTransactions.data, day.date, "Cafetería", "card", true),
       cafeCash: sumFinanceDay(financeTransactions.data, day.date, "Cafetería", "cash"),
     }))
     .filter(
@@ -456,7 +469,7 @@ export function OfferingsPage() {
               monthLabel={monthLabel}
               monthSuffix={monthIncludesSplit ? " (desde 09/09)" : ""}
               cardDay={offeringCardDay}
-              cashDay={offeringCash?.amount || 0}
+              cashDay={offeringCashDay}
               cardMonth={offeringCardMonth}
               cashMonth={offeringCashMonth}
               existingCash={offeringCash}
@@ -468,7 +481,7 @@ export function OfferingsPage() {
               monthLabel={monthLabel}
               monthSuffix={monthIncludesSplit ? " (desde 09/09)" : ""}
               cardDay={cafeCardDay}
-              cashDay={cafeCash?.amount || 0}
+              cashDay={cafeCashDay}
               cardMonth={cafeCardMonth}
               cashMonth={cafeCashMonth}
               existingCash={cafeCash}
@@ -550,8 +563,7 @@ export function OfferingsPage() {
                         </span>
                       ) : (
                         <span className="status-inline text-muted">
-                          <CircleCheck size={13} aria-hidden="true" />
-                          OK
+                          {day.date < SPLIT ? "—" : "Con ingresos"}
                         </span>
                       )}
                     </td>
