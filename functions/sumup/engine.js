@@ -399,6 +399,8 @@ async function runAccountSync(opts) {
         const errorMessage = String(err.message || err);
         await store.setIntegration(account, {
           lastErrorClass: errorClass,
+          // A cursor that already failed once (M7 retry path) must not be retried forever.
+          ...(retriedFromWatermark ? { [cursorField]: "" } : {}),
           ...uiCompatPatch({ account, config, status: "failed", errorMessage, now: clock.now() }),
         });
         await store.updateRun(runId, {

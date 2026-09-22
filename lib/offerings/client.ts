@@ -35,7 +35,7 @@ export interface SumUpIntegration {
   configured: boolean;
   merchantCode: string;
   lastSyncAt: Timestamp | null;
-  lastSyncStatus: "ok" | "error";
+  lastSyncStatus: "ok" | "partial" | "error";
   lastError: string;
   lastImportedCount: number;
 }

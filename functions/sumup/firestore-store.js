@@ -137,7 +137,6 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
       return db.runTransaction(async (tx) => {
         const fRef = financeRef(financeId);
         const rRef = rawRef(account, rawId);
-        const pendingSummary = { period: null, data: null };
         const wrapper = {
           async getFinance() {
             const snap = await tx.get(fRef);

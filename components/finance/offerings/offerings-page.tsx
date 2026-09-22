@@ -94,8 +94,20 @@ function IntegrationCard({ title, data }: { title: string; data: SumUpIntegratio
     <div className="offering-integration-card">
       <span className="eyebrow">SUMUP FÍSICO</span>
       <h3>{title}</h3>
-      <span className={data?.lastSyncStatus === "ok" ? "status-pill" : "status-pill status-voided"}>
-        {data?.lastSyncStatus === "ok" ? "Conectado" : data ? "Con error" : "Sin configurar"}
+      <span
+        className={
+          data?.lastSyncStatus === "ok" || data?.lastSyncStatus === "partial"
+            ? "status-pill"
+            : "status-pill status-voided"
+        }
+      >
+        {data?.lastSyncStatus === "ok"
+          ? "Conectado"
+          : data?.lastSyncStatus === "partial"
+            ? "Conectado · sincronización parcial, continúa automáticamente"
+            : data
+              ? "Con error"
+              : "Sin configurar"}
       </span>
       <p>
         {data?.lastSyncAt
