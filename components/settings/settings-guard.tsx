@@ -12,8 +12,8 @@ export function SettingsGuard({ children }: { children: React.ReactNode }) {
         <p className="mt-2">
           Tu acceso actual no permite consultar ni modificar estos ajustes.
         </p>
-        <Link className="button-secondary mt-5" href="/dashboard">
-          Volver al dashboard
+        <Link className="button-secondary mt-5" href="/finanzas">
+          Volver a Finanzas
         </Link>
       </div>
     );

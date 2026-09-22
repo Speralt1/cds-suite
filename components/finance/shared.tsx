@@ -14,7 +14,7 @@ export function FinanceNav() {
     ? [
         ["/finanzas", "Resumen"],
         ["/finanzas/movimientos", "Movimientos"],
-        ["/finanzas/ofrendas", "Ofrendas"],
+        ["/finanzas/ofrendas", "Ofrendas y Cafetería"],
         ["/finanzas/diezmos", "Diezmos"],
         ["/finanzas/campanas", "Campañas"],
         ["/finanzas/reportes", "Reportes"],

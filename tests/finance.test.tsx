@@ -10,22 +10,26 @@ import {
   isAuthorized,
 } from "@/lib/finance/permissions";
 import type { AccessUser, FinanceTransaction, Role } from "@/lib/finance/types";
-const state = vi.hoisted(() => ({ role: "admin" as Role, path: "/finanzas" }));
+const state = vi.hoisted(() => ({
+  role: "admin" as Role,
+  path: "/finanzas",
+  replace: vi.fn(),
+}));
 vi.mock("@/lib/auth/access-provider", () => ({
   useAccess: () => ({ role: state.role, active: true }),
 }));
-vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => state.path,
+  useRouter: () => ({ replace: state.replace }),
+}));
 beforeEach(() => {
   state.role = "admin";
   state.path = "/finanzas";
+  state.replace.mockClear();
 });
-it("mantiene acceso a Finanzas desde el dashboard y módulos futuros sin acciones", () => {
+it("/dashboard ya no tiene contenido propio: redirige a /finanzas", () => {
   render(<DashboardPage />);
-  expect(screen.getByRole("link", { name: "Ingresar" })).toHaveAttribute(
-    "href",
-    "/finanzas",
-  );
-  expect(screen.getAllByText("Próximamente")).toHaveLength(4);
+  expect(state.replace).toHaveBeenCalledWith("/finanzas");
 });
 it.each(["admin", "pastor", "finance"] as Role[])(
   "navegación con rutas reales para %s",
@@ -46,7 +50,9 @@ it.each(["admin", "pastor", "finance"] as Role[])(
       "href",
       "/finanzas/campanas",
     );
-    expect(screen.getByRole("link", { name: "Ofrendas" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Ofrendas y Cafetería" }),
+    ).toHaveAttribute(
       "href",
       "/finanzas/ofrendas",
     );
