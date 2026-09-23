@@ -1,6 +1,11 @@
-# Decisiones humanas pendientes (gates)
+# Decisiones humanas y gates
 
 Lista ordenada por lo que desbloquea. Cada respuesta se registra en este documento, con fecha.
+
+## Decisiones cerradas el 23/09/2026
+
+- **G1 — CERRADO:** la venta SumUp se registra en **bruto menos reembolsos**. La comisión real se registrará como **egreso vinculado** cuando exista ingesta de payout/detalle. Esto permitirá reconstruir `bruto - reembolsos - comisión = líquido esperado` sin ocultar la recaudación original.
+- **G3 — CERRADO:** los movimientos `financeTransactions/sumup_*` son **solo lectura para clientes**. Solo el backend/Admin SDK puede crearlos o modificarlos. Las correcciones humanas futuras deberán usar ajustes/reversas auditables.
 
 ## A. Autorizaciones (acciones)
 
@@ -15,9 +20,9 @@ Lista ordenada por lo que desbloquea. Cada respuesta se registra en este documen
 
 | # | Pregunta | Recomendación |
 |---|---|---|
-| G1 | ¿La tarjeta se registra en bruto, con la comisión como egreso vinculado, o en líquido? ¿Por qué se había migrado a "líquido"? | **Bruto + comisión como egreso vinculado** (01 §5) |
+| G1 | ¿La tarjeta se registra en bruto, con la comisión como egreso vinculado, o en líquido? | ✅ **CERRADO 23/09/2026:** bruto menos reembolsos + comisión real como egreso vinculado (01 §5) |
 | G2 | ¿En qué mes se reconoce un reembolso o contracargo de una venta de un mes anterior? | En el mes del evento (reversa fechada), si el mes original está cerrado |
-| G3 | ¿Bloqueamos en las reglas de Firestore que un usuario edite movimientos de SumUp? (La UI ya los muestra como solo lectura) | **Sí** |
+| G3 | ¿Bloqueamos en las reglas de Firestore que un usuario edite movimientos de SumUp? | ✅ **CERRADO 23/09/2026:** sí; `sumup_*` es backend-only |
 | G4 | ¿Existen pagos online o ECOM por SumUp? ¿A qué área van? | Por confirmar |
 | G5 | ¿Qué hacemos con contracargos y pagos CANCELLED/FAILED en el libro? | Excepción en revisión y luego reversa aprobada |
 | G6 | ¿Normalizamos la fecha de los movimientos SumUp (implica migración)? | Sí, en el Slice 2, con reporte antes y después |

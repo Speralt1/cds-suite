@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, serverTimestamp, setDoc, type Firestore } from "firebase/firestore";
-import { saveTransaction } from "../../lib/finance/transactions";
-import type { TransactionInput } from "../../lib/finance/types";
+import { doc, getDoc, serverTimestamp, setDoc, Timestamp, type Firestore } from "firebase/firestore";
+import { saveTransaction, voidTransaction } from "../../lib/finance/transactions";
+import type { FinanceTransaction, TransactionInput } from "../../lib/finance/types";
 
 let env: RulesTestEnvironment;
 
@@ -90,11 +90,10 @@ describe("Ofrendas públicas e integración SumUp", () => {
     await assertFails(setDoc(doc(finance, "sumupIntegrations", "offerings", "adjustments", "cb-1"), { reviewRequired: true }));
   });
 
-  // S1.12 — documenta el estado ACTUAL de firestore.rules: financeTransactions
-  // no distingue el prefijo `sumup_*`, así que un usuario de finanzas puede
-  // editar (o "anular") un documento creado por el sync sin que las reglas lo
-  // impidan. Cerrar esto es el Gate G3 (Navigator/Atlas), fuera de este slice.
-  describe("G3 (pendiente): el cliente puede editar sumup_* hoy", () => {
+  // G3 cerrado 2026-09-23: los movimientos importados por SumUp son
+  // propiedad del backend. Un cliente puede leerlos, pero no crearlos,
+  // editarlos ni anularlos. Cloud Functions/Admin SDK sigue pudiendo escribir.
+  describe("G3: sumup_* es de solo lectura para clientes", () => {
     let db: Firestore;
     const input: TransactionInput = {
       type: "income",
@@ -110,19 +109,72 @@ describe("Ofrendas públicas e integración SumUp", () => {
       db = env.authenticatedContext("finance-user").firestore() as unknown as Firestore;
     });
 
-    it("un doc sumup_* creado por el sistema puede ser editado por un usuario de finanzas", async () => {
-      const id = "sumup_offerings_tx-1";
-      await saveTransaction(db, "finance-user", id, input);
-      const before = { id, ...(await getDoc(doc(db, "financeTransactions", id))).data() } as never;
+    async function seedSystemSumUp(id: string) {
+      await env.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        const stamp = Timestamp.fromDate(new Date("2026-09-15T15:00:00.000Z"));
+        await setDoc(doc(adminDb, "financeTransactions", id), {
+          type: "income",
+          amount: 10000,
+          date: stamp,
+          period: "2026-09",
+          day: "15",
+          category: "Ofrendas",
+          paymentMethod: "card",
+          description: "Ofrenda tarjeta física · SumUp",
+          note: "SumUp COD-1",
+          source: "general",
+          status: "active",
+          revision: 1,
+          createdBy: "system:sumup",
+          createdAt: stamp,
+          updatedBy: "system:sumup",
+          updatedAt: stamp,
+        });
+        await setDoc(doc(adminDb, "financeMonthlySummaries", "2026-09"), {
+          incomeTotal: 10000,
+          expenseTotal: 0,
+          result: 10000,
+          titheTotal: 0,
+          transactionCount: 1,
+          incomeByCategory: { Ofrendas: 10000 },
+          expenseByCategory: {},
+          dailyIncome: { "15": 10000 },
+          dailyExpense: {},
+          updatedAt: stamp,
+          lastTransactionId: id,
+        });
+      });
+    }
 
-      // Documents today's gap: nothing in the rules distinguishes this id as
-      // system-owned, so a normal finance-role edit succeeds.
+    it("rechaza crear sumup_* desde un cliente financiero", async () => {
+      await assertFails(saveTransaction(db, "finance-user", "sumup_offerings_fake", input));
+    });
+
+    it("rechaza editar y anular un sumup_* creado por el sistema", async () => {
+      const id = "sumup_offerings_tx-1";
+      await seedSystemSumUp(id);
+
+      const snapshot = await getDoc(doc(db, "financeTransactions", id));
+      const before = { id, ...snapshot.data() } as FinanceTransaction;
+
       await expect(
-        saveTransaction(db, "finance-user", id, { ...input, amount: 7777 }, { existing: before }),
-      ).resolves.toBeDefined();
+        saveTransaction(
+          db,
+          "finance-user",
+          id,
+          { ...input, amount: 7777 },
+          { existing: before },
+        ),
+      ).rejects.toThrow();
+
+      await expect(
+        voidTransaction(db, "finance-user", before, "No permitido"),
+      ).rejects.toThrow();
 
       const after = await getDoc(doc(db, "financeTransactions", id));
-      expect(after.data()?.amount).toBe(7777);
+      expect(after.data()?.amount).toBe(10000);
+      expect(after.data()?.status).toBe("active");
     });
   });
 });

@@ -34,8 +34,8 @@ Auditoría: auditEvents (append-only) · Roles mínimos (cashier/finance/admin)
 |---|---|---|---|
 | **1** | **SumUp reliability**: engine con watermark, paginación, lease, runs, aislamiento, presupuesto, versions, guardas | **HECHO en la branch** `mission/slice1-sumup-reliability`. Atlas: APROBADO PARA PR. 110 tests | Deploy (gate) |
 | **1b** | **Etiquetas veraces + F1**: "bruto" en vez de "líquido", fuera "Conciliado" falso, SumUp solo lectura en la UI, selector de años, caja anulada re-registrable | **HECHO en la branch** `mission/slice1b-truthful-labels`. 123 tests | Deploy (gate) |
-| 2 | **Ledger**: `origin/area/provider/providerRef` en movimientos, `auditEvents` antes→después, reglas: `sumup_*` sin escritura del cliente (G3), datos bancarios públicos solo admin (F8), verificador diario Σ | Siguiente | G3 y migración de backfill de `origin` (gate) |
-| 3 | **Payouts + comisión real**: ingesta `/v1.0/payouts`, `sumupPayouts`, vínculo por `transaction_code`, bruto/comisión/líquido reales | Bloqueado | **G9** (primera llamada real), **G1** (bruto vs neto) |
+| 2 | **Ledger**: `origin/area/provider/providerRef` en movimientos, `auditEvents` antes→después, datos bancarios públicos solo admin (F8), verificador diario Σ | Siguiente; **G3 ya cerrado en reglas** | Migración de backfill de `origin` (gate) |
+| 3 | **Payouts + comisión real**: ingesta `/v1.0/payouts`, `sumupPayouts`, vínculo por `transaction_code`, bruto/comisión/líquido reales | Bloqueado | **G9** (primera llamada real). **G1 cerrado:** bruto menos reembolsos + comisión como egreso vinculado |
 | 4 | **Caja diaria**: `cashSessions` con apertura, esperado, conteo (doble en Ofrendas), cierre con diferencia, reapertura v+1, depósito | Bloqueado parcialmente | Q2, Q3, Q7, Q10 (Navigator) |
 | 5 | **UX foundation + Preview 2026**: tokens, StatusBadge, MoneyAmount, DataTable, Sheet; `/preview/finanzas-2026` con mocks | Puede empezar ya: no toca datos | Revisión del Design Lock |
 | 6 | **Ofrendas / Cafetería** como dominios propios; Conciliation Center; Attention Queue | Después de 3 y 4 | 3, 4, 5 |
@@ -54,7 +54,7 @@ Auditoría: auditEvents (append-only) · Roles mínimos (cashier/finance/admin)
 | PAYOUT: transacciones asociadas | ⏳ Slice 3 |
 | CASH CLOSE: esperado vs contado | ⏳ Slice 4. F1 ✅ `cash.test.ts` |
 | CORRECTION: historia preservada | ✅ parcial: el sync no pisa ediciones humanas y hay versions. Auditoría completa en el Slice 2 |
-| PERMISSIONS: sin permiso no corrige | ⚠️ UI ✅ (SumUp solo lectura). Reglas en el Slice 2 (G3). Test de reglas S1.12 escrito, sin ejecutar |
+| PERMISSIONS: sin permiso no corrige | ✅ UI + Firestore Rules: `sumup_*` es solo lectura para clientes (G3 cerrado) |
 | SCHEDULER + MANUAL simultáneos | ✅ lease |
 | Cambio de mes | ✅ |
 | Resumen con documento completo (9 campos) en mes vacío | ✅ B1 |

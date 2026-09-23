@@ -8,13 +8,14 @@
  * passed in explicitly. Every function here must be deterministic given its
  * inputs so it can be unit tested without emulators or mocks of Firestore.
  *
- * IMPORTANT (financial invariant, do not change without a Navigator/Atlas
- * decision — see docs/mission-2026/02-atlas-sumup-audit.md §7):
+ * IMPORTANT — financial invariant approved in G1 on 2026-09-23:
  *   ledgerAmount = max(0, gross - refunded)
- * `fee_amount` never arrives on /transactions/history today, so it is not
- * subtracted from the ledger amount. If it ever arrives, it is stored on the
- * raw doc as informational data (feeStatus:'provider') but the ledger amount
- * is NOT changed in this slice.
+ * The SumUp sale stays gross (net of refunds) in the ledger. Provider fees are
+ * not subtracted from the sale. When payout/detail ingestion is implemented,
+ * the real commission will be recorded as a linked expense so the system can
+ * reconstruct gross - refunds - fees = expected net deposit.
+ * `fee_amount` is preserved on the raw document whenever the provider supplies
+ * it, but it does not mutate the sale amount.
  */
 
 const crypto = require("node:crypto");
