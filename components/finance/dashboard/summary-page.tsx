@@ -193,7 +193,9 @@ const SETTLEMENT_STATUS_ICON: Record<string, typeof CircleCheck> = {
  * §UI "Resumen del día"). Nunca muestra "$0" mientras la comisión es
  * simplemente desconocida — usa "pendiente". */
 function DaySettlementRow({ area, settlement, todayStr }: { area: string; settlement?: SumUpDailySettlement; todayStr: string }) {
-  const status = settlementStatus(settlement, todayStr);
+  // M3 (Atlas review): filas sumupPayouts en revisión priman sobre pagado/diferencia.
+  const hasReviewRows = (settlement?.reviewCount ?? 0) > 0;
+  const status = settlementStatus(settlement, todayStr, hasReviewRows);
   const StatusIcon = SETTLEMENT_STATUS_ICON[status.code] || CircleDashed;
   const partial = settlement?.linkStatus === "partial";
 
@@ -212,7 +214,7 @@ function DaySettlementRow({ area, settlement, todayStr }: { area: string; settle
             {partial ? `parcial (${settlement.txLinked} de ${settlement.txCount})` : ""}{" "}
             {clp(settlement.comisionSumUp)}
           </span>
-          <span>Líquido {clp(settlement.liquidoEsperado)}</span>
+          <span>{partial ? "Líquido parcial" : "Líquido"} {clp(settlement.liquidoEsperado)}</span>
           <span className={`settlement-status-${status.code}`}>
             <StatusIcon size={13} aria-hidden="true" />
             {settlement.depositado === null ? "Por depositar" : `Depositado ${clp(settlement.depositado)}`} · {status.label}

@@ -161,3 +161,19 @@ it("offerings-page no usa lenguaje engañoso (líquido/conciliado) en las etique
     expect(window).toMatch(/comisionSumUp|settlement/i);
   }
 });
+
+// M3 (Atlas review): sumupPayouts en revisión debe primar sobre "pagado"/
+// "diferencia" en ambas pantallas. La lógica de settlementStatus ya está
+// probada en tests/sumup-settlement.test.ts ("hasReviewRows fuerza..."); acá
+// se verifica que offerings-page y summary-page realmente la conectan a
+// reviewCount, no que quede sin usar en el modelo.
+it("offerings-page y summary-page derivan hasReviewRows de settlement.reviewCount", () => {
+  for (const path of [
+    "components/finance/offerings/offerings-page.tsx",
+    "components/finance/dashboard/summary-page.tsx",
+  ]) {
+    const source = readFileSync(path, "utf-8");
+    expect(source).toMatch(/reviewCount/);
+    expect(source).toMatch(/settlementStatus\([^)]*hasReviewRows/);
+  }
+});

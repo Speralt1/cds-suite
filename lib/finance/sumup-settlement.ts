@@ -24,6 +24,18 @@ export interface SumUpDailySettlement {
   txCount: number;
   txLinked: number;
   txPending: number;
+  // M4 (Atlas review): transacciones excluidas del día por no ser
+  // SUCCESSFUL/REFUNDED (canceladas, fallidas, pendientes) — nunca suman al
+  // bruto ni cuentan como "pendiente", pero tampoco desaparecen (spec "NO
+  // SILENT MONEY LOSS"): se muestran aparte.
+  txExcluded: number;
+  // M3: cantidad de filas sumupPayouts en revisión (deducciones, sin
+  // transaction_code, base indeterminada) cuya fecha de payout cae este día.
+  reviewCount: number;
+  // M3: deducciones (reembolsos/chargebacks/etc del lado del payout, NO de
+  // la transacción) posteadas por su propia fecha de payout, ya restadas de
+  // `depositado` arriba. null cuando no hay ninguna ese día.
+  deductions: { totalAmount: number; count: number } | null;
   linkStatus: "pending" | "partial" | "complete";
   basis: "net" | "gross" | null;
 }

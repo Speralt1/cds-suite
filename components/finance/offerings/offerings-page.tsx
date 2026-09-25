@@ -243,7 +243,10 @@ const SETTLEMENT_STATUS_ICON: Record<string, typeof CircleCheck> = {
 /** Comisión/depósito real de SumUp para el día (spec §UI). Nunca muestra
  * "$0" mientras la comisión es simplemente desconocida — usa "pendiente". */
 function SettlementBlock({ settlement, todayStr }: { settlement?: SumUpDailySettlement; todayStr: string }) {
-  const status = settlementStatus(settlement, todayStr);
+  // M3 (Atlas review): filas sumupPayouts en revisión (deducciones sin
+  // vincular, base indeterminada) para este día priman sobre pagado/diferencia.
+  const hasReviewRows = (settlement?.reviewCount ?? 0) > 0;
+  const status = settlementStatus(settlement, todayStr, hasReviewRows);
   const StatusIcon = SETTLEMENT_STATUS_ICON[status.code] || Clock;
 
   if (!settlement || settlement.linkStatus === "pending") {
@@ -278,7 +281,7 @@ function SettlementBlock({ settlement, todayStr }: { settlement?: SumUpDailySett
         </strong>
       </div>
       <div className="offering-area-line">
-        <span>Líquido</span>
+        <span>{partial ? "Líquido parcial" : "Líquido"}</span>
         <strong className="tabular-nums">{clp(settlement.liquidoEsperado)}</strong>
       </div>
       <div className="offering-area-line offering-area-total">
