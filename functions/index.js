@@ -25,6 +25,11 @@ const sumupCafe = defineJsonSecret("SUMUP_CAFETERIA_CONFIG");
 // and deposit; turning it on to create expense movements + the September
 // backfill is a migration that needs human OK.
 const sumupFeesLedgerEnabled = defineBoolean("SUMUP_FEES_LEDGER_ENABLED", { default: false });
+// Atlas review M1 (2026-09-25): the scheduled payouts sync starts in dryRun
+// too — writing sumupPayouts/settlement/sumupDailySettlement is its own,
+// separate switch from the fee ledger. The scheduled run is still recorded
+// in sumupSyncRuns (dryRun:true) as evidence while this is off.
+const sumupPayoutsWriteEnabled = defineBoolean("SUMUP_PAYOUTS_WRITE_ENABLED", { default: false });
 
 const store = createFirestoreStore({ db, FieldValue, Timestamp });
 const clock = { now: () => Date.now() };
@@ -612,13 +617,14 @@ exports.sumupPayoutsScheduled = onSchedule(
 
     const { start, end } = clampPayoutsWindow(null, null);
     const ledgerEnabled = sumupFeesLedgerEnabled.value();
+    const dryRun = !sumupPayoutsWriteEnabled.value();
 
     const results = await Promise.allSettled([
       safeRunPayoutsSync({
         account: 'offerings',
         config: offeringsConfig,
         trigger: 'scheduled',
-        dryRun: false,
+        dryRun,
         ledgerEnabled,
         start,
         end,
@@ -631,7 +637,7 @@ exports.sumupPayoutsScheduled = onSchedule(
         account: 'cafeteria',
         config: cafeConfig,
         trigger: 'scheduled',
-        dryRun: false,
+        dryRun,
         ledgerEnabled,
         start,
         end,
