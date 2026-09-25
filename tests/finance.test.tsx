@@ -77,6 +77,13 @@ it("líder solo ve resumen y no monta componentes de detalle", () => {
   expect(screen.queryByText("Privado")).toBeNull();
   expect(privateRender).not.toHaveBeenCalled();
 });
+it("un rol sin permiso de detalle ve la barra solo con Resumen", () => {
+  state.role = "leader";
+  render(<FinanceNav />);
+  const links = screen.getAllByRole("link");
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveTextContent("Resumen");
+});
 it("permisos explícitos y denegación por defecto", () => {
   for (const role of ["admin", "pastor", "finance", "leader"] as Role[]) {
     expect(canSeeDetails(role)).toBe(role !== "leader");

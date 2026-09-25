@@ -99,29 +99,55 @@ button:disabled {
 
 /* Finance V1: shared controls, mobile cards, and accessible native dialogs. */
 .finance-nav {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  position: sticky;
+  top: var(--finance-nav-top, 0px);
+  z-index: 20;
+  display: flex;
   gap: 4px;
-  padding: 6px;
-  border: 1px solid var(--color-line);
-  border-radius: 12px;
-  background: white;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-canvas);
+}
+.finance-nav::-webkit-scrollbar {
+  display: none;
 }
 .finance-nav a {
-  display: flex;
-  min-height: 44px;
-  justify-content: center;
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
-  border-radius: 8px;
+  height: 40px;
+  padding: 0 12px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  /* Darker than --color-muted: at 4.46:1 on --color-canvas it falls just
+     short of the 4.5:1 AA text contrast target. */
+  color: #5f6d65;
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
 }
-.finance-nav a[aria-current] {
-  background: var(--color-primary-soft);
+.finance-nav a:hover {
+  color: var(--color-ink);
+}
+.finance-nav a[aria-current="page"] {
   color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
-.finance-nav a:focus:not(:focus-visible) {
-  outline: none;
+.finance-nav a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+@media (max-width: 640px) {
+  .finance-nav {
+    padding-right: 24px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  .finance-nav a {
+    height: 44px;
+    padding: 0 14px;
+  }
 }
 .settings-nav {
   display: grid;
@@ -311,15 +337,20 @@ button:disabled {
   min-width: 180px;
 }
 .finance-page-title h2 {
-  font-size: 23px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .finance-page-title p {
-  margin-top: 8px;
+  margin-top: 4px;
   color: var(--color-muted);
   font-size: 13px;
   line-height: 1.5;
+}
+@media (max-width: 640px) {
+  .finance-page-title p {
+    display: none;
+  }
 }
 .finance-page-header-aside {
   display: flex;
@@ -963,12 +994,6 @@ button:disabled {
     flex: 1 1 140px;
     text-align: center;
   }
-  .finance-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .finance-nav a {
-    font-size: 13px;
-  }
   .charts-grid,
   .profile-grid {
     grid-template-columns: 1fr;
@@ -1448,10 +1473,6 @@ button:disabled {
 }
 
 /* Campañas de recursos */
-.finance-nav {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
 .campaign-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1637,10 +1658,6 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
-  .finance-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .campaign-detail-heading {
     flex-direction: column;
   }

@@ -10,6 +10,7 @@ import type { PeriodSelection } from "@/lib/finance/types";
 export function FinanceNav() {
   const path = usePathname();
   const access = useAccess();
+  const navRef = useRef<HTMLElement>(null);
   const items = canSeeDetails(access.role)
     ? [
         ["/finanzas", "Resumen"],
@@ -20,8 +21,14 @@ export function FinanceNav() {
         ["/finanzas/reportes", "Reportes"],
       ]
     : [["/finanzas", "Resumen"]];
+  useEffect(() => {
+    const activeLink = navRef.current?.querySelector<HTMLElement>(
+      'a[aria-current="page"]',
+    );
+    activeLink?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+  }, [path]);
   return (
-    <nav aria-label="Secciones de Finanzas" className="finance-nav">
+    <nav aria-label="Secciones de Finanzas" className="finance-nav" ref={navRef}>
       {items.map(([href, label]) => (
         <Link
           key={href}

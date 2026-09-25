@@ -7,9 +7,9 @@ export default function FinanceLayout({
 }) {
   return (
     <FinanceDataCacheProvider>
-      <h1 className="mb-5 text-2xl font-medium">Finanzas</h1>
+      <h1 className="mb-3 text-xl font-semibold">Finanzas</h1>
       <FinanceNav />
-      <div className="mt-7">{children}</div>
+      <div className="mt-6">{children}</div>
     </FinanceDataCacheProvider>
   );
 }
