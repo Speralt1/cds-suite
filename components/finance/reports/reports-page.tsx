@@ -10,6 +10,12 @@ import {
 import { buildReport, type AlertItem, type FinanceReport } from "@/lib/finance/reports";
 import { clp, errorMessage, previousPeriod, today } from "@/lib/finance/formatters";
 import {
+  hasAnySettlement,
+  totalCommissionInRange,
+  useMonthSettlements,
+} from "@/lib/finance/sumup-settlement";
+import { canSeeDetails } from "@/lib/finance/permissions";
+import {
   DetailGuard,
   FinancePageHeader,
   PeriodPicker,

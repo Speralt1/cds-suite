@@ -98,7 +98,7 @@ export type SumUpFee =
   | { status: "none" }
   | { status: "pending" }
   | { status: "estimated"; ratePercent: number; estimatedAmount: number }
-  | { status: "recorded"; amount: number };
+  | { status: "recorded"; amount: number; byAccount: { offerings: number; cafeteria: number } };
 
 export interface FinanceReport {
   period: PeriodSelection;
@@ -406,6 +406,10 @@ export function buildReport(
     previousTransactions?: FinanceTransaction[];
     previousSummaries?: MonthlySummary[];
     today?: string;
+    // Slice 3a — comisión real de SumUp para el período (suma de
+    // sumupDailySettlement por cuenta), cuando el caller ya la cargó.
+    // Ausente => sumUpFee sigue en 'pending' (nunca inventa un monto).
+    sumUpSettlement?: { total: number; byAccount: { offerings: number; cafeteria: number } };
   } = {},
 ): FinanceReport {
   if (transactions.length >= MAX_PERIOD_RECORDS)
@@ -609,7 +613,12 @@ export function buildReport(
     narrative,
     comparison,
     monthlyByMethod,
-    sumUpFee: byMethod.sumUpAmount > 0 ? { status: "pending" } : { status: "none" },
+    sumUpFee:
+      byMethod.sumUpAmount <= 0
+        ? { status: "none" }
+        : options.sumUpSettlement && options.sumUpSettlement.total > 0
+          ? { status: "recorded", amount: options.sumUpSettlement.total, byAccount: options.sumUpSettlement.byAccount }
+          : { status: "pending" },
   };
 }
 export function reportCategoryRows(values: Record<string, number>) {

@@ -5,9 +5,11 @@ import {
   Banknote,
   CircleCheck,
   CircleDashed,
+  Clock,
   CloudOff,
   CreditCard,
   ExternalLink,
+  Flag,
   RefreshCw,
   Settings2,
   TriangleAlert,
@@ -21,6 +23,11 @@ import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/ins
 import { WORSHIP_WEEKDAYS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
 import { findActiveDailyCash, type CashArea } from "@/lib/offerings/cash";
+import {
+  settlementStatus,
+  useMonthSettlements,
+  type SumUpDailySettlement,
+} from "@/lib/finance/sumup-settlement";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -221,6 +228,76 @@ function GivingSettingsModal({ current, onClose }: { current: GivingSettings | n
   );
 }
 
+function ddmm(date: string) {
+  const [, month, day] = date.split("-");
+  return `${day}-${month}`;
+}
+
+const SETTLEMENT_STATUS_ICON: Record<string, typeof CircleCheck> = {
+  "por-depositar": Clock,
+  pagado: CircleCheck,
+  diferencia: TriangleAlert,
+  revision: Flag,
+};
+
+/** Comisión/depósito real de SumUp para el día (spec §UI). Nunca muestra
+ * "$0" mientras la comisión es simplemente desconocida — usa "pendiente". */
+function SettlementBlock({ settlement, todayStr }: { settlement?: SumUpDailySettlement; todayStr: string }) {
+  const status = settlementStatus(settlement, todayStr);
+  const StatusIcon = SETTLEMENT_STATUS_ICON[status.code] || Clock;
+
+  if (!settlement || settlement.linkStatus === "pending") {
+    return (
+      <div className="offering-area-block offering-area-settlement">
+        <span className="offering-area-block-label">Comisión y depósito SumUp</span>
+        <div className="offering-area-line">
+          <span>Comisión SumUp</span>
+          <strong className="tabular-nums sumup-fee-pending">
+            <CircleDashed size={14} aria-hidden="true" />
+            Pendiente
+          </strong>
+        </div>
+        <div className="offering-area-line">
+          <span>Por depositar</span>
+          <strong className="tabular-nums">—</strong>
+        </div>
+      </div>
+    );
+  }
+
+  const partial = settlement.linkStatus === "partial";
+  return (
+    <div className="offering-area-block offering-area-settlement">
+      <span className="offering-area-block-label">Comisión y depósito SumUp</span>
+      <div className="offering-area-line">
+        <span>Comisión SumUp</span>
+        <strong className="tabular-nums">
+          {partial
+            ? `Parcial (${settlement.txLinked} de ${settlement.txCount} pagos) · ${clp(settlement.comisionSumUp)}`
+            : `−${clp(settlement.comisionSumUp)}`}
+        </strong>
+      </div>
+      <div className="offering-area-line">
+        <span>Líquido</span>
+        <strong className="tabular-nums">{clp(settlement.liquidoEsperado)}</strong>
+      </div>
+      <div className="offering-area-line offering-area-total">
+        <span>
+          {settlement.depositado === null
+            ? "Por depositar"
+            : `Depositado ${ddmm(settlement.references[0]?.date || settlement.date)}`}
+        </span>
+        <strong className={`tabular-nums settlement-status-${status.code}`}>
+          {settlement.depositado === null ? "—" : clp(settlement.depositado)}
+          {" "}
+          <StatusIcon size={14} aria-hidden="true" />
+          {status.label}
+        </strong>
+      </div>
+    </div>
+  );
+}
+
 function AreaCard({
   title,
   dayLabel,
@@ -231,6 +308,8 @@ function AreaCard({
   cardMonth,
   cashMonth,
   existingCash,
+  settlement,
+  todayStr,
   onCash,
 }: {
   title: string;
@@ -242,6 +321,8 @@ function AreaCard({
   cardMonth: number;
   cashMonth: number;
   existingCash?: FinanceTransaction;
+  settlement?: SumUpDailySettlement;
+  todayStr: string;
   onCash: () => void;
 }) {
   const missingDayCash = cardDay > 0 && cashDay === 0;
@@ -271,6 +352,8 @@ function AreaCard({
           <strong className="tabular-nums">{clp(cardDay + cashDay)}</strong>
         </div>
       </div>
+
+      <SettlementBlock settlement={settlement} todayStr={todayStr} />
 
       <div className="offering-area-block">
         <span className="offering-area-block-label">
@@ -305,6 +388,7 @@ function AreaCard({
 
 export function OfferingsPage() {
   const access = useAccess();
+  const details = canSeeDetails(access.role);
   const { user } = useAuth();
   const settings = useGivingSettings();
   const offeringsIntegration = useSumUpIntegration("offerings");
@@ -321,7 +405,15 @@ export function OfferingsPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
 
-  if (!canSeeDetails(access.role)) {
+  const monthStart = `${selectedDate.slice(0, 7)}-01`;
+  const monthEnd = `${selectedDate.slice(0, 7)}-31`;
+  // sumupDailySettlement solo lo lee details() (firestore.rules) — para
+  // leader nunca se consulta ni se muestra.
+  const settlements = useMonthSettlements(monthStart, monthEnd, details);
+  const offeringSettlement = settlements.data.get(`offerings_${selectedDate}`);
+  const cafeSettlement = settlements.data.get(`cafeteria_${selectedDate}`);
+
+  if (!details) {
     return <Empty>Esta sección está reservada para Administración, Pastor y Finanzas.</Empty>;
   }
 
@@ -473,6 +565,8 @@ export function OfferingsPage() {
               cardMonth={offeringCardMonth}
               cashMonth={offeringCashMonth}
               existingCash={offeringCash}
+              settlement={offeringSettlement}
+              todayStr={today()}
               onCash={() => setCashArea("offerings")}
             />
             <AreaCard
@@ -485,12 +579,16 @@ export function OfferingsPage() {
               cardMonth={cafeCardMonth}
               cashMonth={cafeCashMonth}
               existingCash={cafeCash}
+              settlement={cafeSettlement}
+              todayStr={today()}
               onCash={() => setCashArea("cafeteria")}
             />
           </div>
-          <p className="field-help mt-3">
-            Montos SumUp en bruto: la comisión aún no está disponible.
-          </p>
+          {!offeringSettlement && !cafeSettlement && (
+            <p className="field-help mt-3">
+              Montos SumUp en bruto: la comisión y el depósito todavía no están disponibles para este día.
+            </p>
+          )}
         </>
       ) : (
         <div className="panel offering-area-card">

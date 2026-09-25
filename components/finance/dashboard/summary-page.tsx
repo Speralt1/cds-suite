@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useState } from "react";
-import { TriangleAlert, CircleDashed, CircleCheck, Banknote, Clock } from "lucide-react";
+import { TriangleAlert, CircleDashed, CircleCheck, Banknote, Clock, Flag } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import {
@@ -30,6 +30,14 @@ import {
 import { WORSHIP_WEEKDAYS, MONTHS, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
 import type { CashArea } from "@/lib/offerings/cash";
+import {
+  settlementStatus,
+  sumUpAccountForCategory,
+  totalCommissionInRange,
+  hasAnySettlement,
+  useMonthSettlements,
+  type SumUpDailySettlement,
+} from "@/lib/finance/sumup-settlement";
 import {
   FinancePageHeader,
   PeriodPicker,
@@ -174,20 +182,68 @@ function dateLabelShort(date: string) {
   return `${weekday} ${day} ${MONTHS[month - 1].slice(0, 3).toLowerCase()}`;
 }
 
+const SETTLEMENT_STATUS_ICON: Record<string, typeof CircleCheck> = {
+  "por-depositar": Clock,
+  pagado: CircleCheck,
+  diferencia: TriangleAlert,
+  revision: Flag,
+};
+
+/** Comisión/depósito real de SumUp por área, para el día seleccionado (spec
+ * §UI "Resumen del día"). Nunca muestra "$0" mientras la comisión es
+ * simplemente desconocida — usa "pendiente". */
+function DaySettlementRow({ area, settlement, todayStr }: { area: string; settlement?: SumUpDailySettlement; todayStr: string }) {
+  const status = settlementStatus(settlement, todayStr);
+  const StatusIcon = SETTLEMENT_STATUS_ICON[status.code] || CircleDashed;
+  const partial = settlement?.linkStatus === "partial";
+
+  return (
+    <div className="day-panel-settlement-row">
+      <span className="day-panel-settlement-area">{area}</span>
+      {!settlement || settlement.linkStatus === "pending" ? (
+        <span className="day-panel-settlement-fields">
+          <span>Comisión: pendiente</span>
+          <span>Por depositar</span>
+        </span>
+      ) : (
+        <span className="day-panel-settlement-fields">
+          <span>
+            Comisión{" "}
+            {partial ? `parcial (${settlement.txLinked} de ${settlement.txCount})` : ""}{" "}
+            {clp(settlement.comisionSumUp)}
+          </span>
+          <span>Líquido {clp(settlement.liquidoEsperado)}</span>
+          <span className={`settlement-status-${status.code}`}>
+            <StatusIcon size={13} aria-hidden="true" />
+            {settlement.depositado === null ? "Por depositar" : `Depositado ${clp(settlement.depositado)}`} · {status.label}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 function DayPanel({
   date,
   status,
   transactions,
+  settlements,
+  todayStr,
   onRegisterCash,
   onViewDay,
 }: {
   date: string;
   status?: DayStatus;
   transactions: FinanceTransaction[];
+  settlements: Map<string, SumUpDailySettlement>;
+  todayStr: string;
   onRegisterCash: (area: CashArea) => void;
   onViewDay: () => void;
 }) {
   const { rows, expenses, totalIncome } = dayBreakdown(transactions, date);
+  const sumUpAreas = rows
+    .map((row) => sumUpAccountForCategory(row.label))
+    .filter((account): account is "offerings" | "cafeteria" => account !== null);
   return (
     <div className="panel day-panel" aria-live="polite">
       <div className="day-panel-heading">
@@ -247,6 +303,19 @@ function DayPanel({
         </table>
       ) : (
         <p className="field-help">Sin movimientos activos este día.</p>
+      )}
+
+      {sumUpAreas.length > 0 && (
+        <div className="day-panel-settlement">
+          {sumUpAreas.map((account) => (
+            <DaySettlementRow
+              key={account}
+              area={account === "offerings" ? "Ofrendas" : "Cafetería"}
+              settlement={settlements.get(`${account}_${date}`)}
+              todayStr={todayStr}
+            />
+          ))}
+        </div>
       )}
 
       <div className="day-panel-actions">
@@ -350,6 +419,21 @@ export function SummaryPage() {
   const latest = useTransactions(period, details);
   const dailySummaries = useSummaries(dailyPeriod);
   const dailyTransactions = useTransactions(dailyPeriod, details);
+
+  // Slice 3a — comisión/depósito real de SumUp por día (spec §UI). Una
+  // consulta por mes visible en cada vista, no por transacción.
+  // sumupDailySettlement solo lo lee details() (firestore.rules) — para
+  // leader nunca se consulta ni se muestra.
+  const periodSettlements = useMonthSettlements(
+    `${periodId(period.year, period.month)}-01`,
+    `${periodId(period.year, period.month)}-31`,
+    details,
+  );
+  const dailyPeriodSettlements = useMonthSettlements(
+    `${periodId(dailyPeriod.year, dailyPeriod.month)}-01`,
+    `${periodId(dailyPeriod.year, dailyPeriod.month)}-31`,
+    details,
+  );
 
   const [actionModal, setActionModal] = useState<ActionModal>(null);
   const [cashArea, setCashArea] = useState<CashArea>("offerings");
@@ -566,6 +650,8 @@ export function SummaryPage() {
                 date={dailyDate}
                 status={dayStatus(dailyDate, dailyTransactions.data, today(), WORSHIP_WEEKDAYS)}
                 transactions={dailyTransactions.data}
+                settlements={dailyPeriodSettlements.data}
+                todayStr={today()}
                 onRegisterCash={(area) => openCashModal(area, dailyDate)}
                 onViewDay={() => {}}
               />
@@ -745,6 +831,8 @@ export function SummaryPage() {
                   date={effectiveSelectedDay}
                   status={selectedDayStatus}
                   transactions={latest.data}
+                  settlements={periodSettlements.data}
+                  todayStr={today()}
                   onRegisterCash={(area) => openCashModal(area, effectiveSelectedDay)}
                   onViewDay={() => {
                     setDailyDate(effectiveSelectedDay);
@@ -805,20 +893,39 @@ export function SummaryPage() {
                       <strong className="tabular-nums">{clp(total.expenseTotal)}</strong>
                     </p>
                     {income && income.sumUpAmount > 0 && (
-                      <>
-                        <p>
-                          <span>Comisión SumUp</span>
-                          <strong className="tabular-nums sumup-fee-pending">
-                            <Clock size={14} aria-hidden="true" />
-                            Pendiente de datos de SumUp
-                          </strong>
-                        </p>
-                        <p className="field-help">
-                          La comisión se registrará como gasto cuando se
-                          conecten los payouts de SumUp. El resultado aún no
-                          la descuenta.
-                        </p>
-                      </>
+                      hasAnySettlement(periodSettlements.data) ? (
+                        <>
+                          <p>
+                            <span>Comisión SumUp</span>
+                            <strong className="tabular-nums">
+                              {clp(totalCommissionInRange(periodSettlements.data))}
+                            </strong>
+                          </p>
+                          <p className="field-help">
+                            Comisión real de SumUp para {periodLabel(period).toLowerCase()}
+                            {" "}
+                            (recomendado desde sumupDailySettlement). El resultado aún no la
+                            descuenta como gasto{" "}
+                            {" "}
+                            hasta que se registre en el libro contable.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p>
+                            <span>Comisión SumUp</span>
+                            <strong className="tabular-nums sumup-fee-pending">
+                              <Clock size={14} aria-hidden="true" />
+                              Pendiente de datos de SumUp
+                            </strong>
+                          </p>
+                          <p className="field-help">
+                            La comisión se registrará como gasto cuando se
+                            conecten los payouts de SumUp. El resultado aún no
+                            la descuenta.
+                          </p>
+                        </>
+                      )
                     )}
                     <p>
                       <span>Resultado</span>
