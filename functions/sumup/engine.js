@@ -13,6 +13,7 @@
  */
 
 const core = require("./core");
+const payoutsCore = require("./payouts-core");
 
 const FORTY_FIVE_DAYS_MS = 45 * 24 * 60 * 60 * 1000;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
@@ -712,9 +713,263 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
   }
 }
 
+function emptyPayoutsCounts() {
+  return { rowsFetched: 0, rowsCreated: 0, rowsUpdated: 0, rowsUnchanged: 0, rowsReview: 0, daysSettled: 0, feeMovements: 0 };
+}
+
+/**
+ * runPayoutsSync — Slice 3a: ingests GET /payouts for one account and one
+ * date window, writes sumupPayouts/{docId} (raw evidence, always), and —
+ * only when the account-wide basis is accepted (net|gross), see
+ * payoutsCore.aggregateBasisVotes — writes settlement.* on the linked
+ * transactions, sumupDailySettlement/{a}_{date}, and (when ledgerEnabled)
+ * the sumup_fee_{account}_{date} expense movement.
+ *
+ * Never edits the gross sale (G1). Never writes $0 when the commission is
+ * simply unknown yet — that case is reported as "needs_review" and nothing
+ * beyond the raw sumupPayouts rows is written.
+ *
+ * @param {object} opts
+ * @param {'offerings'|'cafeteria'} opts.account
+ * @param {{apiKey?:string, merchantCode?:string}} opts.config
+ * @param {'manual'|'scheduled'} opts.trigger
+ * @param {boolean} [opts.dryRun]        true = compute everything, write nothing (default true for manual per spec)
+ * @param {boolean} [opts.ledgerEnabled] SUMUP_FEES_LEDGER_ENABLED param
+ * @param {string} opts.start            YYYY-MM-DD (inclusive, Chile-local sale day)
+ * @param {string} opts.end              YYYY-MM-DD (inclusive)
+ * @param {(params:{config, start, end}) => Promise<Array>} opts.fetchPayouts
+ * @param {object} opts.store
+ * @param {{now: () => number}} opts.clock
+ * @param {string} [opts.requestedBy]
+ * @param {number} [opts.leaseTtlMs]
+ */
+async function runPayoutsSync(opts) {
+  const {
+    account,
+    config,
+    trigger,
+    dryRun = true,
+    ledgerEnabled = false,
+    start,
+    end,
+    fetchPayouts,
+    store,
+    clock,
+    requestedBy = "system",
+    leaseTtlMs = 60_000,
+  } = opts;
+
+  const startedAt = clock.now();
+  const leaseKey = `${account}__payouts`;
+  const counts = emptyPayoutsCounts();
+
+  let runId;
+  let lease;
+  try {
+    runId = await store.createRun({
+      account,
+      provider: "sumup",
+      kind: "payouts",
+      merchantCode: config?.merchantCode || null,
+      trigger,
+      dryRun,
+      requestedBy,
+      status: "running",
+      startedAt,
+      window: { start, end },
+    });
+    lease = await store.acquireLease(leaseKey, { ttlMs: leaseTtlMs, runId, trigger, now: startedAt });
+  } catch (error) {
+    return {
+      account,
+      runId: runId || null,
+      status: "failed",
+      counts,
+      basis: null,
+      errorClass: error.errorClass || core.classifyHttpError(error),
+      errorMessage: String(error.message || error),
+    };
+  }
+
+  if (!lease.acquired) {
+    const status = trigger === "manual" ? "already_running" : "skipped_locked";
+    await store.updateRun(runId, { status, finishedAt: startedAt, durationMs: 0 });
+    return { account, runId: lease.existingRunId || runId, status, counts, basis: null, errorClass: null };
+  }
+
+  try {
+    if (!config?.apiKey || !config?.merchantCode) {
+      const err = new Error("Configuración SumUp incompleta.");
+      err.errorClass = "config_error";
+      throw err;
+    }
+
+    let rawRows;
+    try {
+      rawRows = await fetchPayouts({ config, start, end });
+    } catch (err) {
+      const errorClass = err.errorClass || core.classifyHttpError(err);
+      await store.updateRun(runId, {
+        status: "failed",
+        finishedAt: clock.now(),
+        durationMs: clock.now() - startedAt,
+        counts,
+        errorClass,
+        errorMessage: String(err.message || err),
+        httpStatus: err.status || null,
+      });
+      await store.releaseLease(leaseKey, runId);
+      return { account, runId, status: "failed", counts, basis: null, errorClass, errorMessage: String(err.message || err) };
+    }
+
+    counts.rowsFetched = rawRows.length;
+    const now = startedAt;
+
+    const transactions = await store.getTransactionsInWindow(account, { start, end });
+    const index = payoutsCore.buildTransactionIndex({ [account]: transactions });
+
+    const normalizedRows = rawRows.map((row) => {
+      const normalized = payoutsCore.normalizePayoutRow(row, { account, merchantCode: config.merchantCode });
+      if (normalized.type === payoutsCore.PAYOUT_TYPE && !normalized.review) {
+        const link = payoutsCore.linkPayoutRow(row, account, index);
+        normalized.linkStatus = link.status;
+        if (link.status !== "linked") {
+          normalized.review = true;
+          normalized.reviewReason = link.status; // "not_found" | "other_account"
+        }
+      }
+      return normalized;
+    });
+
+    const payoutTypeLinked = normalizedRows.filter((r) => r.type === payoutsCore.PAYOUT_TYPE && r.linkStatus === "linked");
+    const votes = payoutTypeLinked.map((row) => {
+      const tx = index.get(row.transactionCode)?.tx;
+      const { vote } = payoutsCore.detectBasisVote({
+        payoutAmount: row.amount,
+        payoutFee: row.fee,
+        gross: tx?.grossAmount || 0,
+        refunded: tx?.refundedAmount || 0,
+      });
+      return vote;
+    });
+    const basisResult = payoutsCore.aggregateBasisVotes(votes);
+    const basisAccepted = basisResult.basis === "net" || basisResult.basis === "gross";
+    normalizedRows.forEach((r) => {
+      if (r.type === payoutsCore.PAYOUT_TYPE) r.basis = basisAccepted ? basisResult.basis : null;
+    });
+
+    // --- Write raw sumupPayouts rows (always, evidence-first) ---
+    const docIds = normalizedRows.map((r) => r.docId);
+    const existingPayouts = await store.getPayoutsBatch(docIds);
+    for (const normalized of normalizedRows) {
+      const existing = existingPayouts.get(normalized.docId) || null;
+      const decision = payoutsCore.decidePayoutRowAction(existing, normalized);
+      if (decision.action === "unchanged") {
+        counts.rowsUnchanged += 1;
+        continue;
+      }
+      if (normalized.review) counts.rowsReview += 1;
+      if (decision.action === "create") counts.rowsCreated += 1;
+      else counts.rowsUpdated += 1;
+      if (!dryRun) {
+        // eslint-disable-next-line no-await-in-loop
+        await store.upsertPayoutRow({ docId: normalized.docId, normalized, existing, runId, now });
+      }
+    }
+
+    if (!basisAccepted) {
+      await store.updateRun(runId, {
+        status: "needs_review",
+        finishedAt: clock.now(),
+        durationMs: clock.now() - startedAt,
+        counts,
+        basis: basisResult.basis,
+        basisReason: basisResult.reason,
+        errorClass: null,
+      });
+      await store.releaseLease(leaseKey, runId);
+      return { account, runId, status: "needs_review", counts, basis: basisResult.basis, errorClass: null };
+    }
+
+    // --- Settlement + daily aggregates (basis accepted) ---
+    const linkedRowsByCode = new Map();
+    for (const row of payoutTypeLinked) {
+      if (!linkedRowsByCode.has(row.transactionCode)) linkedRowsByCode.set(row.transactionCode, []);
+      linkedRowsByCode.get(row.transactionCode).push(row);
+    }
+
+    const settlements = payoutsCore.computeTransactionSettlements(transactions, linkedRowsByCode, basisResult.basis);
+    const dailyAggregates = payoutsCore.buildDailySettlementAggregates(account, transactions, linkedRowsByCode, basisResult.basis);
+
+    if (!dryRun) {
+      for (const [txId, settlement] of settlements.entries()) {
+        // eslint-disable-next-line no-await-in-loop
+        await store.setSettlement(account, txId, { ...settlement, runId, updatedAt: now });
+      }
+      for (const day of dailyAggregates) {
+        // eslint-disable-next-line no-await-in-loop
+        await store.setDailySettlement(account, day.date, { ...day, runId, basis: basisResult.basis });
+        counts.daysSettled += 1;
+      }
+    } else {
+      counts.daysSettled = dailyAggregates.length;
+    }
+
+    // --- Fee ledger (G1), only when the switch is on and not a dry run ---
+    if (ledgerEnabled && !dryRun) {
+      for (const day of dailyAggregates) {
+        if (day.linkStatus === "pending") continue; // never write $0 while commission is simply unknown
+        const period = day.date.slice(0, 7);
+        const dayOfMonth = String(Number(day.date.slice(8, 10)));
+        const txWithFee = [...settlements.values()].filter((s) => s.feeStatus === "provider").length;
+        // eslint-disable-next-line no-await-in-loop
+        await store.runFeeLedgerTransaction({
+          account,
+          date: day.date,
+          period,
+          day: dayOfMonth,
+          amount: day.comisionSumUp,
+          feeCoverage: { txCount: day.txCount, txWithFee: day.txLinked },
+          now,
+          runId,
+        });
+        counts.feeMovements += 1;
+      }
+    }
+
+    await store.updateRun(runId, {
+      status: "completed",
+      finishedAt: clock.now(),
+      durationMs: clock.now() - startedAt,
+      counts,
+      basis: basisResult.basis,
+      errorClass: null,
+    });
+    await store.releaseLease(leaseKey, runId);
+    return { account, runId, status: "completed", counts, basis: basisResult.basis, errorClass: null };
+  } catch (error) {
+    const errorClass = error.errorClass || "provider_unavailable";
+    await store.updateRun(runId, {
+      status: "failed",
+      finishedAt: clock.now(),
+      durationMs: clock.now() - startedAt,
+      counts,
+      errorClass,
+      errorMessage: String(error.message || error),
+    });
+    return { account, runId, status: "failed", counts, basis: null, errorClass, errorMessage: String(error.message || error) };
+  } finally {
+    if (runId) {
+      await store.releaseLease(leaseKey, runId);
+    }
+  }
+}
+
 module.exports = {
   runAccountSync,
   runLegacyPage,
+  runPayoutsSync,
   applyLedgerDecision,
   emptyCounts,
+  emptyPayoutsCounts,
 };

@@ -312,6 +312,63 @@ function summaryDelta(before, after) {
   return { incomeTotalDelta, countDelta, categoryDeltas, dayDeltas };
 }
 
+/**
+ * expenseSummaryDelta — expense-side equivalent of summaryDelta, used by the
+ * SumUp fee ledger movement (Slice 3a, financeTransactions/sumup_fee_{a}_{d}).
+ * Given the expense's state before and after a recalculation, returns the
+ * deltas to apply to expenseTotal, expenseByCategory, dailyExpense and result.
+ */
+function expenseSummaryDelta(before, after) {
+  const beforeActive = before?.active ? Number(before.amount || 0) : 0;
+  const afterActive = after?.active ? Number(after.amount || 0) : 0;
+  const expenseTotalDelta = afterActive - beforeActive;
+
+  const categoryDeltas = {};
+  const dayDeltas = {};
+
+  if (beforeActive > 0 && before?.category) {
+    categoryDeltas[before.category] = (categoryDeltas[before.category] || 0) - beforeActive;
+    dayDeltas[before.day] = (dayDeltas[before.day] || 0) - beforeActive;
+  }
+  if (afterActive > 0 && after?.category) {
+    categoryDeltas[after.category] = (categoryDeltas[after.category] || 0) + afterActive;
+    dayDeltas[after.day] = (dayDeltas[after.day] || 0) + afterActive;
+  }
+
+  return { expenseTotalDelta, categoryDeltas, dayDeltas };
+}
+
+/**
+ * applyExpenseSummaryDelta — mirrors applySummaryDelta: applies
+ * expenseSummaryDelta onto a summary doc and returns the FULL 9-field
+ * document. Callers MUST write this with a plain (non-merge) set (B1 pattern
+ * — see applySummaryDelta above for why merge:true is unsafe here).
+ */
+function applyExpenseSummaryDelta(summary, delta) {
+  const base = { ...emptySummary(), ...(summary || {}) };
+  const next = {
+    ...base,
+    expenseTotal: Number(base.expenseTotal || 0) + delta.expenseTotalDelta,
+    expenseByCategory: { ...(base.expenseByCategory || {}) },
+    dailyExpense: { ...(base.dailyExpense || {}) },
+  };
+  next.result = Number(next.incomeTotal || 0) - next.expenseTotal;
+
+  for (const [key, value] of Object.entries(delta.categoryDeltas)) {
+    next.expenseByCategory[key] = Number(next.expenseByCategory[key] || 0) + value;
+  }
+  for (const [key, value] of Object.entries(delta.dayDeltas)) {
+    next.dailyExpense[key] = Number(next.dailyExpense[key] || 0) + value;
+  }
+  for (const key of Object.keys(next.expenseByCategory)) {
+    if (next.expenseByCategory[key] === 0) delete next.expenseByCategory[key];
+  }
+  for (const key of Object.keys(next.dailyExpense)) {
+    if (next.dailyExpense[key] === 0) delete next.dailyExpense[key];
+  }
+  return next;
+}
+
 /** The 9 fields a financeMonthlySummaries doc always has (see firestore.rules validSummary). */
 function emptySummary() {
   return {
@@ -400,5 +457,7 @@ module.exports = {
   classifyItem,
   summaryDelta,
   applySummaryDelta,
+  expenseSummaryDelta,
+  applyExpenseSummaryDelta,
   classifyHttpError,
 };

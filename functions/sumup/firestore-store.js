@@ -8,6 +8,8 @@
  * engine can be unit tested with an in-memory store (see tests/functions).
  */
 
+const core = require("./core");
+
 function toTimestamp(Timestamp, value) {
   if (value === null || value === undefined) return value;
   if (typeof value === "number") return Timestamp.fromMillis(value);
@@ -42,6 +44,21 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
   }
   function runRef(runId) {
     return db.doc(`sumupSyncRuns/${runId}`);
+  }
+  function payoutRef(docId) {
+    return db.doc(`sumupPayouts/${docId}`);
+  }
+  function payoutVersionsCol(docId) {
+    return payoutRef(docId).collection("versions");
+  }
+  function dailySettlementRef(account, date) {
+    return db.doc(`sumupDailySettlement/${account}_${date}`);
+  }
+  function feeFinanceRef(account, date) {
+    return db.doc(`financeTransactions/sumup_fee_${account}_${date}`);
+  }
+  function feeVersionsCol(account, date) {
+    return feeFinanceRef(account, date).collection("versions");
   }
 
   return {
@@ -192,6 +209,215 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
           },
         };
         return workFn(wrapper);
+      });
+    },
+
+    // -------------------------------------------------------------------
+    // Slice 3a — payouts ingestion (comisión y depósito por día)
+    // -------------------------------------------------------------------
+
+    /**
+     * getTransactionsInWindow — mirrors scripts/sumup-payouts-probe.mjs's
+     * fetchImportedTransactions: pads the Firestore (UTC) query by a day on
+     * each side, then filters to the exact Chile-local [start, end] using
+     * core.datePartsChile, so a sale near midnight is never dropped due to
+     * timezone rounding.
+     */
+    async getTransactionsInWindow(account, { start, end }) {
+      const startPadded = new Date(`${start}T00:00:00Z`);
+      startPadded.setUTCDate(startPadded.getUTCDate() - 1);
+      const endPadded = new Date(`${end}T00:00:00Z`);
+      endPadded.setUTCDate(endPadded.getUTCDate() + 2);
+
+      const snap = await db
+        .collection(`sumupIntegrations/${account}/transactions`)
+        .where("timestamp", ">=", Timestamp.fromDate(startPadded))
+        .where("timestamp", "<", Timestamp.fromDate(endPadded))
+        .get();
+
+      const out = [];
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if (!data?.timestamp?.toDate) continue;
+        const iso = data.timestamp.toDate().toISOString();
+        const parts = core.datePartsChile(iso);
+        if (parts.localDate < start || parts.localDate > end) continue;
+        out.push({
+          id: doc.id,
+          transactionCode: data.transactionCode || "",
+          grossAmount: Number(data.grossAmount || 0),
+          refundedAmount: Number(data.refundedAmount || 0),
+          status: data.status || "",
+          localDate: parts.localDate,
+        });
+      }
+      return out;
+    },
+
+    async getPayoutsBatch(docIds) {
+      const map = new Map();
+      if (!docIds.length) return map;
+      const refs = docIds.map((id) => payoutRef(id));
+      const snaps = await db.getAll(...refs);
+      snaps.forEach((snap, index) => {
+        if (snap.exists) map.set(docIds[index], snap.data());
+      });
+      return map;
+    },
+
+    /**
+     * upsertPayoutRow — `firstSeenAt`/`raw` are written once (spec §Modelo de
+     * datos "Cambios"); a changed rawHash adds a versions/ entry instead of
+     * silently overwriting history. Called only when decidePayoutRowAction
+     * returned "create" or "update" — "unchanged" never reaches the store at
+     * all (idempotency test).
+     */
+    async upsertPayoutRow({ docId, normalized, existing, runId, now }) {
+      const patch = {
+        account: normalized.account,
+        merchantCode: normalized.merchantCode,
+        rowId: normalized.rowId,
+        type: normalized.type,
+        status: normalized.status,
+        date: normalized.date,
+        reference: normalized.reference,
+        transactionCode: normalized.transactionCode,
+        currency: normalized.currency,
+        amountRaw: normalized.amountRaw,
+        feeRaw: normalized.feeRaw,
+        amount: normalized.amount,
+        fee: normalized.fee,
+        netPaid: normalized.netPaid,
+        basis: normalized.basis,
+        raw: normalized.raw,
+        rawHash: normalized.rawHash,
+        lastSeenAt: toTimestamp(Timestamp, now),
+        runId,
+        linkStatus: normalized.linkStatus || null,
+        review: normalized.review,
+        reviewReason: normalized.reviewReason,
+      };
+      if (!existing) {
+        patch.firstSeenAt = toTimestamp(Timestamp, now);
+      } else {
+        await payoutVersionsCol(docId).doc().set({
+          previous: existing,
+          rawHash: existing.rawHash || null,
+          replacedAt: toTimestamp(Timestamp, now),
+          runId,
+        });
+      }
+      await payoutRef(docId).set(patch, { merge: true });
+    },
+
+    /**
+     * setSettlement — writes ONLY the `settlement` map on the transaction
+     * doc (spec §Modelo de datos). Never touches grossAmount/status/etc, and
+     * is never called by the hourly sync's buildRawDoc/setRaw (functions/
+     * sumup/engine.js) — see the regression test in
+     * tests/functions/sumup-payouts-engine.test.ts.
+     */
+    async setSettlement(account, transactionId, settlement) {
+      await rawRef(account, transactionId).set(
+        { settlement, settlementUpdatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+    },
+
+    /** setDailySettlement — full replace (recomputed fresh every run; no merge). */
+    async setDailySettlement(account, date, data) {
+      await dailySettlementRef(account, date).set({
+        ...data,
+        account,
+        date,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    },
+
+    /**
+     * runFeeLedgerTransaction — the SumUp fee expense movement
+     * (financeTransactions/sumup_fee_{account}_{date}) plus its
+     * expenseSummaryDelta on financeMonthlySummaries/{period}, both inside
+     * one Firestore transaction (spec §Libro contable "Recálculo").
+     */
+    async runFeeLedgerTransaction({ account, date, period, day, amount, feeCoverage, now, runId }) {
+      const finRef = feeFinanceRef(account, date);
+      return db.runTransaction(async (tx) => {
+        const finSnap = await tx.get(finRef);
+        const existing = finSnap.exists ? finSnap.data() : null;
+
+        const category = date < core.SUMUP_SPLIT_START_DATE
+          ? "Comisión SumUp · histórico sin separar"
+          : account === "offerings"
+            ? "Comisión SumUp · Ofrendas"
+            : "Comisión SumUp · Cafetería";
+
+        const before = existing
+          ? { active: existing.status === "active", amount: Number(existing.amount || 0), category: existing.category, day: existing.day }
+          : { active: false, amount: 0, category, day };
+        const willBeActive = amount > 0;
+        const after = willBeActive
+          ? { active: true, amount, category, day }
+          : { active: false, amount: 0, category: before.category, day: before.day };
+
+        const delta = core.expenseSummaryDelta(before, after);
+        const hasDelta = delta.expenseTotalDelta !== 0 || Object.keys(delta.categoryDeltas).length > 0 || Object.keys(delta.dayDeltas).length > 0;
+
+        if (!existing && !willBeActive) {
+          // Nothing to record and nothing existed before: skip entirely
+          // (never write a $0 expense — spec "nunca $0").
+          return { outcome: "skipped" };
+        }
+
+        if (hasDelta) {
+          const summarySnap = await tx.get(summaryRef(period));
+          const summary = summarySnap.exists ? summarySnap.data() : null;
+          tx.set(summaryRef(period), {
+            ...core.applyExpenseSummaryDelta(summary, delta),
+            lastTransactionId: `sumup_fee_${account}_${date}`,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        const revision = Number(existing?.revision || 0) + 1;
+        const noonMs = new Date(`${date}T12:00:00-04:00`).getTime();
+        const financeDoc = {
+          type: "expense",
+          amount: willBeActive ? amount : 0,
+          date: toTimestamp(Timestamp, Number.isFinite(noonMs) ? noonMs : now),
+          period,
+          day,
+          category,
+          paymentMethod: "card",
+          description: `Comisión SumUp · ${account === "offerings" ? "Ofrendas" : "Cafetería"}`,
+          note: "",
+          source: "general",
+          status: willBeActive ? "active" : "voided",
+          origin: "sumup_fee",
+          area: account,
+          feeCoverage: feeCoverage || null,
+          revision,
+          createdBy: existing?.createdBy || "system:sumup",
+          createdAt: existing?.createdAt || FieldValue.serverTimestamp(),
+          updatedBy: "system:sumup",
+          updatedAt: FieldValue.serverTimestamp(),
+          voidReason: willBeActive ? null : "Comisión recalculada a $0",
+          voidedBy: willBeActive ? null : "system:sumup",
+          voidedAt: willBeActive ? null : FieldValue.serverTimestamp(),
+        };
+        tx.set(finRef, financeDoc, { merge: true });
+
+        if (existing && Number(existing.amount || 0) !== (willBeActive ? amount : 0)) {
+          tx.set(feeVersionsCol(account, date).doc(), {
+            action: willBeActive ? "recalculated" : "voided",
+            before: existing,
+            afterAmount: willBeActive ? amount : 0,
+            runId,
+            at: toTimestamp(Timestamp, now),
+          });
+        }
+
+        return { outcome: existing ? "updated" : "created" };
       });
     },
   };
