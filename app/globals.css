@@ -679,6 +679,30 @@ button:disabled {
   background: #eee4df;
   color: #864b3a;
 }
+.transaction-row.is-group {
+  background: #fbfbf9;
+}
+.group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-primary);
+}
+.group-toggle-chevron {
+  flex-shrink: 0;
+}
+.transaction-group-detail {
+  margin: 0 0 8px 20px;
+  padding-left: 12px;
+  border-left: 2px solid var(--color-line);
+}
+.transaction-group-detail .transaction-row {
+  padding: 14px 20px;
+}
 .finance-modal {
   position: fixed;
   inset: 0;
