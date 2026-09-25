@@ -418,7 +418,16 @@ function normalizePayoutRow(rawRow, { account, merchantCode }) {
  */
 function decidePayoutRowAction(existing, normalized) {
   if (!existing) return { action: "create" };
-  if (existing.rawHash === normalized.rawHash) return { action: "unchanged" };
+  // Atlas review M2: linkStatus/review can change on a re-run (a
+  // transaction that was "not_found" gets imported later and this same
+  // payout row now links) without the row's OWN fields (amount/fee/status)
+  // changing at all — rawHash alone would miss that and never re-vincular.
+  const sameHash = existing.rawHash === normalized.rawHash;
+  const sameLinkStatus = (existing.linkStatus || null) === (normalized.linkStatus || null);
+  const sameReview =
+    !!existing.review === !!normalized.review &&
+    (existing.reviewReason || null) === (normalized.reviewReason || null);
+  if (sameHash && sameLinkStatus && sameReview) return { action: "unchanged" };
   return { action: "update" };
 }
 
@@ -495,24 +504,53 @@ function dailyLinkStatus({ n, linked }) {
  * @param {Map<string, Array>} linkedRowsByCode  normalized PAYOUT rows, indexed by transaction_code
  * @param {"net"|"gross"} basis
  */
-function buildDailySettlementAggregates(account, transactions, linkedRowsByCode, basis) {
+function buildDailySettlementAggregates(account, transactions, linkedRowsByCode, basis, extras = {}) {
+  const { excludedByDate = {}, reviewCountByDate = {}, deductionsByDate = {} } = extras;
   const days = aggregateByDay(transactions, linkedRowsByCode, basis);
-  return days.map((d) => ({
-    account,
-    date: d.day,
-    bruto: d.bruto,
-    reembolsado: d.reembolsado,
-    comisionSumUp: d.comision,
-    liquidoEsperado: d.liquido,
-    // No payout linked yet for this day => "por depositar" (spec §UI): never
-    // report $0 as if it were a confirmed deposit.
-    depositado: d.linked > 0 ? d.pagadoSegunBase : null,
-    references: d.payoutRefs,
-    txCount: d.n,
-    txLinked: d.linked,
-    txPending: d.pendientes,
-    linkStatus: dailyLinkStatus({ n: d.n, linked: d.linked }),
-  }));
+  const byDate = new Map(days.map((d) => [d.day, d]));
+  // Atlas review M3/M4: a day can have activity worth showing (excluded
+  // transactions, review rows, deductions posted that day) even with zero
+  // SUCCESSFUL/REFUNDED sales that day — union the keys instead of only
+  // iterating `days` (spec "NO SILENT MONEY LOSS").
+  const allDates = new Set([
+    ...byDate.keys(),
+    ...Object.keys(excludedByDate),
+    ...Object.keys(reviewCountByDate),
+    ...Object.keys(deductionsByDate),
+  ]);
+
+  return [...allDates].sort().map((date) => {
+    const d = byDate.get(date) || null;
+    const deduction = deductionsByDate[date] || null;
+    const reviewCount = reviewCountByDate[date] || 0;
+    const txExcluded = excludedByDate[date] || 0;
+    const linked = d ? d.linked : 0;
+    const n = d ? d.n : 0;
+    // Atlas review M3: a deduction posted this date subtracts from what
+    // SumUp actually deposited, even when it can't be tied to one sale.
+    const deductionAmount = deduction ? deduction.totalAmount : 0;
+    const depositado = linked > 0 ? (d.pagadoSegunBase || 0) + deductionAmount : deduction ? deductionAmount : null;
+
+    return {
+      account,
+      date,
+      bruto: d ? d.bruto : 0,
+      reembolsado: d ? d.reembolsado : 0,
+      comisionSumUp: d ? d.comision : 0,
+      liquidoEsperado: d ? d.liquido : 0,
+      // No payout linked yet for this day => "por depositar" (spec §UI): never
+      // report $0 as if it were a confirmed deposit.
+      depositado,
+      references: d ? d.payoutRefs : [],
+      txCount: n,
+      txLinked: linked,
+      txPending: d ? d.pendientes : 0,
+      txExcluded,
+      reviewCount,
+      deductions: deduction,
+      linkStatus: dailyLinkStatus({ n, linked }),
+    };
+  });
 }
 
 /**

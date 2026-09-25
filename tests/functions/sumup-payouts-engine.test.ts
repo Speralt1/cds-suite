@@ -362,4 +362,63 @@ describe("engine.runPayoutsSync", () => {
     const summary = store.summaries.get("2026-09") as unknown as SummaryDoc;
     expect(summary.expenseTotal).toBe(1350);
   });
+
+  it("M2: la ventana de transacciones (start-10d) es evidencia de vinculación, nunca escribe settlement fuera de [start,end]", async () => {
+    // tx-old vive antes de `start` pero dentro del padding de -10d — solo
+    // debe servir para vincular/votar la base, jamás recibir settlement ni
+    // aparecer en sumupDailySettlement (eso queda acotado a [start,end]).
+    seedTx(store, "offerings", "tx-old", { code: "COD-OLD", gross: 8000, date: "2026-08-25" });
+    const rows = [
+      payoutRow({ id: "r1", code: "COD-1", amount: 9660, fee: 340 }),
+      payoutRow({ id: "r2", code: "COD-2", amount: 19320, fee: 680 }),
+      payoutRow({ id: "r3", code: "COD-3", amount: 4830, fee: 170 }),
+      payoutRow({ id: "r-old", code: "COD-OLD", amount: 7728, fee: 272, date: "2026-09-05" }),
+    ];
+    const result = await engine.runPayoutsSync({
+      account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
+      start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.basis).toBe("net");
+    // Linked for basis-voting purposes (docId exists, action counted)...
+    expect(store.payouts.has("offerings_PAYOUT_r-old_COD-OLD")).toBe(true);
+    // ...but never settled: tx-old's date is before `start`.
+    const txOld = store.raw.get("offerings/tx-old") as unknown as RawTxDoc;
+    expect(txOld.settlement).toBeUndefined();
+    expect(store.dailySettlements.has("offerings_2026-08-25")).toBe(false);
+    // The in-window days still settle normally.
+    expect(store.dailySettlements.has("offerings_2026-09-10")).toBe(true);
+  });
+
+  it("M2: re-vincula cuando cambia linkStatus aunque el rawHash de la fila no cambie", async () => {
+    const rows = [
+      payoutRow({ id: "r1", code: "COD-1", amount: 9660, fee: 340 }),
+      payoutRow({ id: "r2", code: "COD-2", amount: 19320, fee: 680 }),
+      payoutRow({ id: "r3", code: "COD-3", amount: 4830, fee: 170 }),
+      payoutRow({ id: "r4", code: "COD-4", amount: 3864, fee: 136, date: "2026-09-12" }),
+    ];
+    // First run: tx-4 doesn't exist yet -> r4 links "not_found" (review).
+    const result1 = await engine.runPayoutsSync({
+      account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
+      start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
+    });
+    expect(result1.status).toBe("completed");
+    const docId = "offerings_PAYOUT_r4_COD-4";
+    expect((store.payouts.get(docId) as unknown as PayoutDoc).reviewReason).toBe("not_found");
+
+    // tx-4 shows up later; SAME raw rows (identical rawHash for r4), only
+    // the transaction universe changed -> must still re-link, not skip.
+    seedTx(store, "offerings", "tx-4", { code: "COD-4", gross: 4000, date: "2026-09-12" });
+    const result2 = await engine.runPayoutsSync({
+      account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
+      start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
+    });
+
+    expect(result2.status).toBe("completed");
+    expect(result2.counts.rowsUpdated).toBeGreaterThanOrEqual(1);
+    const updated = store.payouts.get(docId) as unknown as PayoutDoc;
+    expect(updated.review).toBe(false);
+    expect(updated.reviewReason).toBeNull();
+  });
 });

@@ -222,6 +222,14 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
      * each side, then filters to the exact Chile-local [start, end] using
      * core.datePartsChile, so a sale near midnight is never dropped due to
      * timezone rounding.
+     *
+     * Atlas review M4: only SUCCESSFUL/REFUNDED transactions are settleable —
+     * a CANCELLED/FAILED/PENDING row (or a chargeback still under review)
+     * never gets a payout, so it must not count as "pendiente" forever nor
+     * silently poison a day's linkStatus. Excluded rows are still counted
+     * (never silently dropped — spec "NO SILENT MONEY LOSS"), grouped by
+     * their own local sale day so the caller can surface `txExcluded` per
+     * day and for the whole run.
      */
     async getTransactionsInWindow(account, { start, end }) {
       const startPadded = new Date(`${start}T00:00:00Z`);
@@ -235,23 +243,32 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
         .where("timestamp", "<", Timestamp.fromDate(endPadded))
         .get();
 
-      const out = [];
+      const transactions = [];
+      const excludedByDate = {};
+      let excludedCount = 0;
+      const SETTLEABLE_STATUSES = ["SUCCESSFUL", "REFUNDED"];
       for (const doc of snap.docs) {
         const data = doc.data();
         if (!data?.timestamp?.toDate) continue;
         const iso = data.timestamp.toDate().toISOString();
         const parts = core.datePartsChile(iso);
         if (parts.localDate < start || parts.localDate > end) continue;
-        out.push({
+        const status = data.status || "";
+        if (!SETTLEABLE_STATUSES.includes(status)) {
+          excludedCount += 1;
+          excludedByDate[parts.localDate] = (excludedByDate[parts.localDate] || 0) + 1;
+          continue;
+        }
+        transactions.push({
           id: doc.id,
           transactionCode: data.transactionCode || "",
           grossAmount: Number(data.grossAmount || 0),
           refundedAmount: Number(data.refundedAmount || 0),
-          status: data.status || "",
+          status,
           localDate: parts.localDate,
         });
       }
-      return out;
+      return { transactions, excludedCount, excludedByDate };
     },
 
     async getPayoutsBatch(docIds) {
@@ -318,9 +335,14 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
      * tests/functions/sumup-payouts-engine.test.ts.
      */
     async setSettlement(account, transactionId, settlement) {
+      // MINOR m1: mergeFields (not a bare merge:true) — a merge:true set
+      // would recursively merge nested maps on OTHER fields too if this call
+      // site ever grows a sibling field; mergeFields keeps the write scoped
+      // to exactly these two top-level fields, matching the "full replace,
+      // never a silent partial merge" rule elsewhere in this store.
       await rawRef(account, transactionId).set(
         { settlement, settlementUpdatedAt: FieldValue.serverTimestamp() },
-        { merge: true },
+        { mergeFields: ["settlement", "settlementUpdatedAt"] },
       );
     },
 
@@ -360,14 +382,26 @@ function createFirestoreStore({ db, FieldValue, Timestamp }) {
           ? { active: true, amount, category, day }
           : { active: false, amount: 0, category: before.category, day: before.day };
 
-        const delta = core.expenseSummaryDelta(before, after);
-        const hasDelta = delta.expenseTotalDelta !== 0 || Object.keys(delta.categoryDeltas).length > 0 || Object.keys(delta.dayDeltas).length > 0;
-
         if (!existing && !willBeActive) {
           // Nothing to record and nothing existed before: skip entirely
           // (never write a $0 expense — spec "nunca $0").
           return { outcome: "skipped" };
         }
+
+        // Atlas review M5: re-running the same window with the SAME amount/
+        // status/category must not bump revision or write anything — only
+        // an actual change to the recorded commission does.
+        if (
+          existing &&
+          Number(existing.amount || 0) === (willBeActive ? amount : 0) &&
+          existing.status === (willBeActive ? "active" : "voided") &&
+          existing.category === category
+        ) {
+          return { outcome: "unchanged" };
+        }
+
+        const delta = core.expenseSummaryDelta(before, after);
+        const hasDelta = delta.expenseTotalDelta !== 0 || Object.keys(delta.categoryDeltas).length > 0 || Object.keys(delta.dayDeltas).length > 0;
 
         if (hasDelta) {
           const summarySnap = await tx.get(summaryRef(period));

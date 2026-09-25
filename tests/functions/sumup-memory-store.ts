@@ -149,8 +149,14 @@ export class MemoryStore {
   /** Mirrors firestore-store.js getTransactionsInWindow: reads from the raw
    * transactions this store already holds (written by buildRawDoc via
    * runLedgerTransaction), computing localDate the same way core.js does. */
+  // M4 (Atlas review): only SUCCESSFUL/REFUNDED are settleable; everything
+  // else is counted (never silently dropped), by its own local sale day.
+  static SETTLEABLE_STATUSES = ["SUCCESSFUL", "REFUNDED"];
+
   async getTransactionsInWindow(account: string, { start, end }: { start: string; end: string }) {
-    const out: Array<{ id: string; transactionCode: string; grossAmount: number; refundedAmount: number; status: string; localDate: string }> = [];
+    const transactions: Array<{ id: string; transactionCode: string; grossAmount: number; refundedAmount: number; status: string; localDate: string }> = [];
+    const excludedByDate: Record<string, number> = {};
+    let excludedCount = 0;
     for (const [key, doc] of this.raw.entries()) {
       if (!key.startsWith(`${account}/`)) continue;
       const rawId = key.slice(account.length + 1);
@@ -159,16 +165,22 @@ export class MemoryStore {
       const iso = ts instanceof Date ? ts.toISOString() : new Date(ts as unknown as string).toISOString();
       const parts = core.datePartsChile(iso);
       if (parts.localDate < start || parts.localDate > end) continue;
-      out.push({
+      const status = String(doc.status || "");
+      if (!MemoryStore.SETTLEABLE_STATUSES.includes(status)) {
+        excludedCount += 1;
+        excludedByDate[parts.localDate] = (excludedByDate[parts.localDate] || 0) + 1;
+        continue;
+      }
+      transactions.push({
         id: rawId,
         transactionCode: String(doc.transactionCode || ""),
         grossAmount: Number(doc.grossAmount || 0),
         refundedAmount: Number(doc.refundedAmount || 0),
-        status: String(doc.status || ""),
+        status,
         localDate: parts.localDate,
       });
     }
-    return out;
+    return { transactions, excludedCount, excludedByDate };
   }
 
   async getPayoutsBatch(docIds: string[]) {

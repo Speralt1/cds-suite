@@ -714,7 +714,27 @@ async function runLegacyPage({ account, config, requestedBy, fetchPage, store, c
 }
 
 function emptyPayoutsCounts() {
-  return { rowsFetched: 0, rowsCreated: 0, rowsUpdated: 0, rowsUnchanged: 0, rowsReview: 0, daysSettled: 0, feeMovements: 0 };
+  return {
+    rowsFetched: 0,
+    rowsCreated: 0,
+    rowsUpdated: 0,
+    rowsUnchanged: 0,
+    rowsReview: 0,
+    daysSettled: 0,
+    feeMovements: 0,
+    txExcluded: 0,
+  };
+}
+
+/** shiftDateStr — YYYY-MM-DD +/- N days, UTC-anchored (no DST ambiguity). */
+function shiftDateStr(dateStr, deltaDays) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayStr(nowMs) {
+  return core.datePartsChile(new Date(nowMs).toISOString()).localDate;
 }
 
 /**
@@ -804,9 +824,25 @@ async function runPayoutsSync(opts) {
       throw err;
     }
 
+    // Atlas review M2: payouts and transactions are fetched on DIFFERENT
+    // windows, because SumUp pays out days after the sale and a payout row
+    // near the start of [start,end] can reference a sale before it, while a
+    // sale near the end can be paid out after it:
+    //   - payouts:      [start, min(today, end+10d)]
+    //   - transactions: [start-10d, end]
+    // Only sale days within the ORIGINAL [start,end] get settlement/
+    // sumupDailySettlement/ledger writes below — the padding is evidence for
+    // linking only, never for what gets settled.
+    const payoutsEnd = (() => {
+      const wide = shiftDateStr(end, 10);
+      const today = todayStr(startedAt);
+      return wide < today ? wide : today;
+    })();
+    const transactionsStart = shiftDateStr(start, -10);
+
     let rawRows;
     try {
-      rawRows = await fetchPayouts({ config, start, end });
+      rawRows = await fetchPayouts({ config, start, end: payoutsEnd });
     } catch (err) {
       const errorClass = err.errorClass || core.classifyHttpError(err);
       await store.updateRun(runId, {
@@ -825,8 +861,18 @@ async function runPayoutsSync(opts) {
     counts.rowsFetched = rawRows.length;
     const now = startedAt;
 
-    const transactions = await store.getTransactionsInWindow(account, { start, end });
-    const index = payoutsCore.buildTransactionIndex({ [account]: transactions });
+    const { transactions: allTransactions, excludedByDate } = await store.getTransactionsInWindow(account, {
+      start: transactionsStart,
+      end,
+    });
+    // txExcluded reported for the run only counts sale days inside the
+    // REQUESTED [start,end] — the -10d padding is linking evidence, not part
+    // of what this run is answering for.
+    counts.txExcluded = Object.entries(excludedByDate)
+      .filter(([date]) => date >= start && date <= end)
+      .reduce((sum, [, n]) => sum + n, 0);
+
+    const index = payoutsCore.buildTransactionIndex({ [account]: allTransactions });
 
     const normalizedRows = rawRows.map((row) => {
       const normalized = payoutsCore.normalizePayoutRow(row, { account, merchantCode: config.merchantCode });
@@ -840,6 +886,10 @@ async function runPayoutsSync(opts) {
       }
       return normalized;
     });
+
+    // Only sale days inside the REQUESTED [start,end] get settlement writes
+    // (M2) — allTransactions/index above stay wide, for linking only.
+    const transactions = allTransactions.filter((t) => t.localDate >= start && t.localDate <= end);
 
     const payoutTypeLinked = normalizedRows.filter((r) => r.type === payoutsCore.PAYOUT_TYPE && r.linkStatus === "linked");
     const votes = payoutTypeLinked.map((row) => {
@@ -899,7 +949,30 @@ async function runPayoutsSync(opts) {
     }
 
     const settlements = payoutsCore.computeTransactionSettlements(transactions, linkedRowsByCode, basisResult.basis);
-    const dailyAggregates = payoutsCore.buildDailySettlementAggregates(account, transactions, linkedRowsByCode, basisResult.basis);
+
+    const excludedByDateInWindow = Object.fromEntries(
+      Object.entries(excludedByDate).filter(([date]) => date >= start && date <= end),
+    );
+
+    // Atlas review M3: deductions (posted by their OWN date, not a sale day)
+    // and review-flagged PAYOUT rows, restricted to the requested window.
+    const inWindow = (row) => row.date >= start && row.date <= end;
+    const deductionsByDate = Object.fromEntries(
+      [...payoutsCore.computeDeductionsByPayoutDate(normalizedRows.filter(inWindow)).entries()],
+    );
+    const reviewCountByDate = {};
+    for (const row of normalizedRows) {
+      if (!row.review || row.type !== payoutsCore.PAYOUT_TYPE || !inWindow(row)) continue;
+      reviewCountByDate[row.date] = (reviewCountByDate[row.date] || 0) + 1;
+    }
+
+    const dailyAggregates = payoutsCore.buildDailySettlementAggregates(
+      account,
+      transactions,
+      linkedRowsByCode,
+      basisResult.basis,
+      { excludedByDate: excludedByDateInWindow, reviewCountByDate, deductionsByDate },
+    );
 
     if (!dryRun) {
       for (const [txId, settlement] of settlements.entries()) {
@@ -921,7 +994,6 @@ async function runPayoutsSync(opts) {
         if (day.linkStatus === "pending") continue; // never write $0 while commission is simply unknown
         const period = day.date.slice(0, 7);
         const dayOfMonth = String(Number(day.date.slice(8, 10)));
-        const txWithFee = [...settlements.values()].filter((s) => s.feeStatus === "provider").length;
         // eslint-disable-next-line no-await-in-loop
         await store.runFeeLedgerTransaction({
           account,
