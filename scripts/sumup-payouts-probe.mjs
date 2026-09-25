@@ -47,8 +47,13 @@ const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // firebase-admin lives in functions/node_modules (see functions/package.json).
-// We import it from there instead of adding a new dependency at the repo root.
-const admin = require(resolve(__dirname, "../functions/node_modules/firebase-admin"));
+// We resolve it from there instead of adding a new dependency at the repo root.
+// Anchoring on functions/package.json is what lets the modular subpath exports
+// ("firebase-admin/app", "firebase-admin/firestore") resolve — an absolute path
+// into node_modules bypasses the package's `exports` map and fails.
+const requireFromFunctions = createRequire(resolve(__dirname, "../functions/package.json"));
+const { initializeApp, getApps } = requireFromFunctions("firebase-admin/app");
+const { getFirestore, Timestamp } = requireFromFunctions("firebase-admin/firestore");
 
 const PROJECT_ID = "cds-administracion";
 const ACCOUNTS = ["offerings", "cafeteria"];
@@ -157,16 +162,18 @@ function loadAccountConfig(account) {
   let source = "env";
 
   if (!raw) {
-    source = "firebase functions:secrets:access";
+    // The repo's firebase-tools via npx, not a global `firebase` binary: the
+    // global one on this machine is x86_64 on an arm64 Mac and fails EBADARCH.
+    source = "npx firebase functions:secrets:access";
     try {
       raw = execFileSync(
-        "firebase",
-        ["functions:secrets:access", envName, "--project", PROJECT_ID],
-        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+        "npx",
+        ["firebase", "functions:secrets:access", envName, "--project", PROJECT_ID],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: resolve(__dirname, "..") },
       ).trim();
     } catch (error) {
       throw new Error(
-        `No se pudo leer el secreto ${envName} con Firebase CLI. ¿Corriste 'firebase login' y tenés permisos en el proyecto ${PROJECT_ID}? Detalle: ${error.message}`,
+        `No se pudo leer el secreto ${envName} con el Firebase CLI del repo. ¿Corriste 'firebase login' y tenés permisos en el proyecto ${PROJECT_ID}? Detalle: ${error.message}`,
       );
     }
   }
@@ -250,10 +257,10 @@ async function fetchPayouts({ apiKey, merchantCode }, { start, end }) {
 // ---------------------------------------------------------------------------
 
 function initFirestore() {
-  if (!admin.apps.length) {
-    admin.initializeApp({ projectId: PROJECT_ID });
+  if (!getApps().length) {
+    initializeApp({ projectId: PROJECT_ID });
   }
-  return admin.firestore();
+  return getFirestore();
 }
 
 /**
@@ -271,8 +278,8 @@ async function fetchImportedTransactions(db, account, { start, end }) {
 
   const col = readOnly(db.collection(`sumupIntegrations/${account}/transactions`));
   const snap = await col
-    .where("timestamp", ">=", admin.firestore.Timestamp.fromDate(startPadded))
-    .where("timestamp", "<", admin.firestore.Timestamp.fromDate(endPadded))
+    .where("timestamp", ">=", Timestamp.fromDate(startPadded))
+    .where("timestamp", "<", Timestamp.fromDate(endPadded))
     .get();
 
   const out = [];
