@@ -290,6 +290,17 @@ export function createFinancePdf(report: FinanceReport, logoData?: string) {
       sourceEnd + 14,
     );
   }
+  if (report.sumUpFee.status === "pending") {
+    const feeY = (pdf as jsPDF & { lastAutoTable: { finalY: number } })
+      .lastAutoTable.finalY;
+    text(
+      "Comisión SumUp: pendiente de datos de SumUp (no descontada del resultado).",
+      18,
+      feeY + 10,
+      9,
+      muted,
+    );
+  }
   if (isMonth && report.worshipDays.length) {
     newPage("Días de culto");
     table(

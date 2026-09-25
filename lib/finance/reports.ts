@@ -89,6 +89,17 @@ export interface MonthlyMethodRow {
   alertCount: number;
 }
 
+// La comisión SumUp no se conoce hasta que se conectan los payouts del
+// proveedor: nunca se inventa un monto ni un "$0". "pending" solo se emite
+// cuando el período tiene SumUp activo; "none" cuando no hay SumUp en el
+// período. "estimated" y "recorded" quedan preparados para cuando Atlas
+// conecte una tarifa real o los payouts.
+export type SumUpFee =
+  | { status: "none" }
+  | { status: "pending" }
+  | { status: "estimated"; ratePercent: number; estimatedAmount: number }
+  | { status: "recorded"; amount: number };
+
 export interface FinanceReport {
   period: PeriodSelection;
   label: string;
@@ -121,6 +132,7 @@ export interface FinanceReport {
   narrative: string;
   comparison: ReportComparison;
   monthlyByMethod: MonthlyMethodRow[];
+  sumUpFee: SumUpFee;
 }
 
 function shortDate(date: string) {
@@ -597,6 +609,7 @@ export function buildReport(
     narrative,
     comparison,
     monthlyByMethod,
+    sumUpFee: byMethod.sumUpAmount > 0 ? { status: "pending" } : { status: "none" },
   };
 }
 export function reportCategoryRows(values: Record<string, number>) {

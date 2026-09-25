@@ -2926,6 +2926,18 @@ button:disabled {
 .source-block-expense strong {
   font-size: 15px;
 }
+.sumup-fee-pending {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 13px !important;
+  font-weight: 500;
+}
+.sumup-fee-pending svg {
+  flex-shrink: 0;
+  color: var(--color-warning);
+}
 
 .review-days ul {
   list-style: none;

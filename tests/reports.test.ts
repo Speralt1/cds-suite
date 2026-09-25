@@ -491,3 +491,69 @@ it("vista anual: lista los meses sin gastos registrados", () => {
   expect(monthsAlert?.text).not.toContain("Febrero");
   expect(r.monthlyByMethod).toHaveLength(12);
 });
+
+it("sumUpFee: 'pending' cuando el período tiene SumUp activo, y no altera Gastos ni Resultado", () => {
+  const r = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  expect(r.sumUpFee).toEqual({ status: "pending" });
+  expect(r.byMethod.sumUpAmount).toBeGreaterThan(0);
+  expect(r.summary.expenseTotal).toBe(septemberSummary.expenseTotal);
+  expect(r.summary.result).toBe(septemberSummary.result);
+});
+
+it("sumUpFee: 'none' cuando el período no tiene SumUp activo", () => {
+  const noSumUpFixture: FinanceTransaction[] = [
+    septTx({
+      id: "tithe_none",
+      day: "5",
+      amount: 100000,
+      category: "Diezmos",
+      paymentMethod: "transfer",
+      source: "tithe",
+      type: "income",
+    }),
+    septTx({
+      id: "off_cash_none",
+      day: "6",
+      amount: 20000,
+      category: "Ofrendas",
+      paymentMethod: "cash",
+      source: "general",
+      type: "income",
+    }),
+  ];
+  const noSumUpSummary = noSumUpFixture.reduce(
+    (s, t) => applyImpact(s, t, 1),
+    emptySummary("2026-09"),
+  );
+  const r = buildReport(
+    septemberPeriod,
+    [noSumUpSummary],
+    noSumUpFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  expect(r.sumUpFee).toEqual({ status: "none" });
+  expect(r.byMethod.sumUpAmount).toBe(0);
+});
+
+it("PDF: incluye la línea de comisión SumUp pendiente cuando aplica", () => {
+  const withFee = buildReport(
+    septemberPeriod,
+    [septemberSummary],
+    septemberFixture,
+    "Tesorería",
+    new Date("2026-09-22T12:00:00Z"),
+    { today: TODAY },
+  );
+  expect(withFee.sumUpFee.status).toBe("pending");
+  const pdf = createFinancePdf(withFee);
+  expect(pdf.output("arraybuffer").byteLength).toBeGreaterThan(3000);
+});

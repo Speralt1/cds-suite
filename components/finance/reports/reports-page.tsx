@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
-import { TriangleAlert, CircleDashed } from "lucide-react";
+import { TriangleAlert, CircleDashed, Clock } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import {
   usePeriod,
@@ -309,6 +309,12 @@ function ReportPreview({
         ) : (
           <p className="mt-3 text-sm text-muted">
             — Comparación disponible en vista mensual.
+          </p>
+        )}
+        {report.sumUpFee.status === "pending" && (
+          <p className="mt-3 sumup-fee-pending">
+            <Clock size={14} aria-hidden="true" />
+            Comisión SumUp: pendiente de datos de SumUp
           </p>
         )}
       </section>

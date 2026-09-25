@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useState } from "react";
-import { TriangleAlert, CircleDashed, CircleCheck, Banknote } from "lucide-react";
+import { TriangleAlert, CircleDashed, CircleCheck, Banknote, Clock } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import {
@@ -804,6 +804,22 @@ export function SummaryPage() {
                       <span>Gastos</span>
                       <strong className="tabular-nums">{clp(total.expenseTotal)}</strong>
                     </p>
+                    {income && income.sumUpAmount > 0 && (
+                      <>
+                        <p>
+                          <span>Comisión SumUp</span>
+                          <strong className="tabular-nums sumup-fee-pending">
+                            <Clock size={14} aria-hidden="true" />
+                            Pendiente de datos de SumUp
+                          </strong>
+                        </p>
+                        <p className="field-help">
+                          La comisión se registrará como gasto cuando se
+                          conecten los payouts de SumUp. El resultado aún no
+                          la descuenta.
+                        </p>
+                      </>
+                    )}
                     <p>
                       <span>Resultado</span>
                       <strong className={`tabular-nums ${total.result < 0 ? "text-danger" : ""}`}>
