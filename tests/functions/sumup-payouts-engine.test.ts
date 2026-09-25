@@ -363,6 +363,32 @@ describe("engine.runPayoutsSync", () => {
     expect(summary.expenseTotal).toBe(1350);
   });
 
+  it("M5: re-ejecutar la misma ventana con el mismo monto no reescribe el libro de comisión", async () => {
+    const rows = [
+      payoutRow({ id: "r1", code: "COD-1", amount: 9660, fee: 340 }),
+      payoutRow({ id: "r2", code: "COD-2", amount: 19320, fee: 680 }),
+      payoutRow({ id: "r3", code: "COD-3", amount: 4830, fee: 170 }),
+    ];
+    await engine.runPayoutsSync({
+      account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
+      start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
+    });
+    const fee1 = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as unknown as FeeFinanceDoc;
+    expect(fee1.revision).toBe(1);
+
+    // Same rows, same amounts -> no revision bump, no version entry, no
+    // change to the monthly summary (Atlas review M5 "no-op").
+    await engine.runPayoutsSync({
+      account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
+      start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
+    });
+    const fee2 = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as unknown as FeeFinanceDoc;
+    expect(fee2.revision).toBe(1);
+    expect(store.feeVersions.get("sumup_fee_offerings_2026-09-10")).toBeUndefined();
+    const summary = store.summaries.get("2026-09") as unknown as SummaryDoc;
+    expect(summary.expenseTotal).toBe(1190);
+  });
+
   it("M2: la ventana de transacciones (start-10d) es evidencia de vinculación, nunca escribe settlement fuera de [start,end]", async () => {
     // tx-old vive antes de `start` pero dentro del padding de -10d — solo
     // debe servir para vincular/votar la base, jamás recibir settlement ni

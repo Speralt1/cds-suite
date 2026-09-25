@@ -283,10 +283,21 @@ export class MemoryStore {
     const willBeActive = amount > 0;
     const after = willBeActive ? { active: true, amount, category, day } : { active: false, amount: 0, category: before.category, day: before.day };
 
+    if (!existing && !willBeActive) return { outcome: "skipped" };
+
+    // M5 (Atlas review): mirrors firestore-store.js — re-running with the
+    // SAME amount/status/category must not bump revision or write anything.
+    if (
+      existing &&
+      Number(existing.amount || 0) === (willBeActive ? amount : 0) &&
+      existing.status === (willBeActive ? "active" : "voided") &&
+      existing.category === category
+    ) {
+      return { outcome: "unchanged" };
+    }
+
     const delta = core.expenseSummaryDelta(before, after);
     const hasDelta = delta.expenseTotalDelta !== 0 || Object.keys(delta.categoryDeltas).length > 0 || Object.keys(delta.dayDeltas).length > 0;
-
-    if (!existing && !willBeActive) return { outcome: "skipped" };
 
     if (hasDelta) {
       const summary = this.summaries.get(period) || null;

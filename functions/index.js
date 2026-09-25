@@ -306,6 +306,34 @@ async function ensureSumUpSystemCategory() {
   );
 }
 
+const SUMUP_FEE_CATEGORIES = [
+  'Comisión SumUp · Ofrendas',
+  'Comisión SumUp · Cafetería',
+  'Comisión SumUp · histórico sin separar',
+];
+
+/** Atlas review M5 — same `ensure` pattern as ensureSumUpSystemCategory, for
+ * the three fee-ledger expense categories the payouts ingestion can write. */
+async function ensureSumUpFeeCategories() {
+  const ref = db.doc('appSettings/finance');
+  const snap = await ref.get();
+  if (!snap.exists) return;
+
+  const data = snap.data();
+  const all = Array.isArray(data.expenseCategoriesAll) ? data.expenseCategoriesAll : [];
+  const missing = SUMUP_FEE_CATEGORIES.filter((c) => !all.includes(c));
+  if (!missing.length) return;
+
+  await ref.set(
+    {
+      expenseCategoriesAll: [...all, ...missing],
+      updatedBy: 'system:sumup',
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 /** Runs one account's sync in isolation: never throws, always resolves to a result row. */
 async function safeRunAccountSync(opts) {
   try {
@@ -605,6 +633,12 @@ exports.sumupPayoutsScheduled = onSchedule(
     secrets: [sumupOfferings, sumupCafe],
   },
   async () => {
+    try {
+      await ensureSumUpFeeCategories();
+    } catch (error) {
+      console.error('sumupPayoutsScheduled ensureSumUpFeeCategories', error);
+    }
+
     let offeringsConfig;
     let cafeConfig;
     try {
@@ -700,6 +734,12 @@ exports.sumupPayoutsNow = onRequest(
     const requestedAccount = body.account === 'offerings' || body.account === 'cafeteria' ? body.account : null;
     const dryRun = body.dryRun !== false; // default true (spec)
     const { start, end } = clampPayoutsWindow(body.startDate, body.endDate);
+
+    try {
+      await ensureSumUpFeeCategories();
+    } catch (error) {
+      console.error('sumupPayoutsNow ensureSumUpFeeCategories', error);
+    }
 
     let offeringsConfig;
     let cafeConfig;
