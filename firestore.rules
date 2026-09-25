@@ -260,6 +260,22 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Slice 3a — SumUp payouts (comisión y depósito). Solo backend: la
+    // ingesta (Cloud Functions / Admin SDK) escribe; el cliente solo lee.
+    match /sumupPayouts/{payoutId} {
+      allow get, list: if details();
+      allow create, update, delete: if false;
+      match /versions/{versionId} {
+        allow get, list: if details();
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /sumupDailySettlement/{settlementId} {
+      allow get, list: if details();
+      allow create, update, delete: if false;
+    }
+
     function validCampaign(d) {
       return d.keys().hasOnly([
         'slug',

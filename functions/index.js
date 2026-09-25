@@ -1,6 +1,6 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { defineJsonSecret } = require("firebase-functions/params");
+const { defineJsonSecret, defineBoolean } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
@@ -20,6 +20,11 @@ const SUMUP_LEGACY_CATEGORY = core.SUMUP_LEGACY_CATEGORY;
 
 const sumupOfferings = defineJsonSecret("SUMUP_OFFERINGS_CONFIG");
 const sumupCafe = defineJsonSecret("SUMUP_CAFETERIA_CONFIG");
+// Slice 3a — starts OFF (spec §Interruptor). While off, ingestion still
+// writes sumupPayouts + settlement.* and the UI already shows commission
+// and deposit; turning it on to create expense movements + the September
+// backfill is a migration that needs human OK.
+const sumupFeesLedgerEnabled = defineBoolean("SUMUP_FEES_LEDGER_ENABLED", { default: false });
 
 const store = createFirestoreStore({ db, FieldValue, Timestamp });
 const clock = { now: () => Date.now() };
@@ -178,17 +183,97 @@ async function fetchPage({ config, changesSince, order, limit, cursor }) {
   return { items, nextCursor: next?.href || null };
 }
 
-async function requireFinanceUser(req) {
+/**
+ * fetchPayoutsFromApi — GET /v1.0/merchants/{mc}/payouts for one account and
+ * date window (spec §Ingesta: limit=9999, order=asc, timeout). This is the
+ * same endpoint G9's read-only probe (scripts/sumup-payouts-probe.mjs)
+ * validated against real data before this slice was authorized.
+ */
+async function fetchPayoutsFromApi({ config, start, end }) {
+  const { apiKey, merchantCode } = config || {};
+  if (!apiKey || !merchantCode) {
+    const err = new Error("Configuración SumUp incompleta.");
+    err.errorClass = "config_error";
+    throw err;
+  }
+
+  const params = new URLSearchParams({ start_date: start, end_date: end, limit: "9999", order: "asc" });
+  const url = `https://api.sumup.com/v1.0/merchants/${encodeURIComponent(merchantCode)}/payouts?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const err = new Error("SumUp payouts timeout (20s)");
+      err.errorClass = "provider_unavailable";
+      throw err;
+    }
+    const err = new Error(String(error.message || error));
+    err.errorClass = "provider_unavailable";
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    const err = new Error(`SumUp payouts ${response.status}: ${text.slice(0, 300)}`);
+    err.status = response.status;
+    // A 401/403 here means the API key lacks the payouts.read scope
+    // (spec §Ingesta "Un 401 o 403 se registra como scope_missing").
+    err.errorClass = response.status === 401 || response.status === 403 ? "scope_missing" : core.classifyHttpError({ status: response.status });
+    throw err;
+  }
+
+  const body = await response.json();
+  if (!Array.isArray(body)) {
+    const err = new Error("SumUp payouts: respuesta inesperada (se esperaba un array).");
+    err.errorClass = "provider_unavailable";
+    throw err;
+  }
+  return body;
+}
+
+const MAX_PAYOUTS_WINDOW_DAYS = 35;
+
+function clampPayoutsWindow(startDate, endDate) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(endDate || "") ? endDate : todayStr;
+  let start = /^\d{4}-\d{2}-\d{2}$/.test(startDate || "") ? startDate : null;
+  const endMs = new Date(`${end}T00:00:00Z`).getTime();
+  const minStartMs = endMs - (MAX_PAYOUTS_WINDOW_DAYS - 1) * 86_400_000;
+  const minStart = new Date(minStartMs).toISOString().slice(0, 10);
+  if (!start || start < minStart) start = minStart;
+  if (start > end) start = end;
+  return { start, end };
+}
+
+async function requireRoleUser(req, allowedRoles) {
   const header = req.get('authorization') || '';
   const match = header.match(/^Bearer\s+(.+)$/i);
   if (!match) throw new Error('UNAUTHENTICATED');
 
   const decoded = await getAuth().verifyIdToken(match[1]);
   const user = await db.doc(`users/${decoded.uid}`).get();
-  if (!user.exists || user.data().active !== true || !['admin', 'pastor', 'finance'].includes(user.data().role)) {
+  if (!user.exists || user.data().active !== true || !allowedRoles.includes(user.data().role)) {
     throw new Error('FORBIDDEN');
   }
   return decoded.uid;
+}
+
+async function requireFinanceUser(req) {
+  return requireRoleUser(req, ['admin', 'pastor', 'finance']);
+}
+
+/** sumupPayoutsNow (Slice 3a) is admin-only per spec §Ingesta "Funciones". */
+async function requireAdminUser(req) {
+  return requireRoleUser(req, ['admin']);
 }
 
 async function ensureSumUpSystemCategory() {
@@ -466,5 +551,193 @@ exports.sumupSyncScheduled = onSchedule(
         if (result.status === 'failed') console.error('sumupSyncScheduled sweep', target.account, result.errorMessage);
       }
     }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Slice 3a — SumUp payouts (comisión y depósito por día)
+// ---------------------------------------------------------------------------
+
+async function safeRunPayoutsSync(opts) {
+  try {
+    return await engine.runPayoutsSync(opts);
+  } catch (error) {
+    console.error(`sumup payouts sync (${opts.account})`, error);
+    return {
+      account: opts.account,
+      runId: null,
+      status: 'failed',
+      counts: engine.emptyPayoutsCounts(),
+      basis: null,
+      errorClass: error.errorClass || core.classifyHttpError(error),
+      errorMessage: String(error?.message || error),
+    };
+  }
+}
+
+function toPayoutsApiResult(result) {
+  return {
+    account: result.account,
+    runId: result.runId,
+    status: result.status,
+    counts: result.counts,
+    basis: result.basis || null,
+    errorClass: result.errorClass || null,
+  };
+}
+
+/**
+ * sumupPayoutsScheduled — once a day at 06:10 Chile time (SumUp pays out the
+ * day after the sale, spec §Ingesta "Funciones"), 35-day rolling window so a
+ * missed day self-heals without a manual backfill.
+ */
+exports.sumupPayoutsScheduled = onSchedule(
+  {
+    schedule: '10 6 * * *',
+    timeZone: 'America/Santiago',
+    region: 'southamerica-east1',
+    timeoutSeconds: 300,
+    secrets: [sumupOfferings, sumupCafe],
+  },
+  async () => {
+    let offeringsConfig;
+    let cafeConfig;
+    try {
+      offeringsConfig = sumupOfferings.value();
+      cafeConfig = sumupCafe.value();
+    } catch (error) {
+      console.error('sumupPayoutsScheduled secrets', error);
+      return;
+    }
+
+    const { start, end } = clampPayoutsWindow(null, null);
+    const ledgerEnabled = sumupFeesLedgerEnabled.value();
+
+    const results = await Promise.allSettled([
+      safeRunPayoutsSync({
+        account: 'offerings',
+        config: offeringsConfig,
+        trigger: 'scheduled',
+        dryRun: false,
+        ledgerEnabled,
+        start,
+        end,
+        fetchPayouts: fetchPayoutsFromApi,
+        store,
+        clock,
+        requestedBy: 'system:scheduler',
+      }),
+      safeRunPayoutsSync({
+        account: 'cafeteria',
+        config: cafeConfig,
+        trigger: 'scheduled',
+        dryRun: false,
+        ledgerEnabled,
+        start,
+        end,
+        fetchPayouts: fetchPayoutsFromApi,
+        store,
+        clock,
+        requestedBy: 'system:scheduler',
+      }),
+    ]);
+    results.forEach((settled) => {
+      if (settled.status === 'rejected') console.error('sumupPayoutsScheduled', settled.reason);
+      else if (settled.value.status === 'failed') console.error('sumupPayoutsScheduled', settled.value.account, settled.value.errorMessage);
+    });
+  },
+);
+
+/**
+ * sumupPayoutsNow — admin-only manual trigger (spec §Ingesta "Funciones").
+ * `dryRun` defaults to true: the first real execution after deploy must be
+ * an explicit, reviewed dry run before anything is written.
+ */
+exports.sumupPayoutsNow = onRequest(
+  { region: REGION, timeoutSeconds: 120, secrets: [sumupOfferings, sumupCafe] },
+  async (req, res) => {
+    const origin = req.get('origin') || '';
+    if (origin === SITE || origin === `https://${PROJECT}.firebaseapp.com`) {
+      res.set('Access-Control-Allow-Origin', origin);
+      res.set('Vary', 'Origin');
+    }
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    let uid;
+    try {
+      uid = await requireAdminUser(req);
+    } catch (error) {
+      const message = String(error?.message || error);
+      const status = message === 'UNAUTHENTICATED' ? 401 : message === 'FORBIDDEN' ? 403 : 401;
+      console.error('sumupPayoutsNow auth', error);
+      res.status(status).json({ ok: false, error: message });
+      return;
+    }
+
+    let body = {};
+    try {
+      body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(req.rawBody?.toString() || '{}');
+    } catch {
+      body = {};
+    }
+
+    const requestedAccount = body.account === 'offerings' || body.account === 'cafeteria' ? body.account : null;
+    const dryRun = body.dryRun !== false; // default true (spec)
+    const { start, end } = clampPayoutsWindow(body.startDate, body.endDate);
+
+    let offeringsConfig;
+    let cafeConfig;
+    try {
+      offeringsConfig = sumupOfferings.value();
+      cafeConfig = sumupCafe.value();
+    } catch (error) {
+      console.error('sumupPayoutsNow secrets', error);
+      res.status(200).json({
+        ok: false,
+        results: [
+          { account: 'offerings', runId: null, status: 'failed', counts: engine.emptyPayoutsCounts(), basis: null, errorClass: 'config_error' },
+          { account: 'cafeteria', runId: null, status: 'failed', counts: engine.emptyPayoutsCounts(), basis: null, errorClass: 'config_error' },
+        ],
+      });
+      return;
+    }
+
+    const ledgerEnabled = sumupFeesLedgerEnabled.value();
+    const targets = requestedAccount
+      ? [{ account: requestedAccount, config: requestedAccount === 'offerings' ? offeringsConfig : cafeConfig }]
+      : [
+          { account: 'offerings', config: offeringsConfig },
+          { account: 'cafeteria', config: cafeConfig },
+        ];
+
+    const results = await Promise.all(
+      targets.map((target) =>
+        safeRunPayoutsSync({
+          account: target.account,
+          config: target.config,
+          trigger: 'manual',
+          dryRun,
+          ledgerEnabled,
+          start,
+          end,
+          fetchPayouts: fetchPayoutsFromApi,
+          store,
+          clock,
+          requestedBy: uid,
+        }),
+      ),
+    );
+
+    res.status(200).json({ ok: true, dryRun, window: { start, end }, results: results.map(toPayoutsApiResult) });
   },
 );
