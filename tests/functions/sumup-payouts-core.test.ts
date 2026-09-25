@@ -280,6 +280,34 @@ describe("buildDailySettlementAggregates + linkStatus", () => {
     expect(dailyLinkStatus({ n: 3, linked: 2 })).toBe("partial");
     expect(dailyLinkStatus({ n: 3, linked: 3 })).toBe("complete");
   });
+
+  it("M4: transacciones excluidas (no SUCCESSFUL/REFUNDED) no suman al bruto pero sí se reportan en txExcluded", () => {
+    // Solo COD-4 llega aquí como transacción "settleable" — la CANCELLED
+    // nunca entra a este array (la excluye getTransactionsInWindow antes),
+    // y su conteo llega por separado vía extras.excludedByDate.
+    const transactions = [{ id: "tx-1", transactionCode: "COD-4", grossAmount: 1000, refundedAmount: 0, localDate: "2026-09-13" }];
+    const row = normalizePayoutRow(
+      { id: "row-4", type: "PAYOUT", status: "SUCCESSFUL", date: "2026-09-14", reference: "REF4", transaction_code: "COD-4", amount: 966, fee: 34 },
+      { account: "offerings", merchantCode: "MC1" },
+    );
+    const linkedRowsByCode = new Map([["COD-4", [row]]]);
+    const days = buildDailySettlementAggregates("offerings", transactions, linkedRowsByCode, "net", {
+      excludedByDate: { "2026-09-13": 2 },
+    });
+    expect(days[0].bruto).toBe(1000); // la excluida nunca suma al bruto
+    expect(days[0].txCount).toBe(1);
+    expect(days[0].txExcluded).toBe(2);
+  });
+
+  it("M4: un día sin ninguna transacción settleable, solo excluidas, sigue apareciendo (nunca desaparece silenciosamente)", () => {
+    const days = buildDailySettlementAggregates("offerings", [], new Map(), "net", {
+      excludedByDate: { "2026-09-20": 3 },
+    });
+    expect(days).toHaveLength(1);
+    expect(days[0].date).toBe("2026-09-20");
+    expect(days[0].bruto).toBe(0);
+    expect(days[0].txExcluded).toBe(3);
+  });
 });
 
 describe("reembolso antes/después del payout y contracargo", () => {

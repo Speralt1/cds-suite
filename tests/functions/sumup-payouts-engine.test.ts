@@ -39,12 +39,12 @@ interface PayoutDoc {
   reviewReason: string | null;
 }
 
-function seedTx(store: MemoryStore, account: string, rawId: string, opts: { code: string; gross: number; refunded?: number; date: string }) {
+function seedTx(store: MemoryStore, account: string, rawId: string, opts: { code: string; gross: number; refunded?: number; date: string; status?: string }) {
   store.raw.set(`${account}/${rawId}`, {
     transactionCode: opts.code,
     grossAmount: opts.gross,
     refundedAmount: opts.refunded || 0,
-    status: "SUCCESSFUL",
+    status: opts.status || "SUCCESSFUL",
     timestamp: new Date(`${opts.date}T15:00:00Z`),
   });
 }
@@ -446,5 +446,39 @@ describe("engine.runPayoutsSync", () => {
     const updated = store.payouts.get(docId) as unknown as PayoutDoc;
     expect(updated.review).toBe(false);
     expect(updated.reviewReason).toBeNull();
+  });
+
+  it("M4: una transacción CANCELLED no suma al bruto ni queda 'pendiente' para siempre, pero se cuenta como excluida", async () => {
+    // tx-4 nunca llegó a completarse -> no es settleable (SUCCESSFUL/REFUNDED
+    // only). No debe sumar a `bruto` del día ni contarse como txPending, y sí
+    // debe reflejarse en txExcluded (spec "NO SILENT MONEY LOSS": nunca
+    // desaparece silenciosamente).
+    seedTx(store, "offerings", "tx-4", { code: "COD-4", gross: 4000, date: "2026-09-10", status: "CANCELLED" });
+    const rows = [
+      payoutRow({ id: "r1", code: "COD-1", amount: 9660, fee: 340 }),
+      payoutRow({ id: "r2", code: "COD-2", amount: 19320, fee: 680 }),
+      payoutRow({ id: "r3", code: "COD-3", amount: 4830, fee: 170 }),
+    ];
+    const result = await engine.runPayoutsSync({
+      account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
+      start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.counts.txExcluded).toBe(1);
+    const daily = store.dailySettlements.get("offerings_2026-09-10") as unknown as DailySettlementDoc & {
+      txExcluded: number;
+      txCount: number;
+      txPending: number;
+    };
+    // Bruto is still exactly the 3 SUCCESSFUL transactions (35000), the
+    // CANCELLED one never joins the sum.
+    expect(daily.bruto).toBe(35000);
+    expect(daily.txCount).toBe(3);
+    expect(daily.txPending).toBe(0);
+    expect(daily.txExcluded).toBe(1);
+    // The CANCELLED transaction's own raw doc is never touched.
+    const txCancelled = store.raw.get("offerings/tx-4") as unknown as RawTxDoc;
+    expect(txCancelled.settlement).toBeUndefined();
   });
 });
