@@ -6,6 +6,39 @@ import { MemoryStore, makeClock } from "./sumup-memory-store";
 const require = createRequire(import.meta.url);
 const engine = require("../../functions/sumup/engine.js");
 
+// Loose shapes for the store's dynamic docs in these tests — just the
+// fields each assertion actually reads, typed for real instead of `any`.
+interface RawTxDoc {
+  grossAmount: number;
+  settlement?: { feeAmount: number; netPaid: number; feeSource: string };
+  timestamp?: Date;
+  transactionCode?: string;
+  status?: string;
+}
+interface DailySettlementDoc {
+  bruto: number;
+  comisionSumUp: number;
+  liquidoEsperado: number;
+  linkStatus: string;
+}
+interface FeeFinanceDoc {
+  amount: number;
+  status: string;
+  category: string;
+  revision: number;
+  createdBy?: string;
+}
+interface SummaryDoc {
+  expenseTotal: number;
+  expenseByCategory: Record<string, number>;
+}
+interface PayoutDoc {
+  type: string;
+  fee: number;
+  review: boolean;
+  reviewReason: string | null;
+}
+
 function seedTx(store: MemoryStore, account: string, rawId: string, opts: { code: string; gross: number; refunded?: number; date: string }) {
   store.raw.set(`${account}/${rawId}`, {
     transactionCode: opts.code,
@@ -60,25 +93,25 @@ describe("engine.runPayoutsSync", () => {
     expect(store.payouts.size).toBe(3);
 
     // Settlement written on each transaction, gross untouched.
-    const tx1 = store.raw.get("offerings/tx-1") as Record<string, any>;
+    const tx1 = store.raw.get("offerings/tx-1") as unknown as RawTxDoc;
     expect(tx1.grossAmount).toBe(10000); // G1: never edited.
-    expect(tx1.settlement.feeAmount).toBe(340);
-    expect(tx1.settlement.netPaid).toBe(9660);
-    expect(tx1.settlement.feeSource).toBe("payouts");
+    expect(tx1.settlement!.feeAmount).toBe(340);
+    expect(tx1.settlement!.netPaid).toBe(9660);
+    expect(tx1.settlement!.feeSource).toBe("payouts");
 
     // Daily settlement summary.
-    const daily = store.dailySettlements.get("offerings_2026-09-10") as Record<string, any>;
+    const daily = store.dailySettlements.get("offerings_2026-09-10") as unknown as DailySettlementDoc;
     expect(daily.bruto).toBe(35000);
     expect(daily.comisionSumUp).toBe(1190);
     expect(daily.liquidoEsperado).toBe(33810);
     expect(daily.linkStatus).toBe("complete");
 
     // Fee ledger movement + summary delta.
-    const fee = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as Record<string, any>;
+    const fee = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as unknown as FeeFinanceDoc;
     expect(fee.amount).toBe(1190);
     expect(fee.status).toBe("active");
     expect(fee.category).toBe("Comisión SumUp · Ofrendas");
-    const summary = store.summaries.get("2026-09") as Record<string, any>;
+    const summary = store.summaries.get("2026-09") as unknown as SummaryDoc;
     expect(summary.expenseTotal).toBe(1190);
     expect(summary.expenseByCategory["Comisión SumUp · Ofrendas"]).toBe(1190);
   });
@@ -164,7 +197,7 @@ describe("engine.runPayoutsSync", () => {
     expect(second.counts.rowsUnchanged).toBe(2);
     const docId = "offerings_PAYOUT_r1_COD-1";
     expect(store.payoutVersions.get(docId)?.length).toBe(1);
-    const updated = store.payouts.get(docId) as Record<string, any>;
+    const updated = store.payouts.get(docId) as unknown as { fee: number };
     expect(updated.fee).toBe(500);
   });
 
@@ -183,7 +216,7 @@ describe("engine.runPayoutsSync", () => {
     expect(store.payouts.size).toBe(2); // raw rows still written
     expect(store.dailySettlements.size).toBe(0);
     expect(store.feeFinance.size).toBe(0);
-    const tx1 = store.raw.get("offerings/tx-1") as Record<string, any>;
+    const tx1 = store.raw.get("offerings/tx-1") as unknown as RawTxDoc;
     expect(tx1.settlement).toBeUndefined();
   });
 
@@ -213,7 +246,7 @@ describe("engine.runPayoutsSync", () => {
     });
     expect(result.status).toBe("completed"); // 3 clean PAYOUT votes still accepted
     expect(result.counts.rowsReview).toBe(1);
-    const deductionDoc = [...store.payouts.values()].find((p: any) => p.type === "BALANCE_DEDUCTION") as any;
+    const deductionDoc = [...store.payouts.values()].find((p) => (p as unknown as PayoutDoc).type === "BALANCE_DEDUCTION") as unknown as PayoutDoc;
     expect(deductionDoc.review).toBe(true);
     expect(deductionDoc.reviewReason).toBe("deduction_balance_deduction");
   });
@@ -230,7 +263,7 @@ describe("engine.runPayoutsSync", () => {
       start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
     });
     expect(result.status).toBe("completed");
-    const orphan = store.payouts.get("offerings_PAYOUT_r4_COD-DESCONOCIDO") as any;
+    const orphan = store.payouts.get("offerings_PAYOUT_r4_COD-DESCONOCIDO") as unknown as PayoutDoc;
     expect(orphan.review).toBe(true);
     expect(orphan.reviewReason).toBe("not_found");
   });
@@ -248,7 +281,7 @@ describe("engine.runPayoutsSync", () => {
       account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: false,
       start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows, store, clock,
     });
-    expect((store.raw.get("offerings/tx-1") as any).settlement.feeAmount).toBe(340);
+    expect((store.raw.get("offerings/tx-1") as unknown as RawTxDoc).settlement!.feeAmount).toBe(340);
 
     // Now the hourly sync re-processes the SAME unchanged provider item —
     // classifyItem returns "rawRefresh" (sameAmount/sameCategory/sameDay,
@@ -270,7 +303,7 @@ describe("engine.runPayoutsSync", () => {
       },
       "offerings",
     );
-    await store.runLedgerTransaction({ account: "offerings", rawId: "tx-1", financeId: "sumup_offerings_tx-1" }, async (tx: any) => {
+    await store.runLedgerTransaction({ account: "offerings", rawId: "tx-1", financeId: "sumup_offerings_tx-1" }, async (tx) => {
       const previousRaw = await tx.getRaw();
       tx.setRaw({
         account: normalized.account,
@@ -286,8 +319,8 @@ describe("engine.runPayoutsSync", () => {
       });
     });
 
-    const after = store.raw.get("offerings/tx-1") as any;
-    expect(after.settlement.feeAmount).toBe(340); // survived the hourly rawRefresh
+    const after = store.raw.get("offerings/tx-1") as unknown as RawTxDoc;
+    expect(after.settlement!.feeAmount).toBe(340); // survived the hourly rawRefresh
     expect(after.grossAmount).toBe(10000);
   });
 
@@ -308,7 +341,7 @@ describe("engine.runPayoutsSync", () => {
       account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
       start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows1, store, clock,
     });
-    const fee1 = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as any;
+    const fee1 = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as unknown as FeeFinanceDoc;
     expect(fee1.amount).toBe(1190);
     expect(fee1.revision).toBe(1);
 
@@ -322,11 +355,11 @@ describe("engine.runPayoutsSync", () => {
       account: "offerings", config, trigger: "manual", dryRun: false, ledgerEnabled: true,
       start: "2026-09-01", end: "2026-09-30", fetchPayouts: async () => rows2, store, clock,
     });
-    const fee2 = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as any;
+    const fee2 = store.feeFinance.get("sumup_fee_offerings_2026-09-10") as unknown as FeeFinanceDoc;
     expect(fee2.amount).toBe(1350);
     expect(fee2.revision).toBe(2);
     expect(store.feeVersions.get("sumup_fee_offerings_2026-09-10")?.length).toBe(1);
-    const summary = store.summaries.get("2026-09") as any;
+    const summary = store.summaries.get("2026-09") as unknown as SummaryDoc;
     expect(summary.expenseTotal).toBe(1350);
   });
 });

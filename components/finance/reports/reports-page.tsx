@@ -8,11 +8,12 @@ import {
   useTransactions,
 } from "@/lib/finance/hooks";
 import { buildReport, type AlertItem, type FinanceReport } from "@/lib/finance/reports";
-import { clp, errorMessage, previousPeriod, today } from "@/lib/finance/formatters";
+import { clp, errorMessage, periodId, previousPeriod, today } from "@/lib/finance/formatters";
 import {
   hasAnySettlement,
   totalCommissionInRange,
   useMonthSettlements,
+  type SumUpDailySettlement,
 } from "@/lib/finance/sumup-settlement";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import {
@@ -26,6 +27,16 @@ import {
 } from "../shared";
 import { Kpis } from "../dashboard/kpis";
 import { FinanceCharts } from "../charts/finance-charts";
+function sumByAccount(settlements: Map<string, SumUpDailySettlement>) {
+  let offerings = 0;
+  let cafeteria = 0;
+  for (const daily of settlements.values()) {
+    if (daily.account === "offerings") offerings += daily.comisionSumUp;
+    else if (daily.account === "cafeteria") cafeteria += daily.comisionSumUp;
+  }
+  return { offerings, cafeteria };
+}
+
 export function ReportsPage() {
   return (
     <DetailGuard>
@@ -45,6 +56,15 @@ function Reports() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const lock = useRef(false);
+
+  // Slice 3a — comisión real de SumUp para el período del reporte (spec
+  // §UI "Reporte": "agrega la comisión real ... por cuenta"). Solo se
+  // consulta para roles con detalle (sumupDailySettlement lo exige).
+  const details = canSeeDetails(access.role);
+  const rangeStart = isMonthView ? `${periodId(period.year, period.month)}-01` : `${period.year}-01-01`;
+  const rangeEnd = isMonthView ? `${periodId(period.year, period.month)}-31` : `${period.year}-12-31`;
+  const settlements = useMonthSettlements(rangeStart, rangeEnd, details);
+
   function changePeriod(nextPeriod: typeof period) {
     setPeriod(nextPeriod);
     setSuccess("");
@@ -60,6 +80,12 @@ function Reports() {
     )
       return { data: null, error: "" };
     try {
+      const sumUpSettlement = hasAnySettlement(settlements.data)
+        ? {
+            total: totalCommissionInRange(settlements.data),
+            byAccount: sumByAccount(settlements.data),
+          }
+        : undefined;
       return {
         data: buildReport(
           period,
@@ -71,6 +97,7 @@ function Reports() {
             previousTransactions: isMonthView ? previousTransactions.data : undefined,
             previousSummaries: isMonthView ? previousSummaries.data : undefined,
             today: today(),
+            sumUpSettlement,
           },
         ),
         error: "",
@@ -92,6 +119,7 @@ function Reports() {
     previousTransactions.data,
     previousTransactions.loading,
     access.displayName,
+    settlements.data,
   ]);
   async function generate(share = false) {
     if (lock.current || !preview.data) return;

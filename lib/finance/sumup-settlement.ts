@@ -38,6 +38,8 @@ export interface SumUpDailySettlement {
  * (admin/pastor/finance) to read it, so a leader session must never issue
  * this query at all — same pattern as useTransactions(period, details).
  */
+const EMPTY_SETTLEMENTS_STATE = { data: new Map<string, SumUpDailySettlement>(), loading: false, error: "" };
+
 export function useMonthSettlements(startDate: string, endDate: string, enabled = true) {
   const [state, setState] = useState<{
     data: Map<string, SumUpDailySettlement>;
@@ -46,10 +48,10 @@ export function useMonthSettlements(startDate: string, endDate: string, enabled 
   }>({ data: new Map(), loading: enabled, error: "" });
 
   useEffect(() => {
-    if (!enabled) {
-      setState({ data: new Map(), loading: false, error: "" });
-      return undefined;
-    }
+    // Never call setState synchronously from the effect body when disabled —
+    // the disabled case is served by the fixed EMPTY_SETTLEMENTS_STATE
+    // constant below instead of touching state at all.
+    if (!enabled) return undefined;
     const unsubscribe = onSnapshot(
       query(
         collection(getFirebaseServices().db, "sumupDailySettlement"),
@@ -69,7 +71,7 @@ export function useMonthSettlements(startDate: string, endDate: string, enabled 
     return unsubscribe;
   }, [startDate, endDate, enabled]);
 
-  return state;
+  return enabled ? state : EMPTY_SETTLEMENTS_STATE;
 }
 
 export type SettlementStatusCode = "por-depositar" | "pagado" | "diferencia" | "revision";

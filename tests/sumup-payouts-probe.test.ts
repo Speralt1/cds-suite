@@ -150,7 +150,7 @@ describe("aggregateByDay", () => {
 
     const days = aggregateByDay(transactions, linkedRowsByCode, "net");
 
-    const day1 = days.find((d) => d.day === "2026-09-01");
+    const day1 = days.find((d: { day: string }) => d.day === "2026-09-01")!;
     expect(day1.n).toBe(2);
     expect(day1.bruto).toBe(15000);
     expect(day1.comision).toBe(450);
@@ -159,7 +159,7 @@ describe("aggregateByDay", () => {
     expect(day1.pendientes).toBe(0);
     expect(day1.payoutRefs).toEqual([{ date: "2026-09-03", reference: "PO-1" }]);
 
-    const day2 = days.find((d) => d.day === "2026-09-02");
+    const day2 = days.find((d: { day: string }) => d.day === "2026-09-02")!;
     expect(day2.n).toBe(1);
     expect(day2.pendientes).toBe(1);
     expect(day2.comision).toBe(0);
@@ -190,7 +190,7 @@ describe("aggregateByPayout", () => {
 
     const { payouts, rowsInReview } = aggregateByPayout(rows);
 
-    const poA = payouts.find((p) => p.reference === "PO-A");
+    const poA = payouts.find((p: { reference: string | null }) => p.reference === "PO-A")!;
     expect(poA.montoPagado).toBe(200000);
     expect(poA.comision).toBe(6000);
     expect(poA.nTransacciones).toBe(3);
@@ -228,7 +228,7 @@ describe("buildDepositsList", () => {
       { reference: "PO-C", date: "2026-09-20", montoPagado: 0 },
     ];
     const deposits = buildDepositsList(groups);
-    expect(deposits.map((d) => d.reference)).toEqual(["PO-A", "PO-B"]);
+    expect(deposits.map((d: { reference: string | null }) => d.reference)).toEqual(["PO-A", "PO-B"]);
     expect(deposits[0].montoNeto).toBe(195000);
   });
 });

@@ -134,11 +134,30 @@ it("los movimientos importados de SumUp no muestran Editar ni Anular y sí un ba
   expect(screen.queryAllByRole("button", { name: "Anular" })).toHaveLength(1);
 });
 
+// Slice 3a: "Líquido" ahora es legítimo, pero SOLO dentro del bloque que
+// muestra la comisión/depósito real de SumUp (settlement) — nunca como
+// etiqueta de un monto que en realidad es bruto (spec §UI "Etiquetas").
+// "Conciliado" tampoco se usa: SumUp pagando el líquido esperado no es lo
+// mismo que estar conciliado contra la cartola del banco (ver
+// lib/finance/sumup-settlement.ts).
 it("offerings-page no usa lenguaje engañoso (líquido/conciliado) en las etiquetas de SumUp", () => {
   const source = readFileSync(
     "components/finance/offerings/offerings-page.tsx",
     "utf-8",
   );
-  expect(source).not.toMatch(/líquid/i);
+
+  expect(source).not.toMatch(/Tarjeta SumUp · líquido/i);
+  expect(source).not.toMatch(/Tarjeta líquida/i);
   expect(source).not.toMatch(/Conciliado/);
+
+  // Toda aparición de "líquido" debe vivir en el bloque de settlement real
+  // (identificado por mencionar comisionSumUp o settlement cerca), nunca
+  // suelta junto a "Tarjeta SumUp (bruto)".
+  const liquidMatches = [...source.matchAll(/líquid[oa]/gi)];
+  expect(liquidMatches.length).toBeGreaterThan(0);
+  for (const match of liquidMatches) {
+    const index = match.index ?? 0;
+    const window = source.slice(Math.max(0, index - 400), index + 400);
+    expect(window).toMatch(/comisionSumUp|settlement/i);
+  }
 });
