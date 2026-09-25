@@ -7,6 +7,10 @@ Lista ordenada por lo que desbloquea. Cada respuesta se registra en este documen
 - **G1 — CERRADO:** la venta SumUp se registra en **bruto menos reembolsos**. La comisión real se registrará como **egreso vinculado** cuando exista ingesta de payout/detalle. Esto permitirá reconstruir `bruto - reembolsos - comisión = líquido esperado` sin ocultar la recaudación original.
 - **G3 — CERRADO:** los movimientos `financeTransactions/sumup_*` son **solo lectura para clientes**. Solo el backend/Admin SDK puede crearlos o modificarlos. Las correcciones humanas futuras deberán usar ajustes/reversas auditables.
 
+## Limpieza pendiente
+
+- **Canal de preview `slice6` — vence el 2026-10-02.** El canal se creó el 25/09/2026 (`firebase hosting:channel:deploy slice6 --expires 7d`) y Firebase agregó `cds-administracion--slice6-jaujq6fv.web.app` a los *Authorized domains* de Authentication automáticamente. Firebase **no lo quita** cuando el canal expira: hay que borrarlo a mano en Authentication → Settings → Authorized domains, o con un PATCH a `projects/cds-administracion/config` (`updateMask=authorizedDomains`). Un dominio autorizado que ya no apunta a nada es superficie de ataque innecesaria.
+
 ## A. Autorizaciones (acciones)
 
 | # | Qué | Desbloquea |
