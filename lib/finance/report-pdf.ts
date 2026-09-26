@@ -235,6 +235,140 @@ export function createFinancePdf(report: FinanceReport, logoData?: string) {
     169,
   );
   lineChart(204);
+  const isMonth = report.period.view === "month";
+  if (isMonth && report.narrative) {
+    newPage("Resumen ejecutivo");
+    const narrativeLines = pdf.splitTextToSize(
+      report.narrative,
+      W,
+    ) as string[];
+    pdf.setFontSize(10);
+    pdf.setTextColor(...ink);
+    pdf.text(narrativeLines, 18, 70);
+  }
+  newPage("Alertas");
+  {
+    const allAlerts = [...report.alerts.revisar, ...report.alerts.info];
+    if (!allAlerts.length)
+      text("Sin alertas de revisión en este período.", 18, 70, 10, muted);
+    else
+      table(
+        ["Alerta"],
+        allAlerts.map((a) => [a.pdfText]),
+        67,
+      );
+  }
+  newPage("Por tipo de dinero y por fuente");
+  table(
+    ["Tipo", "Monto CLP", "%", "Mov."],
+    report.byMethod.rows.map((r) => [
+      r.label,
+      clp(r.amount),
+      `${r.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`,
+      r.count,
+    ]),
+    67,
+  );
+  if (isMonth && report.bySource.length) {
+    const sourceEnd = (pdf as jsPDF & { lastAutoTable: { finalY: number } })
+      .lastAutoTable.finalY;
+    table(
+      ["Fuente", "SumUp (bruto)", "Efectivo", "Transferencia", "Otro", "Total", "Mes anterior"],
+      report.bySource.map((r) => [
+        r.category,
+        r.sumUp ? clp(r.sumUp) : "—",
+        r.cash ? clp(r.cash) : "—",
+        r.transfer ? clp(r.transfer) : "—",
+        r.other ? clp(r.other) : "—",
+        clp(r.total),
+        r.notComparable
+          ? "No comparable (antes del 09/09)"
+          : r.previousTotal !== null
+            ? clp(r.previousTotal)
+            : "—",
+      ]),
+      sourceEnd + 14,
+    );
+  }
+  if (report.sumUpFee.status === "pending") {
+    const feeY = (pdf as jsPDF & { lastAutoTable: { finalY: number } })
+      .lastAutoTable.finalY;
+    text(
+      "Comisión SumUp: pendiente de datos de SumUp (no descontada del resultado).",
+      18,
+      feeY + 10,
+      9,
+      muted,
+    );
+  }
+  if (isMonth && report.worshipDays.length) {
+    newPage("Días de culto");
+    table(
+      [
+        "Fecha",
+        "Ofrendas SumUp",
+        "Ofrendas efectivo",
+        "Cafetería SumUp",
+        "Cafetería efectivo",
+        "Diezmos",
+        "Total del día",
+        "Estado",
+      ],
+      report.worshipDays.map((r) => [
+        r.label,
+        r.offeringsSumUp ? clp(r.offeringsSumUp) : "—",
+        r.offeringsCash ? clp(r.offeringsCash) : "—",
+        r.cafeSumUp ? clp(r.cafeSumUp) : "—",
+        r.cafeCash ? clp(r.cafeCash) : "—",
+        r.tithe ? clp(r.tithe) : "—",
+        clp(r.total),
+        r.statusLabel,
+      ]),
+      67,
+    );
+  } else if (!isMonth && report.monthlyByMethod.length) {
+    newPage("Resumen de los 12 meses");
+    table(
+      ["Mes", "Ingresos", "Efectivo", "SumUp", "Transferencia", "Gastos", "Alertas"],
+      report.monthlyByMethod.map((r) => [
+        r.label,
+        clp(r.income),
+        clp(r.cash),
+        clp(r.sumUp),
+        clp(r.transfer),
+        clp(r.expense),
+        r.alertCount,
+      ]),
+      67,
+    );
+  }
+  newPage("Principales categorías");
+  table(
+    ["Top ingresos", "Monto CLP", "%"],
+    report.topIncome.length
+      ? report.topIncome.map((r) => [
+          r.category,
+          clp(r.amount),
+          `${r.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`,
+        ])
+      : [["Sin ingresos registrados", clp(0), "—"]],
+    67,
+  );
+  {
+    const topEnd = (pdf as jsPDF & { lastAutoTable: { finalY: number } })
+      .lastAutoTable.finalY;
+    table(
+      ["Top gastos", "Monto CLP", "%"],
+      report.topExpense.length
+        ? report.topExpense.map((r) => [
+            r.category,
+            clp(r.amount),
+            `${r.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`,
+          ])
+        : [["Sin gastos registrados", clp(0), "—"]],
+      topEnd + 14,
+    );
+  }
   // Separate categories page keeps every chart readable and avoids tiny screenshots.
   newPage("Composición del período");
   categoryBars(

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { TriangleAlert, CircleDashed, CircleCheck, Banknote, Clock } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { canSeeDetails } from "@/lib/finance/permissions";
 import {
@@ -13,10 +14,22 @@ import { combineSummaries } from "@/lib/finance/calculations";
 import {
   clp,
   previousPeriod,
+  periodId,
   periodLabel,
   today,
 } from "@/lib/finance/formatters";
-import type { PeriodSelection } from "@/lib/finance/types";
+import {
+  buildMonthCalendar,
+  defaultSelectedDay,
+  dayStatus,
+  incomeByMethod,
+  isSumUpTransaction,
+  reviewDays,
+  type DayStatus,
+} from "@/lib/finance/insights";
+import { WORSHIP_WEEKDAYS, MONTHS, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
+import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
+import type { CashArea } from "@/lib/offerings/cash";
 import {
   FinancePageHeader,
   PeriodPicker,
@@ -27,9 +40,33 @@ import {
 import { FinanceCharts } from "../charts/finance-charts";
 import { TransactionForm } from "../forms/transaction-form";
 import { TransactionList } from "../transactions/transaction-list";
+import { TitheRegister } from "../tithes/tithe-register";
+import { CashModal } from "../offerings/cash-modal";
 import { Kpis } from "./kpis";
 
 type SummaryView = "day" | "month" | "year";
+type ActionModal = "cash" | "tithe" | "expense" | "other" | null;
+
+const AREA_TO_KEY: Record<string, CashArea> = {
+  Ofrendas: "offerings",
+  Cafetería: "cafeteria",
+};
+
+// SumUp breakdown order (§D minor de Atlas): Ofrendas, luego Cafetería,
+// luego el histórico sin separar y por último cualquier otra categoría.
+const SUMUP_CATEGORY_ORDER = ["Ofrendas", "Cafetería", "SumUp histórico sin separar"];
+function orderedSumUpEntries(byCategory: Record<string, number>) {
+  return Object.entries(byCategory).sort(([a], [b]) => {
+    const ia = SUMUP_CATEGORY_ORDER.indexOf(a);
+    const ib = SUMUP_CATEGORY_ORDER.indexOf(b);
+    const ra = ia === -1 ? SUMUP_CATEGORY_ORDER.length : ia;
+    const rb = ib === -1 ? SUMUP_CATEGORY_ORDER.length : ib;
+    return ra !== rb ? ra - rb : a.localeCompare(b);
+  });
+}
+function sumUpCategoryLabel(category: string) {
+  return category === "SumUp histórico sin separar" ? "Histórico sin separar" : category;
+}
 
 function DailyKpis({
   income,
@@ -75,6 +112,226 @@ function DailyKpis({
   );
 }
 
+// Panel del día (§D "Panel del día" / §C1.5): rows for Ofrendas, Cafetería,
+// Diezmos, SumUp histórico sin separar and Otros ingresos, split into
+// SumUp bruto / Efectivo / Otros / Total. Zero rows are hidden.
+function dayBreakdown(transactions: FinanceTransaction[], date: string) {
+  const period = date.slice(0, 7);
+  const day = String(Number(date.slice(8, 10)));
+  const dayTx = transactions.filter(
+    (t) => t.status === "active" && t.period === period && t.day === day,
+  );
+  const definitions: [string, (t: FinanceTransaction) => boolean][] = [
+    ["Ofrendas", (t) => t.type === "income" && t.category === "Ofrendas"],
+    ["Cafetería", (t) => t.type === "income" && t.category === "Cafetería"],
+    ["Diezmos", (t) => t.type === "income" && t.source === "tithe"],
+    [
+      "SumUp histórico sin separar",
+      (t) => t.type === "income" && t.category === "SumUp histórico sin separar",
+    ],
+    [
+      "Otros ingresos",
+      (t) =>
+        t.type === "income" &&
+        t.source !== "tithe" &&
+        !["Ofrendas", "Cafetería", "SumUp histórico sin separar"].includes(
+          t.category,
+        ),
+    ],
+  ];
+  const rows = definitions
+    .map(([label, match]) => {
+      const items = dayTx.filter(match);
+      const sumUp = items
+        .filter((t) => t.paymentMethod === "card" && isSumUpTransaction(t.id, t.createdBy))
+        .reduce((s, t) => s + t.amount, 0);
+      const cash = items
+        .filter((t) => t.paymentMethod === "cash")
+        .reduce((s, t) => s + t.amount, 0);
+      const other = items
+        .filter(
+          (t) =>
+            t.paymentMethod !== "cash" &&
+            !(t.paymentMethod === "card" && isSumUpTransaction(t.id, t.createdBy)),
+        )
+        .reduce((s, t) => s + t.amount, 0);
+      return { label, sumUp, cash, other, total: sumUp + cash + other };
+    })
+    .filter((row) => row.total > 0);
+  const expenses = dayTx
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+  const totalIncome = rows.reduce((s, r) => s + r.total, 0);
+  return { rows, expenses, totalIncome };
+}
+
+function dateLabelShort(date: string) {
+  const [, month, day] = date.split("-").map(Number);
+  const weekday = new Date(`${date}T12:00:00.000Z`).toLocaleDateString("es-CL", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  return `${weekday} ${day} ${MONTHS[month - 1].slice(0, 3).toLowerCase()}`;
+}
+
+function DayPanel({
+  date,
+  status,
+  transactions,
+  onRegisterCash,
+  onViewDay,
+}: {
+  date: string;
+  status?: DayStatus;
+  transactions: FinanceTransaction[];
+  onRegisterCash: (area: CashArea) => void;
+  onViewDay: () => void;
+}) {
+  const { rows, expenses, totalIncome } = dayBreakdown(transactions, date);
+  return (
+    <div className="panel day-panel" aria-live="polite">
+      <div className="day-panel-heading">
+        <h3>
+          {dateLabelShort(date)}
+          {status?.isWorshipDay ? " · Culto" : ""}
+        </h3>
+        {status?.missingCashAreas.length ? (
+          <p className="day-panel-status status-warning">
+            <TriangleAlert size={15} aria-hidden="true" />
+            {status.missingCashAreas.length === 2
+              ? "Falta efectivo · 2 áreas"
+              : `Falta efectivo · ${status.missingCashAreas[0]}`}
+          </p>
+        ) : status?.noRecords ? (
+          <p className="day-panel-status status-muted">
+            <CircleDashed size={15} aria-hidden="true" />
+            Sin registros
+          </p>
+        ) : null}
+      </div>
+
+      {rows.length ? (
+        <table className="day-panel-table">
+          <thead>
+            <tr>
+              <th scope="col">Fuente</th>
+              <th scope="col">SumUp bruto</th>
+              <th scope="col">Efectivo</th>
+              <th scope="col">Otros</th>
+              <th scope="col">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <th scope="row">{row.label}</th>
+                <td className="tabular-nums">{row.sumUp ? clp(row.sumUp) : "—"}</td>
+                <td className="tabular-nums">{row.cash ? clp(row.cash) : "—"}</td>
+                <td className="tabular-nums">{row.other ? clp(row.other) : "—"}</td>
+                <td className="tabular-nums">{clp(row.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">Gastos</th>
+              <td colSpan={3} />
+              <td className="tabular-nums">{clp(expenses)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Total ingresos del día</th>
+              <td colSpan={3} />
+              <td className="tabular-nums font-semibold">{clp(totalIncome)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      ) : (
+        <p className="field-help">Sin movimientos activos este día.</p>
+      )}
+
+      <div className="day-panel-actions">
+        {(status?.missingCashAreas || []).map((area) => (
+          <button
+            key={area}
+            type="button"
+            className="button-secondary"
+            onClick={() => onRegisterCash(AREA_TO_KEY[area])}
+          >
+            <Banknote size={16} aria-hidden="true" />
+            Registrar efectivo · {area}
+          </button>
+        ))}
+        <button type="button" className="button-secondary" onClick={onViewDay}>
+          Ver movimientos del día
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MonthCalendar({
+  year,
+  month,
+  transactions,
+  selected,
+  onSelect,
+}: {
+  year: number;
+  month: number;
+  transactions: FinanceTransaction[];
+  selected: string;
+  onSelect: (date: string) => void;
+}) {
+  const { weeks } = buildMonthCalendar(transactions, year, month, today());
+  return (
+    <table className="calendar-table" aria-label={`Calendario de ${MONTHS[month - 1]} ${year}`}>
+      <thead>
+        <tr>
+          {["lun", "mar", "mié", "jue", "vie", "sáb", "dom"].map((label) => (
+            <th scope="col" key={label}>
+              {label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {weeks.map((week, i) => (
+          <tr key={i}>
+            {week.map((day, j) =>
+              day ? (
+                <td key={day.date}>
+                  <button
+                    type="button"
+                    className={`calendar-cell${day.isToday ? " is-today" : ""}${day.isFuture ? " is-future" : ""}${day.missingCashAreas.length ? " has-warning" : day.noRecords ? " has-empty" : ""}`}
+                    aria-pressed={selected === day.date}
+                    aria-current={day.isToday ? "date" : undefined}
+                    onClick={() => onSelect(day.date)}
+                    aria-label={`${dateLabelShort(day.date)}${day.isWorshipDay ? ", culto" : ""}${day.totalIncome ? `, ingresos ${clp(day.totalIncome)}` : ""}${day.missingCashAreas.length ? `, falta efectivo ${day.missingCashAreas.join(" y ")}` : ""}${day.noRecords ? ", sin registros" : ""}`}
+                  >
+                    <span className="calendar-cell-day">{Number(day.date.slice(8, 10))}</span>
+                    {day.statusLabel && (
+                      <span className="calendar-cell-status">
+                        {day.missingCashAreas.length ? (
+                          <TriangleAlert size={12} aria-hidden="true" />
+                        ) : day.noRecords ? (
+                          <CircleDashed size={12} aria-hidden="true" />
+                        ) : null}
+                        {day.missingCashAreas.length || day.noRecords ? "" : day.statusLabel}
+                      </span>
+                    )}
+                  </button>
+                </td>
+              ) : (
+                <td key={`blank-${i}-${j}`} aria-hidden="true" />
+              ),
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function SummaryPage() {
   const [period, setPeriod] = usePeriod();
   const [summaryView, setSummaryView] =
@@ -94,7 +351,10 @@ export function SummaryPage() {
   const dailySummaries = useSummaries(dailyPeriod);
   const dailyTransactions = useTransactions(dailyPeriod, details);
 
-  const [create, setCreate] = useState(false);
+  const [actionModal, setActionModal] = useState<ActionModal>(null);
+  const [cashArea, setCashArea] = useState<CashArea>("offerings");
+  const [cashDate, setCashDate] = useState(today());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
 
   const total = combineSummaries(summaries.data);
@@ -128,27 +388,37 @@ export function SummaryPage() {
   const movementError =
     summaryView === "day" ? dailyTransactions.error : latest.error;
 
-  const isSumUpTransaction = (id: string, createdBy: string) =>
-    id.startsWith("sumup_") || createdBy === "system:sumup";
-
-  const sumUpTransactions = movementItems.filter(
-    (transaction) =>
-      transaction.status === "active" &&
-      transaction.type === "income" &&
-      isSumUpTransaction(transaction.id, transaction.createdBy),
-  );
-
-  const sumUpTotal = sumUpTransactions.reduce(
-    (sum, transaction) => sum + transaction.amount,
-    0,
-  );
-
-  const latestNonSumUp = movementItems
+  const latestFiltered = movementItems
     .filter(
       (transaction) =>
         !isSumUpTransaction(transaction.id, transaction.createdBy),
     )
     .slice(0, 6);
+
+  const isMonthCalendarView = summaryView === "month" && period.view === "month";
+
+  // M2 (Atlas): income/review/calendar must only be computed once `latest`
+  // has actually loaded without error for this period — otherwise a leader
+  // (details=false, hook disabled) or a still-loading/errored fetch could
+  // render stale or empty-looking figures as if they were final. Leaders
+  // never get here since `details` is false, so they keep seeing exactly
+  // what they saw before (no calendar, no "Días por revisar").
+  const detailReady = details && !latest.loading && !latest.error;
+
+  const income = detailReady && summaryView !== "day" ? incomeByMethod(latest.data) : null;
+  const review =
+    isMonthCalendarView && detailReady
+      ? reviewDays(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
+      : [];
+  const calendar =
+    isMonthCalendarView && detailReady
+      ? buildMonthCalendar(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
+      : null;
+  const effectiveSelectedDay =
+    selectedDay ||
+    (calendar ? defaultSelectedDay(calendar, review, today()) : undefined) ||
+    today();
+  const selectedDayStatus = calendar?.days.find((d) => d.date === effectiveSelectedDay);
 
   function selectView(view: SummaryView) {
     setSummaryView(view);
@@ -157,11 +427,24 @@ export function SummaryPage() {
     }
   }
 
+  function openCashModal(area: CashArea, date: string) {
+    setCashArea(area);
+    setCashDate(date);
+    setActionModal("cash");
+  }
+
+  function defaultCashArea(): CashArea {
+    const status = dayStatus(today(), dailyTransactions.data, today(), WORSHIP_WEEKDAYS);
+    return status.missingCashAreas.length
+      ? AREA_TO_KEY[status.missingCashAreas[0]]
+      : "offerings";
+  }
+
   return (
     <>
       <FinancePageHeader
         title="Resumen financiero"
-        subtitle="Información confirmada en Firestore."
+        subtitle="Totales calculados a partir de los movimientos registrados."
       />
 
       <div className="summary-period-controls">
@@ -208,24 +491,46 @@ export function SummaryPage() {
             />
           )}
         </div>
-
-        {details && (
-          <div className="finance-page-actions">
-            <button
-              className="button-primary"
-              onClick={() => setCreate(true)}
-            >
-              + Registrar movimiento
-            </button>
-            <Link
-              className="button-secondary"
-              href="/finanzas/diezmos?registrar=1"
-            >
-              + Registrar diezmo
-            </Link>
-          </div>
-        )}
       </div>
+
+      {details && (
+        <div className="summary-actions">
+          <button
+            type="button"
+            className="button-primary summary-action-primary"
+            onClick={() => openCashModal(defaultCashArea(), today())}
+          >
+            + Registrar efectivo
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => setActionModal("tithe")}
+          >
+            + Diezmo
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => setActionModal("expense")}
+          >
+            + Gasto
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => setActionModal("other")}
+          >
+            Otro movimiento
+          </button>
+          <Link
+            className="button-ghost"
+            href={`/finanzas/reportes?periodo=${periodId(period.year, period.month)}`}
+          >
+            Reporte del mes →
+          </Link>
+        </div>
+      )}
 
       <Notice
         error={
@@ -256,9 +561,15 @@ export function SummaryPage() {
               gastos y no representa el saldo bancario.
             </p>
 
-            {!dailyIncome &&
-            !dailyExpense &&
-            (!details || !activeDailyRows.length) ? (
+            {details ? (
+              <DayPanel
+                date={dailyDate}
+                status={dayStatus(dailyDate, dailyTransactions.data, today(), WORSHIP_WEEKDAYS)}
+                transactions={dailyTransactions.data}
+                onRegisterCash={(area) => openCashModal(area, dailyDate)}
+                onViewDay={() => {}}
+              />
+            ) : !dailyIncome && !dailyExpense ? (
               <Empty>
                 <h3>No hay movimientos registrados para esta fecha.</h3>
                 <p className="mt-2">
@@ -293,20 +604,162 @@ export function SummaryPage() {
         <Loading />
       ) : summaries.error ? null : (
         <>
-          <Kpis
-            summary={total}
-            previous={
-              !previous.error &&
-              previous.data.some((summary) => summary.transactionCount > 0)
-                ? combineSummaries(previous.data)
-                : undefined
-            }
-          />
+          {!details && (
+            <Kpis
+              summary={total}
+              previous={
+                !previous.error &&
+                previous.data.some((summary) => summary.transactionCount > 0)
+                  ? combineSummaries(previous.data)
+                  : undefined
+              }
+            />
+          )}
+
+          {details &&
+            (latest.loading ? (
+              <Loading />
+            ) : latest.error ? (
+              <Notice error={latest.error} />
+            ) : (
+              income && (
+            <section className="panel income-method-panel">
+              <h3>Ingresos por tipo de dinero</h3>
+              <table className="income-method-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Monto</th>
+                    <th scope="col">%</th>
+                    <th scope="col">Mov.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {income.rows.map((row) => (
+                    <Fragment key={row.key}>
+                      <tr>
+                        <th scope="row">{row.label}</th>
+                        <td className="tabular-nums">{clp(row.amount)}</td>
+                        <td className="tabular-nums">
+                          {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
+                        </td>
+                        <td className="tabular-nums">{row.count}</td>
+                      </tr>
+                      {row.key === "sumup" && row.amount > 0 && (
+                        <tr className="income-method-breakdown">
+                          <td colSpan={4}>
+                            {orderedSumUpEntries(income.sumUpByCategory)
+                              .map(([category, amount]) => `${sumUpCategoryLabel(category)} ${clp(amount)}`)
+                              .join(" · ")}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                  <tr className="income-method-total">
+                    <th scope="row">Total ingresos</th>
+                    <td className="tabular-nums font-semibold">{clp(income.total)}</td>
+                    <td className="tabular-nums font-semibold">100%</td>
+                    <td className="tabular-nums font-semibold">{income.count}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="field-help">
+                SumUp en bruto: la comisión aún no está disponible.
+              </p>
+              {income.total !== total.incomeTotal &&
+                (latest.data.length >= MAX_PERIOD_RECORDS ? (
+                  <p className="notice-warning">
+                    <TriangleAlert size={15} aria-hidden="true" />
+                    Resultado truncado: el período supera 10.000 movimientos.
+                  </p>
+                ) : (
+                  <p className="notice success">
+                    Los datos se están sincronizando; los totales pueden
+                    cambiar en segundos.
+                  </p>
+                ))}
+            </section>
+              )
+            ))}
 
           <p className="mb-6 text-xs text-muted">
             El resultado del período es ingresos menos gastos; no representa el
             saldo bancario.
           </p>
+
+          {/* Días por revisar y el calendario dependen de los días de culto
+              del mes, no de si ya hay movimientos registrados: deben poder
+              mostrar "Sin registros" incluso en un mes vacío. Solo se
+              calculan/muestran para roles con detalle (M2, Atlas): leader
+              nunca ve calendario ni "Días por revisar". */}
+          {details && isMonthCalendarView && (latest.loading ? (
+            <Loading />
+          ) : latest.error ? (
+            <Notice error={latest.error} />
+          ) : (
+            <>
+            <section className="panel review-days">
+              <h3>Días por revisar ({review.length})</h3>
+              {review.length ? (
+                <ul>
+                  {review.map((item) => (
+                    <li key={`${item.date}-${item.kind}-${item.area || ""}`}>
+                      {item.kind === "missing-cash" ? (
+                        <TriangleAlert size={15} aria-hidden="true" />
+                      ) : (
+                        <CircleDashed size={15} aria-hidden="true" />
+                      )}
+                      <span>
+                        {item.label} — {dateLabelShort(item.date)}
+                      </span>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => setSelectedDay(item.date)}
+                      >
+                        Ver día
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="notice-ok">
+                  <CircleCheck size={15} aria-hidden="true" />
+                  Todo registrado en los días de culto de este mes.
+                </p>
+              )}
+            </section>
+
+              <section className="calendar-section">
+                <div className="calendar-wrap">
+                  <MonthCalendar
+                    year={period.year}
+                    month={period.month}
+                    transactions={latest.data}
+                    selected={effectiveSelectedDay}
+                    onSelect={setSelectedDay}
+                  />
+                </div>
+                <DayPanel
+                  date={effectiveSelectedDay}
+                  status={selectedDayStatus}
+                  transactions={latest.data}
+                  onRegisterCash={(area) => openCashModal(area, effectiveSelectedDay)}
+                  onViewDay={() => {
+                    setDailyDate(effectiveSelectedDay);
+                    setSummaryView("day");
+                  }}
+                />
+              </section>
+            </>
+          ))}
+
+          {summaryView === "year" && (
+            <p className="field-help mb-6">
+              Selecciona Mensual para ver el calendario.
+            </p>
+          )}
 
           {!total.transactionCount ? (
             <Empty>
@@ -320,14 +773,73 @@ export function SummaryPage() {
               {details && (
                 <button
                   className="button-primary mt-5"
-                  onClick={() => setCreate(true)}
+                  onClick={() => setActionModal("other")}
                 >
                   Registrar primer movimiento
                 </button>
               )}
             </Empty>
           ) : (
-            <FinanceCharts summaries={summaries.data} period={period} />
+            <>
+              {details && (
+                <section className="panel source-block">
+                  <div className="source-block-income">
+                    <h3>Ingresos por fuente</h3>
+                    <table className="income-method-table">
+                      <tbody>
+                        {Object.entries(total.incomeByCategory)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([category, amount]) => (
+                            <tr key={category}>
+                              <th scope="row">{category}</th>
+                              <td className="tabular-nums">{clp(amount)}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="source-block-expense">
+                    <h3>Gastos y resultado</h3>
+                    <p>
+                      <span>Gastos</span>
+                      <strong className="tabular-nums">{clp(total.expenseTotal)}</strong>
+                    </p>
+                    {income && income.sumUpAmount > 0 && (
+                      <>
+                        <p>
+                          <span>Comisión SumUp</span>
+                          <strong className="tabular-nums sumup-fee-pending">
+                            <Clock size={14} aria-hidden="true" />
+                            Pendiente de datos de SumUp
+                          </strong>
+                        </p>
+                        <p className="field-help">
+                          La comisión se registrará como gasto cuando se
+                          conecten los payouts de SumUp. El resultado aún no
+                          la descuenta.
+                        </p>
+                      </>
+                    )}
+                    <p>
+                      <span>Resultado</span>
+                      <strong className={`tabular-nums ${total.result < 0 ? "text-danger" : ""}`}>
+                        {clp(total.result)}
+                      </strong>
+                    </p>
+                    <p className="field-help">No representa el saldo bancario.</p>
+                    {total.expenseTotal === 0 && total.incomeTotal > 0 && (
+                      <p className="notice-warning">
+                        <TriangleAlert size={15} aria-hidden="true" />
+                        No se registraron gastos en el período. ¿Faltan
+                        egresos?
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              <FinanceCharts summaries={summaries.data} period={period} />
+            </>
           )}
         </>
       )}
@@ -349,62 +861,65 @@ export function SummaryPage() {
 
           {movementLoading ? (
             <Loading />
-          ) : movementError ? null : (
-            <>
-              {sumUpTotal > 0 && (
-                <div className="summary-sumup-card">
-                  <div className="summary-sumup-copy">
-                    <span className="eyebrow">
-                      {summaryView === "day"
-                        ? "SUMUP · TOTAL DEL DÍA"
-                        : "SUMUP · TOTAL DEL PERÍODO"}
-                    </span>
-                    <h3>Recaudación SumUp</h3>
-                    <p>
-                      Incluye Ofrendas, Cafetería y, cuando corresponda, el
-                      histórico anterior al 09/09/2026 sin separación.
-                    </p>
-                  </div>
-
-                  <div className="summary-sumup-amount">
-                    <strong>{clp(sumUpTotal)}</strong>
-                    <span>
-                      {sumUpTransactions.length} movimientos agrupados
-                    </span>
-                    <Link
-                      className="button-secondary"
-                      href="/finanzas/movimientos"
-                    >
-                      Ver detalle
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {latestNonSumUp.length ? (
-                <TransactionList
-                  items={latestNonSumUp}
-                  onSaved={setSuccess}
-                />
-              ) : sumUpTotal ? (
-                <p className="summary-sumup-only-note">
-                  No hay otros movimientos en esta selección.
-                </p>
-              ) : (
-                <Empty>No hay registros en esta selección.</Empty>
-              )}
-            </>
+          ) : movementError ? null : latestFiltered.length ? (
+            <TransactionList
+              items={latestFiltered}
+              onSaved={setSuccess}
+            />
+          ) : (
+            <Empty>No hay registros en esta selección.</Empty>
           )}
         </section>
       )}
 
-      {create && (
+      {actionModal === "other" && (
         <TransactionForm
-          onClose={() => setCreate(false)}
-          onSaved={setSuccess}
+          onClose={() => setActionModal(null)}
+          onSaved={(message) => {
+            setSuccess(message);
+            setActionModal(null);
+          }}
+        />
+      )}
+      {actionModal === "expense" && (
+        <TransactionForm
+          initialType="expense"
+          onClose={() => setActionModal(null)}
+          onSaved={(message) => {
+            setSuccess(message);
+            setActionModal(null);
+          }}
+        />
+      )}
+      {actionModal === "tithe" && (
+        <TitheRegister
+          onClose={() => setActionModal(null)}
+          onSaved={(message) => {
+            setSuccess(message);
+            setActionModal(null);
+          }}
+        />
+      )}
+      {actionModal === "cash" && (
+        <CashModal
+          key={`${cashArea}-${cashDate}`}
+          area={cashArea}
+          date={cashDate}
+          allTransactionsForDay={
+            cashDate.slice(0, 7) === dailyPeriodId
+              ? dailyTransactions.data
+              : latest.data
+          }
+          loading={dailyTransactions.loading || latest.loading}
+          onAreaChange={setCashArea}
+          onDateChange={setCashDate}
+          onClose={() => setActionModal(null)}
+          onSaved={(message) => {
+            setSuccess(message);
+            setActionModal(null);
+          }}
         />
       )}
     </>
   );
 }
-

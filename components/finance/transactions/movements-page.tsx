@@ -8,6 +8,8 @@ import {
 } from "@/lib/finance/constants";
 import { useFinanceSettings } from "@/lib/settings/finance-settings-client";
 import { periodLabel } from "@/lib/finance/formatters";
+import { isSumUpTransaction } from "@/lib/finance/insights";
+import { groupMovements, matchesMovementSearch } from "@/lib/finance/movement-groups";
 import {
   DetailGuard,
   FinancePageHeader,
@@ -17,7 +19,7 @@ import {
   Empty,
 } from "../shared";
 import { TransactionForm } from "../forms/transaction-form";
-import { TransactionList } from "./transaction-list";
+import { TransactionRow, TransactionTable, SumUpGroupRow } from "./transaction-list";
 export function MovementsPage() {
   return (
     <DetailGuard>
@@ -43,15 +45,17 @@ function Movements() {
       (!filters.type || t.type === filters.type) &&
       (!filters.category || t.category === filters.category) &&
       (!filters.method || t.paymentMethod === filters.method) &&
-      t.description
-        .toLocaleLowerCase("es")
-        .includes(filters.search.toLocaleLowerCase("es")),
+      matchesMovementSearch(t, filters.search),
   );
+  const entries = groupMovements(items);
+  const sumUpCount = items.filter((t) =>
+    isSumUpTransaction(t.id, t.createdBy),
+  ).length;
   return (
     <>
       <FinancePageHeader
         title="Movimientos"
-        subtitle="Entradas y salidas, con cada registro a la vista."
+        subtitle="Entradas y salidas del período. Los pagos SumUp se agrupan por día."
         aside={
           <button className="button-primary" onClick={() => setCreate(true)}>
             + Registrar movimiento
@@ -131,14 +135,31 @@ function Movements() {
       />
       {state.loading ? (
         <Loading />
-      ) : state.error ? null : items.length ? (
+      ) : state.error ? null : entries.length ? (
         <>
-          <TransactionList items={items.slice(0, count)} onSaved={setSuccess} />
+          <TransactionTable>
+            {entries.slice(0, count).map((entry) =>
+              entry.kind === "single" ? (
+                <TransactionRow
+                  key={entry.key}
+                  t={entry.transaction}
+                  onSaved={setSuccess}
+                />
+              ) : (
+                <SumUpGroupRow
+                  key={entry.key}
+                  group={entry}
+                  onSaved={setSuccess}
+                />
+              ),
+            )}
+          </TransactionTable>
           <p className="mt-4 text-sm text-muted">
-            {Math.min(count, items.length)} de {items.length} registros del
-            período
+            Mostrando {Math.min(count, entries.length)} de {entries.length}{" "}
+            filas · {items.length} registros del período ({sumUpCount} pagos
+            SumUp agrupados)
           </p>
-          {count < items.length && (
+          {count < entries.length && (
             <button
               className="button-secondary mt-4"
               onClick={() => setCount(count + PAGE_SIZE)}

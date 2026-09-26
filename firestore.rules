@@ -8,6 +8,9 @@ service cloud.firestore {
     function pastoral() { return member() && role() in ['admin','pastor']; }
     function admin() { return member() && role() == 'admin'; }
     function approved() { return member() && role() in ['admin','pastor','finance','leader']; }
+    // Movimientos importados desde proveedores son propiedad del backend.
+    // Cloud Functions/Admin SDK no está sujeto a estas reglas; clientes sí.
+    function providerOwnedFinanceTransaction(id) { return id.matches('^sumup_.*'); }
     function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function money(v) { return v is int && v > 0 && v <= 1000000000000; }
     function total(v) { return v is int && v >= 0 && v <= 750599937895082; }
@@ -105,12 +108,14 @@ service cloud.firestore {
     }
     match /financeTransactions/{id} {
       allow read: if details();
-      allow create: if details() && validTransaction(request.resource.data) && activeTransactionCategory(request.resource.data)
+      allow create: if details() && !providerOwnedFinanceTransaction(id)
+        && validTransaction(request.resource.data) && activeTransactionCategory(request.resource.data)
         && auditCreate(request.resource.data) && request.resource.data.revision == 1 && request.resource.data.status == 'active'
         && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason'])
         && summaryLinked(request.resource.data.period,id)
         && (request.resource.data.source != 'tithe' || attributionLinked(request.resource.data,id));
-      allow update: if details() && validTransaction(request.resource.data) && resource.data.status == 'active'
+      allow update: if details() && !providerOwnedFinanceTransaction(id)
+        && validTransaction(request.resource.data) && resource.data.status == 'active'
         && (request.resource.data.category == resource.data.category || activeTransactionCategory(request.resource.data))
         && request.resource.data.source == resource.data.source && request.resource.data.revision == resource.data.revision + 1
         && auditUpdate(request.resource.data,resource.data)
@@ -234,7 +239,25 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow get, list: if details();
         allow create, update, delete: if false;
+
+        match /versions/{versionId} {
+          allow get, list: if details();
+          allow create, update, delete: if false;
+        }
       }
+      match /adjustments/{adjustmentId} {
+        allow get, list: if details();
+        allow create, update, delete: if false;
+      }
+      match /_locks/{lockId} {
+        allow get, list: if false;
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /sumupSyncRuns/{runId} {
+      allow get, list: if details();
+      allow create, update, delete: if false;
     }
 
     function validCampaign(d) {
