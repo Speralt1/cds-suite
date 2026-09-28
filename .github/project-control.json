@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "project": "CDS Suite",
+  "github": {
+    "repo": "Speralt1/cds-suite",
+    "canonicalBranch": "feature/preproduccion-mobile-v1"
+  },
+  "trello": {
+    "masterCardId": "6ab9caaf57e99e4723c7f671"
+  },
+  "automation": {
+    "markerStart": "<!-- AUTO-STATUS:START -->",
+    "markerEnd": "<!-- AUTO-STATUS:END -->"
+  }
+}
