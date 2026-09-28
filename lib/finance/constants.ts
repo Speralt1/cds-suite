@@ -38,6 +38,10 @@ export const MONTHS = [
   "Noviembre",
   "Diciembre",
 ];
+// Weekdays with worship services (Date#getDay/getUTCDay values: 0=Sun..6=Sat).
+// Miércoles y domingo. Making this configurable per church is a later slice (Atlas).
+export const WORSHIP_WEEKDAYS = [3, 0] as const;
+
 export const MAX_AMOUNT = 1_000_000_000_000;
 export const PAGE_SIZE = 30;
 export const MAX_PERIOD_RECORDS = 10000;

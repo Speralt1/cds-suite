@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && user && !initializationError) router.replace("/dashboard");
+    if (!loading && user && !initializationError) router.replace("/finanzas");
   }, [user, loading, initializationError, router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {

@@ -8,6 +8,19 @@ export function clp(value: number) {
     maximumFractionDigits: 0,
   }).format(Number.isFinite(value) ? value : 0);
 }
+// Compact CLP for tight spaces (calendar cells): "$165 mil", "$1,2 M".
+export function clpShort(value: number) {
+  const n = Number.isFinite(value) ? value : 0;
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) {
+    const millions = n / 1_000_000;
+    return `$${millions.toLocaleString("es-CL", { maximumFractionDigits: 1 })} M`;
+  }
+  if (abs >= 1_000) {
+    return `$${Math.round(n / 1_000).toLocaleString("es-CL")} mil`;
+  }
+  return clp(n);
+}
 export function today() {
   const d = new Date();
   return [

@@ -1,9 +1,14 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
+import { TriangleAlert, CircleDashed, Clock } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
-import { usePeriod, useSummaries, useTransactions } from "@/lib/finance/hooks";
-import { buildReport, type FinanceReport } from "@/lib/finance/reports";
-import { clp, errorMessage } from "@/lib/finance/formatters";
+import {
+  usePeriod,
+  useSummaries,
+  useTransactions,
+} from "@/lib/finance/hooks";
+import { buildReport, type AlertItem, type FinanceReport } from "@/lib/finance/reports";
+import { clp, errorMessage, previousPeriod, today } from "@/lib/finance/formatters";
 import {
   DetailGuard,
   FinancePageHeader,
@@ -27,6 +32,9 @@ function Reports() {
   const [period, setPeriod] = usePeriod();
   const summaries = useSummaries(period);
   const transactions = useTransactions(period);
+  const isMonthView = period.view === "month";
+  const previousSummaries = useSummaries(previousPeriod(period));
+  const previousTransactions = useTransactions(previousPeriod(period), isMonthView);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -41,7 +49,8 @@ function Reports() {
       summaries.loading ||
       transactions.loading ||
       summaries.error ||
-      transactions.error
+      transactions.error ||
+      (isMonthView && (previousSummaries.loading || previousTransactions.loading))
     )
       return { data: null, error: "" };
     try {
@@ -51,6 +60,12 @@ function Reports() {
           summaries.data,
           transactions.data,
           access.displayName,
+          new Date(),
+          {
+            previousTransactions: isMonthView ? previousTransactions.data : undefined,
+            previousSummaries: isMonthView ? previousSummaries.data : undefined,
+            today: today(),
+          },
         ),
         error: "",
       };
@@ -65,6 +80,11 @@ function Reports() {
     transactions.data,
     transactions.loading,
     transactions.error,
+    isMonthView,
+    previousSummaries.data,
+    previousSummaries.loading,
+    previousTransactions.data,
+    previousTransactions.loading,
     access.displayName,
   ]);
   async function generate(share = false) {
@@ -136,7 +156,13 @@ function Reports() {
         </div>
       </div>
       <Notice
-        error={summaries.error || transactions.error || preview.error || error}
+        error={
+          summaries.error ||
+          transactions.error ||
+          (isMonthView ? previousSummaries.error || previousTransactions.error : "") ||
+          preview.error ||
+          error
+        }
         success={success}
       />
       <p className="mb-6 text-xs leading-6 text-muted">
@@ -159,6 +185,19 @@ function Reports() {
     </>
   );
 }
+function AlertRow({ alert }: { alert: AlertItem }) {
+  return (
+    <li className={alert.tone === "revisar" ? "text-warning" : "text-muted"}>
+      {alert.tone === "revisar" ? (
+        <TriangleAlert size={15} aria-hidden="true" />
+      ) : (
+        <CircleDashed size={15} aria-hidden="true" />
+      )}
+      <span>{alert.text}</span>
+    </li>
+  );
+}
+
 function ReportPreview({
   report,
   charts,
@@ -166,6 +205,7 @@ function ReportPreview({
   report: FinanceReport;
   charts: React.ReactNode;
 }) {
+  const isMonth = report.period.view === "month";
   return (
     <section aria-label="Vista previa del reporte">
       <div className="panel">
@@ -175,6 +215,224 @@ function ReportPreview({
           {report.label} · Generado por {report.generatedBy}
         </p>
       </div>
+
+      {isMonth && report.narrative && (
+        <section className="panel mt-6">
+          <h3>Resumen ejecutivo</h3>
+          <p className="mt-3 text-sm leading-6">{report.narrative}</p>
+        </section>
+      )}
+
+      <section className="panel mt-6">
+        <h3>Alertas</h3>
+        {report.alerts.revisar.length ? (
+          <ul className="report-alerts mt-3">
+            {report.alerts.revisar.map((a, i) => (
+              <AlertRow key={`revisar-${i}`} alert={a} />
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-muted">
+            Sin alertas de revisión en este período.
+          </p>
+        )}
+        {report.alerts.info.length > 0 && (
+          <ul className="report-alerts mt-3">
+            {report.alerts.info.map((a, i) => (
+              <AlertRow key={`info-${i}`} alert={a} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="panel mt-6">
+        <h3>Por tipo de dinero</h3>
+        <table className="income-method-table mt-3">
+          <thead>
+            <tr>
+              <th scope="col">Tipo</th>
+              <th scope="col">Monto</th>
+              <th scope="col">%</th>
+              <th scope="col">Mov.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.byMethod.rows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row">{row.label}</th>
+                <td className="tabular-nums">{clp(row.amount)}</td>
+                <td className="tabular-nums">
+                  {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
+                </td>
+                <td className="tabular-nums">{row.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel mt-6">
+        <h3>Por fuente</h3>
+        {isMonth ? (
+          <table className="income-method-table mt-3">
+            <thead>
+              <tr>
+                <th scope="col">Fuente</th>
+                <th scope="col">SumUp (bruto)</th>
+                <th scope="col">Efectivo</th>
+                <th scope="col">Transferencia</th>
+                <th scope="col">Otro</th>
+                <th scope="col">Total</th>
+                <th scope="col">Mes anterior</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.bySource.map((row) => (
+                <tr key={row.category}>
+                  <th scope="row">{row.category}</th>
+                  <td className="tabular-nums">{row.sumUp ? clp(row.sumUp) : "—"}</td>
+                  <td className="tabular-nums">{row.cash ? clp(row.cash) : "—"}</td>
+                  <td className="tabular-nums">{row.transfer ? clp(row.transfer) : "—"}</td>
+                  <td className="tabular-nums">{row.other ? clp(row.other) : "—"}</td>
+                  <td className="tabular-nums">{clp(row.total)}</td>
+                  <td>
+                    {row.notComparable
+                      ? "No comparable (antes del 09/09 SumUp no separaba áreas)"
+                      : row.previousTotal !== null
+                        ? clp(row.previousTotal)
+                        : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="mt-3 text-sm text-muted">
+            — Comparación disponible en vista mensual.
+          </p>
+        )}
+        {report.sumUpFee.status === "pending" && (
+          <p className="mt-3 sumup-fee-pending">
+            <Clock size={14} aria-hidden="true" />
+            Comisión SumUp: pendiente de datos de SumUp
+          </p>
+        )}
+      </section>
+
+      {isMonth ? (
+        <section className="panel mt-6">
+          <h3>Días de culto</h3>
+          <div className="offering-days-table-wrap mt-3">
+            <table className="offering-days-table">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Ofrendas SumUp</th>
+                  <th scope="col">Ofrendas efectivo</th>
+                  <th scope="col">Cafetería SumUp</th>
+                  <th scope="col">Cafetería efectivo</th>
+                  <th scope="col">Diezmos</th>
+                  <th scope="col">Total del día</th>
+                  <th scope="col">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.worshipDays.map((row) => (
+                  <tr key={row.date}>
+                    <td>{row.label}</td>
+                    <td className="tabular-nums">{row.offeringsSumUp ? clp(row.offeringsSumUp) : "—"}</td>
+                    <td className="tabular-nums">{row.offeringsCash ? clp(row.offeringsCash) : "—"}</td>
+                    <td className="tabular-nums">{row.cafeSumUp ? clp(row.cafeSumUp) : "—"}</td>
+                    <td className="tabular-nums">{row.cafeCash ? clp(row.cafeCash) : "—"}</td>
+                    <td className="tabular-nums">{row.tithe ? clp(row.tithe) : "—"}</td>
+                    <td className="tabular-nums">{clp(row.total)}</td>
+                    <td>{row.statusLabel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : (
+        <section className="panel mt-6">
+          <h3>Resumen de los 12 meses</h3>
+          <div className="offering-days-table-wrap mt-3">
+            <table className="offering-days-table">
+              <thead>
+                <tr>
+                  <th scope="col">Mes</th>
+                  <th scope="col">Ingresos</th>
+                  <th scope="col">Efectivo</th>
+                  <th scope="col">SumUp</th>
+                  <th scope="col">Transferencia</th>
+                  <th scope="col">Gastos</th>
+                  <th scope="col">Alertas (n)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.monthlyByMethod.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td className="tabular-nums">{clp(row.income)}</td>
+                    <td className="tabular-nums">{clp(row.cash)}</td>
+                    <td className="tabular-nums">{clp(row.sumUp)}</td>
+                    <td className="tabular-nums">{clp(row.transfer)}</td>
+                    <td className="tabular-nums">{clp(row.expense)}</td>
+                    <td className="tabular-nums">{row.alertCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section className="panel mt-6">
+        <h3>Principales categorías</h3>
+        <div className="source-block mt-3">
+          <div>
+            <h4 className="mb-2 text-sm font-medium">Top 5 ingresos</h4>
+            {report.topIncome.length ? (
+              <table className="income-method-table">
+                <tbody>
+                  {report.topIncome.map((row) => (
+                    <tr key={row.category}>
+                      <th scope="row">{row.category}</th>
+                      <td className="tabular-nums">
+                        {clp(row.amount)} ·{" "}
+                        {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-muted">Sin ingresos registrados.</p>
+            )}
+          </div>
+          <div>
+            <h4 className="mb-2 text-sm font-medium">Top 5 gastos</h4>
+            {report.topExpense.length ? (
+              <table className="income-method-table">
+                <tbody>
+                  {report.topExpense.map((row) => (
+                    <tr key={row.category}>
+                      <th scope="row">{row.category}</th>
+                      <td className="tabular-nums">
+                        {clp(row.amount)} ·{" "}
+                        {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-muted">Sin gastos registrados</p>
+            )}
+          </div>
+        </div>
+      </section>
+
       <Kpis summary={report.summary} />
       {charts}
       <section className="panel mt-6">

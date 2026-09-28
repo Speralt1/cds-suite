@@ -44,7 +44,7 @@ vi.mock("@/lib/firebase", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: firebase.replace }),
-  usePathname: () => "/dashboard",
+  usePathname: () => "/finanzas",
 }));
 
 const account = {
@@ -103,7 +103,7 @@ describe("session boundaries", () => {
 
   it.each([
     [null, "/login"],
-    [account, "/dashboard"],
+    [account, "/finanzas"],
   ])(
     "routes the root according to the resolved session",
     async (user, route) => {
@@ -203,7 +203,7 @@ describe("login", () => {
     );
     expect(firebase.replace).not.toHaveBeenCalled();
     await resolveSession(account);
-    expect(firebase.replace).toHaveBeenCalledWith("/dashboard");
+    expect(firebase.replace).toHaveBeenCalledWith("/finanzas");
   });
 
   it("reports connection errors and allows retry", async () => {
