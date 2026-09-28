@@ -1,0 +1,28 @@
+name: Project Control Validation
+
+on:
+  push:
+    branches: [chore/project-control-plane-v1]
+  pull_request:
+    branches: [feature/base-cds-suite]
+    paths:
+      - '.github/project-control.json'
+      - '.github/scripts/project-control.mjs'
+      - '.github/scripts/project-control.test.mjs'
+      - '.github/workflows/project-control.yml'
+      - '.github/workflows/project-control-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: node --check .github/scripts/project-control.mjs
+      - run: node --test .github/scripts/project-control.test.mjs
