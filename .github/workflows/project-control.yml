@@ -1,0 +1,40 @@
+name: Project Control Plane
+
+on:
+  push:
+    branches: [feature/base-cds-suite]
+  pull_request_target:
+    branches: [feature/preproduccion-mobile-v1]
+    types: [opened, reopened, synchronize, closed, converted_to_draft, ready_for_review]
+  schedule:
+    - cron: '53 8 * * *'
+      timezone: 'America/Santiago'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: project-control-cds-suite
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/base-cds-suite
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - name: Sync GitHub facts to Trello
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          CONTROL_PLANE_REASON: ${{ github.event_name }}:${{ github.event.action || github.event.schedule || 'manual' }}
+        run: node .github/scripts/project-control.mjs
