@@ -22,9 +22,8 @@ import {
 /** Marcador para verificar que el build por defecto NO publica el preview. */
 export const FX_PREVIEW_SENTINEL = "FX_PREVIEW_SENTINEL_V2_7f3a";
 
-/** "Hoy" del preview: domingo 4 de octubre de 2026, 13:30. */
-export const DEMO_TODAY = "2026-10-04";
-export const DEMO_NOW = "2026-10-04T13:30";
+/** "Hoy" del preview: domingo 4 de octubre de 2026, 13:30 (ver ./clock). */
+export { DEMO_TODAY, DEMO_NOW } from "./clock";
 
 export const DEMO_USER = { name: "Usuario demo", role: "Tesorería" };
 
