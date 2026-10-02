@@ -5,6 +5,7 @@
   },
   "hosting": {
     "public": "out",
+    "predeploy": ["node scripts/check-no-preview.mjs"],
     "ignore": [
       "firebase.json",
       "**/.*",
