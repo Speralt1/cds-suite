@@ -14,6 +14,86 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
+/* Platform Core · Shell de CDS Suite (18b §1.1). Tokens nuevos; los existentes
+   no cambian. Valores del shell oscuro aprobado (PR #3, --fx-side-*). */
+@theme inline {
+  --color-side: #14231d;
+  --color-side-hover: #1d3229;
+  --color-side-active: #244233;
+  --color-side-accent: #7fc79c;
+  --color-side-focus: #8fd1a8;
+  --color-side-text: #c9d6ce;
+  --color-side-muted: #8aa197;
+  --color-side-line: #23392f;
+  --color-info: #245a86;
+  --color-info-soft: #e5eef6;
+  /* Paleta cerrada de áreas (16b §4.1). Texto en color de área: SIEMPRE -ink. */
+  --color-area-azul: var(--area-azul-swatch);
+  --color-area-azul-ink: var(--area-azul-ink);
+  --color-area-azul-soft: var(--area-azul-soft);
+  --color-area-indigo: var(--area-indigo-swatch);
+  --color-area-indigo-ink: var(--area-indigo-ink);
+  --color-area-indigo-soft: var(--area-indigo-soft);
+  --color-area-naranjo: var(--area-naranjo-swatch);
+  --color-area-naranjo-ink: var(--area-naranjo-ink);
+  --color-area-naranjo-soft: var(--area-naranjo-soft);
+  --color-area-ambar: var(--area-ambar-swatch);
+  --color-area-ambar-ink: var(--area-ambar-ink);
+  --color-area-ambar-soft: var(--area-ambar-soft);
+  --color-area-frambuesa: var(--area-frambuesa-swatch);
+  --color-area-frambuesa-ink: var(--area-frambuesa-ink);
+  --color-area-frambuesa-soft: var(--area-frambuesa-soft);
+  --color-area-cafe: var(--area-cafe-swatch);
+  --color-area-cafe-ink: var(--area-cafe-ink);
+  --color-area-cafe-soft: var(--area-cafe-soft);
+  --color-area-teal: var(--area-teal-swatch);
+  --color-area-teal-ink: var(--area-teal-ink);
+  --color-area-teal-soft: var(--area-teal-soft);
+  --color-area-pizarra: var(--area-pizarra-swatch);
+  --color-area-pizarra-ink: var(--area-pizarra-ink);
+  --color-area-pizarra-soft: var(--area-pizarra-soft);
+  --color-area-verde: var(--area-verde-swatch);
+  --color-area-verde-ink: var(--area-verde-ink);
+  --color-area-verde-soft: var(--area-verde-soft);
+  --color-area-carmin: var(--area-carmin-swatch);
+  --color-area-carmin-ink: var(--area-carmin-ink);
+  --color-area-carmin-soft: var(--area-carmin-soft);
+}
+
+/* Paleta de áreas como variables CSS: --area-{color}-{swatch|ink|soft}. */
+:root {
+  --area-azul-swatch: #2f6fb0;
+  --area-azul-ink: #245a8f;
+  --area-azul-soft: #e6eef7;
+  --area-indigo-swatch: #5b5fc7;
+  --area-indigo-ink: #464aa6;
+  --area-indigo-soft: #ebebf8;
+  --area-naranjo-swatch: #c4561d;
+  --area-naranjo-ink: #a3461a;
+  --area-naranjo-soft: #f8ebe3;
+  --area-ambar-swatch: #a06a00;
+  --area-ambar-ink: #7d5300;
+  --area-ambar-soft: #f5eedf;
+  --area-frambuesa-swatch: #b03a8a;
+  --area-frambuesa-ink: #8f2e70;
+  --area-frambuesa-soft: #f5e7f1;
+  --area-cafe-swatch: #8a5a3c;
+  --area-cafe-ink: #6e4529;
+  --area-cafe-soft: #f1ebe7;
+  --area-teal-swatch: #1f7f86;
+  --area-teal-ink: #17646a;
+  --area-teal-soft: #e3f0f1;
+  --area-pizarra-swatch: #5e6b78;
+  --area-pizarra-ink: #4a5560;
+  --area-pizarra-soft: #edeff1;
+  --area-verde-swatch: #3d8a3f;
+  --area-verde-ink: #2e6e30;
+  --area-verde-soft: #e7f1e7;
+  --area-carmin-swatch: #b83a4b;
+  --area-carmin-ink: #962d3c;
+  --area-carmin-soft: #f6e7e9;
+}
+
 body {
   margin: 0;
   background: var(--color-canvas);

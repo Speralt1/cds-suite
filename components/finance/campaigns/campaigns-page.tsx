@@ -12,7 +12,7 @@ import {
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
 import { useAccess } from "@/lib/auth/access-provider";
-import { canSeeDetails } from "@/lib/finance/permissions";
+import { can } from "@/lib/shared/access";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import { PendingCampaignSubmissions } from "./pending-submissions";
 import { ReceiptPreviewButton } from "./receipt-preview-button";
@@ -982,7 +982,7 @@ export function CampaignsPage() {
   const [create, setCreate] = useState(false);
   const [selected, setSelected] = useState("");
 
-  if (!canSeeDetails(access.role)) {
+  if (!can(access, "finance.details.read")) {
     return (
       <Empty>
         Esta sección está reservada para Administración,

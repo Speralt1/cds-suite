@@ -5,13 +5,13 @@ import { usePathname } from "next/navigation";
 import { X, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { MONTHS } from "@/lib/finance/constants";
 import { useAccess } from "@/lib/auth/access-provider";
-import { canSeeDetails } from "@/lib/finance/permissions";
+import { can } from "@/lib/shared/access";
 import type { PeriodSelection } from "@/lib/finance/types";
 export function FinanceNav() {
   const path = usePathname();
   const access = useAccess();
   const navRef = useRef<HTMLElement>(null);
-  const items = canSeeDetails(access.role)
+  const items = can(access, "finance.details.read")
     ? [
         ["/finanzas", "Resumen"],
         ["/finanzas/movimientos", "Movimientos"],
@@ -181,7 +181,7 @@ export function Empty({ children }: { children: React.ReactNode }) {
   return <div className="panel empty">{children}</div>;
 }
 export function DetailGuard({ children }: { children: React.ReactNode }) {
-  return canSeeDetails(useAccess().role) ? (
+  return can(useAccess(), "finance.details.read") ? (
     children
   ) : (
     <Empty>
