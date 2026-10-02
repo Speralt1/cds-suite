@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/suite-preview/placeholders";
+import { MembersSettingsScreen } from "@/components/suite-preview/members/settings";
 
-export const metadata: Metadata = { title: "Ajustes de alertas · Vista previa CDS Suite" };
+export const metadata: Metadata = { title: "Ajustes de Consolidación · Vista previa CDS Suite" };
 
 export default function Page() {
-  return <ModulePlaceholder title="Ajustes de alertas" subtitle="Parámetros de las alertas (solo lectura)." />;
+  return <MembersSettingsScreen />;
 }

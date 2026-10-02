@@ -346,7 +346,8 @@ export const ATTENTION_CTA: Partial<Record<AlertType, string>> = {
   sin_primer_contacto: "Contactar",
   seguimiento_vencido: "Registrar seguimiento",
   volvio: "Agradecer",
-  varios_dias_sin_volver: "Contactar",
+  // "Invitar" (de vuelta): verbo pedido por el coordinador para quien lleva días sin volver.
+  varios_dias_sin_volver: "Invitar",
   posible_duplicado_telefono: "Revisar",
   posible_duplicado_correo: "Revisar",
 };
