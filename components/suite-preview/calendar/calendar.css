@@ -211,6 +211,12 @@
   color: var(--fx-muted);
   font-size: 12px;
 }
+/* En el sheet (móvil) la lista no tiene scroll propio: el sheet crece hasta
+   92dvh y su cuerpo es el que se desplaza, así se ven todas las áreas. */
+.fx .fx-sheet-body .sx-filter-list {
+  max-height: none;
+  overflow: visible;
+}
 .fx .sx-filter-switch {
   display: grid;
   gap: 2px;
@@ -1752,9 +1758,9 @@
   padding: 0;
   border: 0;
 }
+/* Toolbar y lista comparten el contenedor de .sx-pub-main (máx. 960 px). */
 .fx .sx-pub-agenda {
-  max-width: 760px;
-  margin: 0 auto;
+  width: 100%;
 }
 .fx .sx-pub-agenda .sx-agenda-day {
   top: 0;
@@ -1945,13 +1951,15 @@
   color: var(--fx-primary);
   font-weight: 600;
 }
+/* Fila de filtros (desktop): una sola fila, base de los controles alineada
+   (todos miden 36 px), labels 12/600 y el switch al final. */
 .fx .sx-rep-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 12px 20px;
+  gap: 12px;
   margin-bottom: 16px;
-  padding: 14px 16px;
+  padding: 14px;
   border: 1px solid var(--fx-line);
   border-radius: var(--fx-radius);
   background: var(--fx-surface);
@@ -1959,33 +1967,72 @@
 .fx .sx-rep-filters-desktop {
   display: contents;
 }
+.fx .sx-rep-period,
 .fx .sx-rep-filters-desktop .sx-field {
   display: grid;
-  grid-template-columns: auto;
   gap: 4px;
-  min-width: 200px;
 }
-.fx .sx-rep-filters-desktop .sx-switch {
-  min-height: 28px;
+.fx .sx-rep-filters-desktop .sx-field {
+  width: 148px;
+}
+.fx .sx-rep-label,
+.fx .sx-rep-filters .sx-field > label,
+.fx .sx-rep-filters .sx-legend {
+  margin: 0;
+  padding: 0;
+  color: var(--fx-ink-strong);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.fx .sx-rep-filters .sx-legend {
+  margin-bottom: 4px;
+}
+.fx .sx-rep-filters .sx-rep-group {
+  gap: 0;
+}
+.fx .sx-rep-filters-desktop .sx-rep-switch {
+  gap: 8px;
+  min-height: 36px;
+  margin-left: auto;
   font-size: 13px;
 }
 .fx .sx-rep-filters-btn {
   display: none;
 }
 .fx .sx-rep-stepper {
-  align-self: flex-start;
-  margin-top: 22px;
+  height: 36px;
 }
+.fx .sx-rep-stepper > button {
+  width: 30px;
+  height: 34px;
+}
+/* Ancho fijo para el mes más largo ("Septiembre 2026"): la fila no salta. */
 .fx .sx-rep-stepper .fx-stepper-label {
-  min-width: 130px;
+  min-width: 122px;
 }
 .fx .sx-rep-checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 14px;
+  align-items: center;
+  gap: 0 8px;
+  min-height: 36px;
+}
+.fx .sx-rep-filters .sx-cal-check {
+  gap: 6px;
+  min-height: 36px;
+  font-size: 13px;
+}
+.fx .sx-rep-filters .sx-rep-vis button {
+  height: 30px;
+  padding: 0 9px;
 }
 .fx .sx-rep-group {
   gap: 4px;
+}
+.fx .sx-rep-sheet-area {
+  display: grid;
+  gap: 8px;
 }
 .fx .sx-rep-layout {
   display: grid;
@@ -2155,7 +2202,8 @@
   color: var(--fx-ink);
 }
 
-/* Maqueta del PDF */
+/* Maqueta del PDF: página A4 a escala del ancho disponible. Todas las medidas
+   en mm (var(--sx-mm)) salen del mismo cálculo que el PDF real. */
 .fx .sx-pdf {
   display: grid;
   gap: 8px;
@@ -2165,7 +2213,6 @@
   position: relative;
   aspect-ratio: 297 / 210;
   max-width: 760px;
-  padding: 0 0 18px;
   overflow: hidden;
   border: 1px solid var(--fx-line);
   border-radius: 4px;
@@ -2173,83 +2220,81 @@
   box-shadow: 0 6px 20px rgba(20, 35, 29, 0.1);
   color: #233c33;
   font-family: Helvetica, Arial, sans-serif;
-  font-size: 7px;
-  line-height: 10px;
+  container-type: inline-size;
+}
+.fx .sx-pdf-sheet {
+  --sx-mm: calc(100cqw / 297);
+  position: absolute;
+  inset: 0;
 }
 .fx .sx-pdf-band {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 3px 5%;
   background: #eef0f4;
   color: #46505e;
   font-weight: 700;
-  font-size: 6px;
+  white-space: nowrap;
 }
-.fx .sx-pdf-head {
-  padding: 8px 5% 6px;
+.fx .sx-pdf-hline,
+.fx .sx-pdf-foot {
+  position: absolute;
+  margin: 0;
+  color: #505f58;
+  line-height: 1;
+  white-space: nowrap;
 }
-.fx .sx-pdf-church {
+.fx .sx-pdf-hline.is-strong {
   color: #14231d;
-  font-size: 11px;
+}
+.fx .sx-pdf-hline.is-bold {
   font-weight: 700;
-  line-height: 14px;
 }
-.fx .sx-pdf-title {
-  font-size: 9px;
-  line-height: 13px;
-}
-.fx .sx-pdf-meta {
+.fx .sx-pdf-foot {
   color: #5f6e65;
 }
-.fx .sx-pdf-meta.is-strong {
-  color: #14231d;
-}
 .fx .sx-pdf-table {
-  margin: 0 5%;
-  border: 1px solid #e3e7e0;
+  position: absolute;
+  border-top: 1px solid #e3e7e0;
+  border-left: 1px solid #e3e7e0;
 }
 .fx .sx-pdf-tr {
   display: grid;
-  grid-template-columns: 12% 11% 30% 16% 17% 14%;
-}
-.fx .sx-pdf-tr > span {
-  padding: 1px 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fx .sx-pdf-tr:nth-child(odd):not(.is-head) {
-  background: #f9faf8;
 }
 .fx .sx-pdf-tr.is-head {
   background: #eef0ec;
   color: #14231d;
   font-weight: 700;
 }
-.fx .sx-pdf-resp {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+.fx .sx-pdf-tr.is-alt {
+  background: #f9faf8;
 }
-.fx .sx-pdf-empty {
-  padding: 8px;
-  color: #5f6e65;
+.fx .sx-pdf-td {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid #e3e7e0;
+  border-bottom: 1px solid #e3e7e0;
 }
-.fx .sx-pdf-foot {
+.fx .sx-pdf-line {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.fx .sx-pdf-swatch {
   position: absolute;
-  right: 5%;
-  bottom: 4px;
-  color: #5f6e65;
-  font-size: 6px;
+  top: 50%;
+  left: calc(1.6 * var(--sx-mm));
+  width: calc(2.5 * var(--sx-mm));
+  height: calc(2.5 * var(--sx-mm));
+  transform: translateY(-50%);
 }
 .fx .sx-pdf-note {
   margin-top: 8px;
-}
-@media (min-width: 1280px) {
-  .fx .sx-pdf-page {
-    font-size: 8px;
-    line-height: 11px;
-  }
 }
 @media (max-width: 767px) {
   .fx .sx-rep-filters {
@@ -2266,7 +2311,34 @@
   }
   .fx .sx-rep-stepper {
     height: auto;
-    margin-top: 0;
+  }
+  .fx .sx-rep-period {
+    display: block;
+    min-width: 0;
+  }
+  .fx .sx-rep-period .sx-rep-stepper {
+    display: flex;
+    width: 100%;
+  }
+  .fx .sx-rep-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  /* "Descargar PDF" a ancho completo (el header deja de medirse por su texto). */
+  .fx .sx-rep .fx-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fx .sx-rep-download {
+    width: 100%;
+    justify-content: center;
+    height: 44px;
+  }
+  .fx .sx-rep-switch {
+    min-height: 44px;
   }
   .fx .sx-rep-stepper > button {
     flex: none;

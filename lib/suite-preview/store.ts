@@ -516,7 +516,9 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
       if (p.lifecycleStage === "integrante") return fail(s, ALREADY_MEMBER);
       if (!Object.hasOwn(FOLLOWUP_TYPE_LABEL, a.input.type)) return fail(s, "Elige un tipo de seguimiento válido.");
       if (!Object.hasOwn(FOLLOWUP_RESULT_LABEL, a.input.result)) return fail(s, "Elige un resultado válido.");
-      if (a.input.ownerUid && !isValidOwner(a.input.ownerUid, s.users)) return fail(s, "El responsable debe tener acceso a Consolidación.");
+      // Solo se valida un responsable NUEVO: si el actual perdió acceso, igual se puede registrar el seguimiento.
+      if (a.input.ownerUid && a.input.ownerUid !== p.followUpOwnerUid && !isValidOwner(a.input.ownerUid, s.users))
+        return fail(s, "El responsable debe tener acceso a Consolidación.");
       const at = a.input.at ?? now;
       if (compareLocal(at, now) > 0) return fail(s, "El seguimiento no puede ser futuro.");
       if ((a.input.note ?? "").length > 1000) return fail(s, "La nota admite máximo 1.000 caracteres.");
@@ -587,6 +589,7 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
       if (!can(actor, "members.consolidation.manage")) return fail(s, NO_PERMISSION);
       const p = s.persons.find((x) => x.id === a.personId);
       if (!p) return fail(s, "La persona no existe.");
+      if (p.lifecycleStage === "integrante") return fail(s, ALREADY_MEMBER);
       if (a.ownerUid && !isValidOwner(a.ownerUid, s.users)) return fail(s, "El responsable debe tener acceso a Consolidación.");
       if (a.ownerUid === p.followUpOwnerUid) return fail(s, "Ya es el responsable.");
       const seq = s.seq + 1;

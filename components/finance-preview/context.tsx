@@ -48,8 +48,10 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sync = () => {
       const q = readQuery();
-      setPeriodState(q.period);
-      setDemoState(q.state);
+      // Conserva la misma referencia si el período no cambió: QUERY_EVENT se emite
+      // por cualquier cambio de query y no debe re-renderizar a los consumidores.
+      setPeriodState((prev) => (periodKey(prev) === periodKey(q.period) ? prev : q.period));
+      setDemoState((prev) => (prev === q.state ? prev : q.state));
     };
     sync();
     window.addEventListener("popstate", sync);

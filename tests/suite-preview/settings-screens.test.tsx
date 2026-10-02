@@ -223,3 +223,37 @@ describe("Configuración › accesibilidad (ciclo 1, M1)", () => {
     }
   });
 });
+
+describe("Configuración › Ajustes de finanzas (ciclo 2, S4)", () => {
+  it("variante suite: h1 «Ajustes de finanzas», sin usuarios ficticios y con enlace a Usuarios y permisos", async () => {
+    const { PreviewProvider } = await import("@/components/finance-preview/context");
+    const { default: Page } = await import("@/app/preview/(suite)/configuracion/finanzas/page.preview");
+    at("/preview/configuracion/finanzas?perfil=admin");
+    render(
+      <PreviewProvider>
+        <Page />
+      </PreviewProvider>,
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "Ajustes de finanzas" })).toBeInTheDocument();
+    expect(screen.getByText("Integraciones, categorías y días de culto.")).toBeInTheDocument();
+    expect(screen.queryByText(/Usuarios y roles/)).toBeNull();
+    expect(screen.queryByText("(ficticios)")).toBeNull();
+    expect(screen.getByRole("link", { name: /Usuarios y permisos/ })).toHaveAttribute("href", "/preview/configuracion/usuarios");
+    expect(screen.getByRole("heading", { name: "Integraciones" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Días de culto" })).toBeInTheDocument();
+  });
+
+  it("ConfiguracionScreen standalone (Financial UX V2) no cambia", async () => {
+    const { PreviewProvider } = await import("@/components/finance-preview/context");
+    const { ConfiguracionScreen } = await import("@/components/finance-preview/screens/analisis");
+    at("/preview/finanzas-2026/configuracion");
+    render(
+      <PreviewProvider>
+        <ConfiguracionScreen />
+      </PreviewProvider>,
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "Configuración" })).toBeInTheDocument();
+    expect(screen.getByText(/Usuarios y roles/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Usuarios y permisos/ })).toBeNull();
+  });
+});

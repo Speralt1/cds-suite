@@ -5,13 +5,13 @@
 // A4 horizontal, rótulo de vista previa, sin notas internas) y una vista previa
 // visual de la primera página del PDF.
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Ban, ChevronLeft, ChevronRight, CircleCheck, Clock, Download, FileX2, Globe, Lock, SlidersHorizontal } from "lucide-react";
-import { activeAreas, areaById } from "@/lib/suite-preview/areas";
+import { activeAreas, AREA_PALETTE, areaById } from "@/lib/suite-preview/areas";
 import { DEMO_NOW, DEMO_TODAY } from "@/lib/suite-preview/clock";
 import { addMonthsClamped, firstOfMonth, lastOfMonth, monthTitle, numericYmd, parseYmd } from "@/lib/suite-preview/dates";
 import { calendarReportRows, calendarReportSummary, OCCURRENCE_STATUS_LABEL, type CalendarReportRow } from "@/lib/suite-preview/report";
+import { calendarPdfLayout, PDF_GEOMETRY, type CalendarPdfLayout, type CalendarReportMeta } from "@/lib/suite-preview/report-pdf";
 import type { OccurrenceStatus } from "@/lib/suite-preview/types";
 import { EmptyState, ErrorState, Panel, Sheet, Skeleton, SkeletonRows } from "@/components/finance-preview/ui";
 import { AreaSwatch, PageHeader } from "../primitives";
@@ -19,6 +19,7 @@ import { useSuite } from "../provider";
 import { replaceQueryParam, useQueryParam } from "../use-query";
 import { SxBadge } from "../calendar/event-bits";
 import { shortDay } from "../calendar/labels";
+import { ReportSections, useBothReportSections } from "./report-sections";
 
 const ALL_STATUSES: OccurrenceStatus[] = ["programada", "realizada", "cancelada"];
 type Vis = "all" | "public" | "team";
@@ -38,7 +39,7 @@ function VisIcon({ v }: { v: "public" | "team" }) {
 const rowDay = (r: CalendarReportRow) => shortDay(r.date);
 
 export function CalendarReport() {
-  const { state, profile, eff, hrefFor, simulate, toast } = useSuite();
+  const { state, profile, simulate, toast } = useSuite();
   const estado = useQueryParam("estado");
   const [month, setMonth] = useState(firstOfMonth(DEMO_TODAY));
   const [areaId, setAreaId] = useState("");
@@ -47,6 +48,7 @@ export function CalendarReport() {
   const [visibility, setVisibility] = useState<Vis>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const periodId = useId();
 
   const areas = state.areas;
   const { y, m } = parseYmd(month);
@@ -78,7 +80,17 @@ export function CalendarReport() {
   const activeFilters = (areaId ? 1 : 0) + (statuses.length !== 3 ? 1 : 0) + (visibility !== "all" ? 1 : 0);
   const summaryLabel = `${summary.total} ${summary.total === 1 ? "actividad" : "actividades"} · ${summary.byStatus.realizada} realizadas · ${summary.byStatus.programada} programadas · ${summary.byStatus.cancelada} canceladas`;
   const byAreaLabel = summary.byArea.map((a) => `${a.name} ${a.count}`).join(" · ");
-  const both = eff.has("finance.details.read");
+  const both = useBothReportSections();
+  const meta: CalendarReportMeta = {
+    periodLabel,
+    filtersLabel,
+    generatedBy: profile?.displayName ?? "Usuario de CDS",
+    generatedOn: `${numericYmd(DEMO_TODAY)} ${DEMO_NOW.slice(11, 16)}`,
+    summaryLabel,
+    byAreaLabel,
+  };
+  // Mismo cálculo que el PDF (barato: decenas de filas).
+  const layout = calendarPdfLayout(rows, meta);
   const clear = () => {
     setAreaId("");
     setOnlyResponsible(false);
@@ -90,14 +102,7 @@ export function CalendarReport() {
     setBusy(true);
     try {
       const { buildCalendarPdf, calendarPdfFileName } = await import("@/lib/suite-preview/report-pdf");
-      const pdf = await buildCalendarPdf(rows, {
-        periodLabel,
-        filtersLabel,
-        generatedBy: profile?.displayName ?? "Usuario de CDS",
-        generatedOn: `${numericYmd(DEMO_TODAY)} ${DEMO_NOW.slice(11, 16)}`,
-        summaryLabel,
-        byAreaLabel,
-      });
+      const pdf = await buildCalendarPdf(rows, meta);
       pdf.save(calendarPdfFileName(month.slice(0, 7)));
       simulate(`PDF generado en tu equipo (${pdf.pageCount} ${pdf.pageCount === 1 ? "página" : "páginas"})`);
     } catch {
@@ -107,69 +112,79 @@ export function CalendarReport() {
     }
   };
 
-  const filterFields = (
-    <>
-      <div className="sx-field">
-        <label htmlFor="sx-rep-area">Área</label>
-        <select id="sx-rep-area" className="fx-select" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
-          <option value="">Todas las áreas</option>
-          {activeAreas(areas).map((a) => (
+  /** Controles de filtro; `prefix` evita ids duplicados entre la fila desktop y el sheet. */
+  const areaField = (prefix: string) => (
+    <div className="sx-field sx-rep-field">
+      <label htmlFor={`${prefix}-area`}>Área</label>
+      <select id={`${prefix}-area`} className="fx-select" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+        <option value="">Todas las áreas</option>
+        {activeAreas(areas).map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+        {areas
+          .filter((a) => !a.active)
+          .map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {a.name} (inactiva)
             </option>
           ))}
-          {areas
-            .filter((a) => !a.active)
-            .map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} (inactiva)
-              </option>
-            ))}
-        </select>
-        <label className="sx-switch">
-          <input type="checkbox" role="switch" checked={onlyResponsible} disabled={!areaId} onChange={(e) => setOnlyResponsible(e.target.checked)} />
-          <span>Solo como responsable</span>
-        </label>
+      </select>
+    </div>
+  );
+  const responsibleSwitch = (
+    <label className="sx-switch sx-rep-switch">
+      <input type="checkbox" role="switch" checked={onlyResponsible} disabled={!areaId} onChange={(e) => setOnlyResponsible(e.target.checked)} />
+      <span>Solo como responsable</span>
+    </label>
+  );
+  const statusField = (
+    <fieldset className="sx-cal-fieldset sx-rep-group">
+      <legend className="sx-legend">Estado</legend>
+      <div className="sx-rep-checks">
+        {ALL_STATUSES.map((s) => (
+          <label key={s} className="sx-cal-check">
+            <input
+              type="checkbox"
+              checked={statuses.includes(s)}
+              onChange={(e) => setStatuses(e.target.checked ? ALL_STATUSES.filter((x) => x === s || statuses.includes(x)) : statuses.filter((x) => x !== s))}
+            />
+            <span>{OCCURRENCE_STATUS_LABEL[s]}</span>
+          </label>
+        ))}
       </div>
-      <fieldset className="sx-cal-fieldset sx-rep-group">
-        <legend className="sx-legend">Estado</legend>
-        <div className="sx-rep-checks">
-          {ALL_STATUSES.map((s) => (
-            <label key={s} className="sx-cal-check">
-              <input
-                type="checkbox"
-                checked={statuses.includes(s)}
-                onChange={(e) => setStatuses(e.target.checked ? ALL_STATUSES.filter((x) => x === s || statuses.includes(x)) : statuses.filter((x) => x !== s))}
-              />
-              <span>{OCCURRENCE_STATUS_LABEL[s]}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset className="sx-cal-fieldset sx-rep-group">
-        <legend className="sx-legend">Visibilidad</legend>
-        <div className="fx-segmented sx-rep-vis" role="group" aria-label="Visibilidad">
-          {(Object.keys(VIS_LABEL) as Vis[]).map((v) => (
-            <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)}>
-              {VIS_LABEL[v]}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-    </>
+    </fieldset>
+  );
+  const visibilityField = (
+    <fieldset className="sx-cal-fieldset sx-rep-group">
+      <legend className="sx-legend">Visibilidad</legend>
+      <div className="fx-segmented sx-rep-vis" role="group" aria-label="Visibilidad">
+        {(Object.keys(VIS_LABEL) as Vis[]).map((v) => (
+          <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)}>
+            {VIS_LABEL[v]}
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 
   const stepper = (
-    <div className="fx-stepper sx-rep-stepper" role="group" aria-label="Período">
-      <button type="button" aria-label="Mes anterior" onClick={() => setMonth(firstOfMonth(addMonthsClamped(month, -1)))}>
-        <ChevronLeft size={16} aria-hidden="true" />
-      </button>
-      <span className="fx-stepper-label" aria-live="polite">
-        {periodLabel}
+    <div className="sx-rep-period">
+      <span className="sx-rep-label" id={periodId}>
+        Período
       </span>
-      <button type="button" aria-label="Mes siguiente" onClick={() => setMonth(firstOfMonth(addMonthsClamped(month, 1)))}>
-        <ChevronRight size={16} aria-hidden="true" />
-      </button>
+      <div className="fx-stepper sx-rep-stepper" role="group" aria-labelledby={periodId}>
+        <button type="button" aria-label="Mes anterior" onClick={() => setMonth(firstOfMonth(addMonthsClamped(month, -1)))}>
+          <ChevronLeft size={16} aria-hidden="true" />
+        </button>
+        <span className="fx-stepper-label" aria-live="polite">
+          {periodLabel}
+        </span>
+        <button type="button" aria-label="Mes siguiente" onClick={() => setMonth(firstOfMonth(addMonthsClamped(month, 1)))}>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 
@@ -311,7 +326,7 @@ export function CalendarReport() {
         </Panel>
 
         <Panel title="Vista previa del PDF" labelledBy="sx-pdf-preview-title" className="sx-pdf-panel">
-          <PdfMock rows={rows} periodLabel={periodLabel} filtersLabel={filtersLabel} summaryLabel={summaryLabel} generatedBy={profile?.displayName ?? ""} />
+          <PdfMock rows={rows} layout={layout} periodLabel={periodLabel} />
           <p className="fx-help sx-pdf-note">A4 horizontal · se genera en tu equipo, sin conexión · no incluye notas internas ni motivos.</p>
         </Panel>
       </div>
@@ -324,22 +339,20 @@ export function CalendarReport() {
         title={both ? "Reportes" : "Reportes · Calendario"}
         subtitle="Actividades por período, área, estado y visibilidad."
         actions={
-          <button type="button" className="fx-btn fx-btn-secondary" onClick={download} disabled={busy || estado === "cargando" || estado === "error"}>
+          <button type="button" className="fx-btn fx-btn-secondary sx-rep-download" onClick={download} disabled={busy || estado === "cargando" || estado === "error"}>
             <Download size={16} aria-hidden="true" /> {busy ? "Generando…" : "Descargar PDF"}
           </button>
         }
       />
-      {both && (
-        <nav className="fx-segmented sx-rep-sections" aria-label="Secciones de Reportes">
-          <Link href={hrefFor("/preview/reportes/finanzas")}>Finanzas</Link>
-          <Link href={hrefFor("/preview/reportes/calendario")} aria-current="page">
-            Calendario
-          </Link>
-        </nav>
-      )}
+      <ReportSections current="calendario" />
       <div className="sx-rep-filters">
         {stepper}
-        <div className="sx-rep-filters-desktop">{filterFields}</div>
+        <div className="sx-rep-filters-desktop">
+          {areaField("sx-rep")}
+          {statusField}
+          {visibilityField}
+          {responsibleSwitch}
+        </div>
         <button type="button" className="fx-btn fx-btn-secondary sx-rep-filters-btn" onClick={() => setFiltersOpen(true)}>
           <SlidersHorizontal size={16} aria-hidden="true" /> Filtros{activeFilters ? ` (${activeFilters})` : ""}
         </button>
@@ -361,76 +374,90 @@ export function CalendarReport() {
           </div>
         }
       >
-        <div className="sx-cal-form">{filterFields}</div>
+        <div className="sx-cal-form">
+          <div className="sx-rep-sheet-area">
+            {areaField("sx-rep-sheet")}
+            {responsibleSwitch}
+          </div>
+          {statusField}
+          {visibilityField}
+        </div>
       </Sheet>
     </div>
   );
 }
 
-/** Maqueta visual de la primera página del PDF (no es el PDF: es su vista previa). */
-function PdfMock({
-  rows,
-  periodLabel,
-  filtersLabel,
-  summaryLabel,
-  generatedBy,
-}: {
-  rows: CalendarReportRow[];
-  periodLabel: string;
-  filtersLabel: string;
-  summaryLabel: string;
-  generatedBy: string;
-}) {
+const G = PDF_GEOMETRY;
+/** Longitud en mm → CSS relativo al ancho de la página (container query). */
+const mm = (v: number) => `calc(${v} * var(--sx-mm))`;
+const pt = (v: number) => mm(v * G.mmPerPt);
+const COLS = G.columnWidths.map((w) => mm(w)).join(" ");
+
+/**
+ * Maqueta de la primera página del PDF (no es el PDF: es su vista previa).
+ * Usa el mismo cálculo que el PDF (calendarPdfLayout): mismas líneas, mismo
+ * alto de fila y mismas filas en la página 1, a escala del ancho disponible.
+ */
+function PdfMock({ rows, layout, periodLabel }: { rows: CalendarReportRow[]; layout: CalendarPdfLayout; periodLabel: string }) {
   const { state } = useSuite();
-  const first = rows.slice(0, 12);
-  const pages = Math.max(1, Math.ceil(Math.max(0, rows.length - 14) / 22) + 1);
+  const first = layout.pages[0] ?? [];
+  const tableRow = (lines: string[][], height: number, cls: string, key: string, row?: CalendarReportRow) => (
+    <div key={key} className={`sx-pdf-tr ${cls}`} style={{ height: mm(height), gridTemplateColumns: COLS }}>
+      {lines.map((cell, col) => {
+        const ar = row && col === G.responsibleColumn ? areaById(state.areas, row.responsibleAreaId) : undefined;
+        return (
+          <span
+            key={col}
+            className="sx-pdf-td"
+            style={{ padding: `${mm(G.padding)} ${mm(G.padding)} ${mm(G.padding)} ${mm(col === G.responsibleColumn ? G.responsiblePadLeft : G.padding)}` }}
+          >
+            {ar && <span className="sx-pdf-swatch" style={{ background: AREA_PALETTE[ar.color].swatch }} />}
+            {cell.map((l, i) => (
+              <span key={i} className="sx-pdf-line">
+                {l || " "}
+              </span>
+            ))}
+          </span>
+        );
+      })}
+    </div>
+  );
   return (
     <figure className="sx-pdf" aria-label={`Vista previa de la primera página del PDF: ${periodLabel}`}>
       <div className="sx-pdf-page" aria-hidden="true">
-        <div className="sx-pdf-band">
-          <span>Casa de Salvación</span>
-          <span>VISTA PREVIA · DATOS DE DEMOSTRACIÓN</span>
-        </div>
-        <div className="sx-pdf-head">
-          <p className="sx-pdf-church">Casa de Salvación</p>
-          <p className="sx-pdf-title">Reporte de actividades · {periodLabel}</p>
-          <p className="sx-pdf-meta">Filtros: {filtersLabel}</p>
-          <p className="sx-pdf-meta">
-            Generado por {generatedBy} el {numericYmd(DEMO_TODAY)} {DEMO_NOW.slice(11, 16)}
-          </p>
-          <p className="sx-pdf-meta is-strong">Resumen: {summaryLabel}</p>
-        </div>
-        <div className="sx-pdf-table">
-          <div className="sx-pdf-tr is-head">
-            <span>Fecha</span>
-            <span>Hora</span>
-            <span>Actividad</span>
-            <span>Responsable</span>
-            <span>Lugar</span>
-            <span>Estado</span>
+        <div className="sx-pdf-sheet" style={{ fontSize: pt(G.fontSize), lineHeight: mm(G.lineHeight) }}>
+          <div className="sx-pdf-band" style={{ height: mm(9), padding: `0 ${mm(G.margin.left)}` }}>
+            <span>Casa de Salvación</span>
+            <span>VISTA PREVIA · DATOS DE DEMOSTRACIÓN</span>
           </div>
-          {first.map((r) => {
-            const ar = areaById(state.areas, r.responsibleAreaId);
-            return (
-              <div key={r.key} className="sx-pdf-tr">
-                <span>{r.dateLabel}</span>
-                <span>{r.time}</span>
-                <span>{r.title}</span>
-                <span className="sx-pdf-resp">
-                  {ar && <AreaSwatch color={ar.color} size={6} shape="square" />}
-                  {r.responsible}
-                </span>
-                <span>{r.location}</span>
-                <span>{r.statusLabel}</span>
-              </div>
-            );
-          })}
-          {rows.length === 0 && <div className="sx-pdf-empty">No hay actividades con estos filtros.</div>}
+          {layout.header.flatMap((h, i) =>
+            (Array.isArray(h.text) ? h.text : [h.text]).map((t, j) => (
+              <p
+                key={`${i}-${j}`}
+                className={`sx-pdf-hline ${h.tone === "strong" ? "is-strong" : ""} ${h.bold ? "is-bold" : ""}`}
+                style={{ top: mm(h.y + j * h.size * 1.15 * G.mmPerPt - h.size * G.mmPerPt * 0.78), left: mm(G.margin.left), fontSize: pt(h.size) }}
+              >
+                {t}
+              </p>
+            )),
+          )}
+          <div className="sx-pdf-table" style={{ top: mm(layout.startY), left: mm(G.margin.left), width: mm(G.page.width - G.margin.left - G.margin.right) }}>
+            {tableRow(layout.head.lines, layout.head.height, "is-head", "head")}
+            {first.map((idx, i) => tableRow(layout.rows[idx].lines, layout.rows[idx].height, i % 2 === 0 ? "is-alt" : "", rows[idx].key, rows[idx]))}
+          </div>
+          {rows.length === 0 && (
+            <p className="sx-pdf-hline" style={{ top: mm(layout.startY + 13 - 10 * G.mmPerPt * 0.78), left: mm(G.margin.left), fontSize: pt(10) }}>
+              No hay actividades con estos filtros.
+            </p>
+          )}
+          <p className="sx-pdf-foot" style={{ top: mm(G.page.height - 7 - G.fontSize * G.mmPerPt * 0.78), right: mm(G.margin.right) }}>
+            Página 1 de {layout.pageCount}
+          </p>
         </div>
-        <div className="sx-pdf-foot">Página 1 de {pages}</div>
       </div>
       <figcaption className="fx-help">
-        Primera página · {rows.length} {rows.length === 1 ? "fila" : "filas"} en total
+        Primera página · {first.length} de {rows.length} {rows.length === 1 ? "fila" : "filas"} · {layout.pageCount}{" "}
+        {layout.pageCount === 1 ? "página" : "páginas"}
       </figcaption>
     </figure>
   );

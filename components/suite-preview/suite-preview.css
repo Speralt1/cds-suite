@@ -555,6 +555,17 @@
     padding: 24px 16px;
   }
 }
+/* Tarea enfocada (FOCUSED_ROUTES en lib/suite-preview/modules): sin barra inferior;
+   el footer sticky del formulario baja al borde y el main no reserva sus 64 px. */
+@media (max-width: 767px) {
+  .fx .sx-focused .fx-main {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  .fx .sx-focused .sx-form-foot {
+    bottom: 0;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
 .fx .sx-login-main {
   padding: 32px 16px 64px;
 }

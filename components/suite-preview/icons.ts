@@ -8,6 +8,8 @@ import {
   CircleDollarSign,
   Coffee,
   Contact,
+  FileChartColumn,
+  FileChartLine,
   HandCoins,
   HandHeart,
   Inbox,
@@ -51,4 +53,6 @@ export const ICONS: Record<IconName, LucideIcon> = {
   UserCog,
   Plug,
   PieChart: ChartPie,
+  FileChartColumn,
+  FileChartLine,
 };

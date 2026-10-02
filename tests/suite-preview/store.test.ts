@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAction, initialSuiteState, type SuiteState } from "@/lib/suite-preview/store";
-import { personStats } from "@/lib/suite-preview/consolidation";
+import { isValidOwner, personStats } from "@/lib/suite-preview/consolidation";
 import { canManageEvent, canManageSeries, TEMPORAL_LOCK_HELP } from "@/lib/suite-preview/calendar";
 
 function deepFreeze<T>(o: T): T {
@@ -245,5 +245,54 @@ describe("store · consolidación (validaciones del servidor)", () => {
     const v = s.visits.find((x) => !x.voided)!;
     const r = applyAction(s, { type: "visit/void", by: "consolidacion", visitId: v.id, reason: "Registrada dos veces" }, "2026-10-04T12:30");
     expect(r.ok && r.state.visits.find((x) => x.id === v.id)).toMatchObject({ voided: true, voidReason: "Registrada dos veces", voidedBy: "consolidacion", voidedAt: "2026-10-04T12:30" });
+  });
+});
+
+describe("store · ciclo 2 (responsable sin acceso, integrantes, series canceladas)", () => {
+  it("followup/register con p-07 (responsable `lider` sin acceso): sin cambiar responsable → ok; a otro sin acceso → rechazo", () => {
+    const s = fresh();
+    const p = s.persons.find((x) => x.id === "p-07")!;
+    expect(p.followUpOwnerUid).toBe("lider");
+    expect(isValidOwner("lider", s.users)).toBe(false);
+    const base = { personId: "p-07", type: "llamada", result: "contactado" } as const;
+    // Sin ownerUid: conserva el responsable actual aunque ya no tenga acceso.
+    const keep = applyAction(s, { type: "followup/register", by: "consolidacion", input: base });
+    expect(keep.ok).toBe(true);
+    expect(keep.state.followUps.at(-1)).toMatchObject({ personId: "p-07", ownerUid: "lider" });
+    // Reenviando el MISMO responsable: tampoco se revalida.
+    expect(applyAction(s, { type: "followup/register", by: "consolidacion", input: { ...base, ownerUid: "lider" } }).ok).toBe(true);
+    // Cambiar a otro usuario sin acceso a Consolidación: rechazo.
+    expect(applyAction(s, { type: "followup/register", by: "consolidacion", input: { ...base, ownerUid: "finanzas" } })).toMatchObject({
+      ok: false,
+      error: "El responsable debe tener acceso a Consolidación.",
+    });
+    // Cambiar a un responsable válido: ok.
+    const changed = applyAction(s, { type: "followup/register", by: "consolidacion", input: { ...base, ownerUid: "consolidacion" } });
+    expect(changed.ok && changed.state.followUps.at(-1)!.ownerUid).toBe("consolidacion");
+  });
+
+  it("person/assignOwner rechaza integrantes con el mismo mensaje que el resto de acciones", () => {
+    const s = fresh();
+    expect(applyAction(s, { type: "person/assignOwner", by: "consolidacion", personId: "p-14", ownerUid: "consolidacion" })).toMatchObject({
+      ok: false,
+      error: "Esta persona ya está integrada; se gestiona desde Integrantes.",
+    });
+    expect(applyAction(s, { type: "person/assignOwner", by: "consolidacion", personId: "p-07", ownerUid: "consolidacion" }).ok).toBe(true);
+  });
+
+  it("serie cancelada (seriesCancellation): solo lectura para manage_assigned; Administración sí la edita", () => {
+    const cancelled = applyAction(fresh(), { type: "event/cancelSeriesFrom", by: "lider", id: "ev-jovenes", reason: "Se termina el ciclo" });
+    expect(cancelled.ok).toBe(true);
+    const s = cancelled.state;
+    const e = s.events.find((x) => x.id === "ev-jovenes")!;
+    const lider = s.users.find((u) => u.uid === "lider")!;
+    const admin = s.users.find((u) => u.uid === "admin")!;
+    expect(canManageSeries(lider, e, s.areas, "2026-10-04")).toBe(false);
+    expect(canManageSeries(lider, e, s.areas)).toBe(false);
+    expect(canManageEvent(lider, e, s.areas, "2026-10-04", "2026-10-09")).toBe(false);
+    expect(canManageSeries(admin, e, s.areas, "2026-10-04")).toBe(true);
+    expect(applyAction(s, { type: "event/updateSeries", by: "lider", id: "ev-jovenes", patch: { title: "Jóvenes 2" } })).toMatchObject({ ok: false });
+    expect(applyAction(s, { type: "event/archive", by: "lider", id: "ev-jovenes", reason: "Ya no se hace" })).toMatchObject({ ok: false });
+    expect(applyAction(s, { type: "event/updateSeries", by: "admin", id: "ev-jovenes", patch: { title: "Jóvenes 2" } }).ok).toBe(true);
   });
 });

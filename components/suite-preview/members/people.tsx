@@ -487,7 +487,8 @@ function PeopleList({ rows }: { rows: PersonView[] }) {
                 {STATUS_LABEL[p.consolidationStatus]}
               </span>
               <span className="sx-prow-l2">
-                {v.age === null ? "Edad desconocida" : `${v.age} años`} · {plural(v.stats.visitCount, "visita", "visitas")} · llegó {relDay(p.entryDate, m.today)}
+                {v.age === null ? "Edad desconocida" : `${v.age} años`} · {plural(v.stats.visitCount, "visita", "visitas")} ·{" "}
+                <span className="sx-nowrap">llegó {relDay(p.entryDate, m.today)}</span>
               </span>
               {top && AlertI ? (
                 <span className={`sx-prow-l3 sx-ink-${ALERT_VIS[top.type].tone}`}>
@@ -497,8 +498,15 @@ function PeopleList({ rows }: { rows: PersonView[] }) {
                 </span>
               ) : v.next ? (
                 <span className="sx-prow-l3">
-                  Próxima: {v.next.text}
-                  {v.next.date ? ` · ${relDay(v.next.date, m.today)}` : ""}
+                  <span>
+                    Próxima: {v.next.text}
+                    {v.next.date ? (
+                      <>
+                        {" · "}
+                        <span className="sx-nowrap">{relDay(v.next.date, m.today)}</span>
+                      </>
+                    ) : null}
+                  </span>
                 </span>
               ) : p.doNotContact ? (
                 <span className="sx-prow-l3">No contactar</span>

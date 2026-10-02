@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { areaById } from "@/lib/suite-preview/areas";
+import { compareDayOrder, occurrenceOrderKey } from "@/lib/suite-preview/calendar";
 import { compareLocal, daysBetween, parseYmd, WEEKDAY_NAMES, weekdayOf } from "@/lib/suite-preview/dates";
 import type { Area, Occurrence, Ymd } from "@/lib/suite-preview/types";
 import { areaStyle } from "../primitives";
@@ -40,7 +41,7 @@ function minutes(t: string | undefined): number {
   return h * 60 + m;
 }
 
-interface Segment {
+export interface Segment {
   o: Occurrence;
   day: Ymd;
   start: number;
@@ -51,7 +52,12 @@ interface Segment {
   cols: number;
 }
 
-function segmentsFor(list: readonly Occurrence[], days: readonly Ymd[]): Segment[] {
+/**
+ * Segmentos por día con su columna. A igual hora de inicio, el orden de las
+ * columnas usa el comparador único compareDayOrder (área responsable, título),
+ * igual que Mes, Agenda y el resto de las vistas.
+ */
+export function segmentsFor(list: readonly Occurrence[], days: readonly Ymd[], areas: readonly Area[]): Segment[] {
   const set = new Set(days);
   const out: Segment[] = [];
   for (const o of list) {
@@ -68,7 +74,8 @@ function segmentsFor(list: readonly Occurrence[], days: readonly Ymd[]): Segment
   }
   // Columnas por grupo de superposición (por día).
   for (const day of days) {
-    const segs = out.filter((x) => x.day === day).sort((a, b) => a.start - b.start || b.end - a.end);
+    const order = (x: Segment) => ({ ...occurrenceOrderKey(x.o, areas), date: day, allDay: false, startTime: "" });
+    const segs = out.filter((x) => x.day === day).sort((a, b) => a.start - b.start || compareDayOrder(order(a), order(b)));
     let cluster: Segment[] = [];
     let clusterEnd = -1;
     const flush = () => {
@@ -162,7 +169,7 @@ export function WeekGrid({
     else el.scrollTop = top;
   };
 
-  const segs = segmentsFor(occurrences, days);
+  const segs = segmentsFor(occurrences, days, areas);
   const bars = allDayBars(occurrences, days[0]);
   const visibleBars = bars.filter((b) => b.lane < 2);
   const hiddenByDay = days.map((_, i) => bars.filter((b) => b.lane >= 2 && b.startIdx <= i && b.startIdx + b.span - 1 >= i).length);
@@ -200,7 +207,14 @@ export function WeekGrid({
           })}
           {hiddenByDay.map((n, i) =>
             n > 0 ? (
-              <button key={days[i]} type="button" className="sx-more-link" style={{ gridColumn: i + 1, gridRow: 3 }} onClick={() => onOpenDay(days[i])}>
+              <button
+                key={days[i]}
+                type="button"
+                className="sx-more-link"
+                style={{ gridColumn: i + 1, gridRow: 3 }}
+                aria-label={`Ver ${n} ${n === 1 ? "actividad" : "actividades"} más del ${WEEKDAY_NAMES[weekdayOf(days[i])]} ${parseYmd(days[i]).d}`}
+                onClick={() => onOpenDay(days[i])}
+              >
                 +{n}
               </button>
             ) : null,

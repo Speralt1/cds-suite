@@ -80,6 +80,19 @@ function SimulatorFooter({ onPick }: { onPick: () => void }) {
   );
 }
 
+const SHORT_BY_UID: Record<string, string> = { "sin-permisos": "Sin acceso" };
+const SHORT_BY_CARGO: Record<string, string> = { Administración: "Admin", Consolidación: "Consolid." };
+
+/**
+ * Etiqueta corta (nunca vacía) del simulador bajo 400 px: "Admin", "Líder",
+ * "Consolid."… Si no hay cargo, las iniciales.
+ */
+export function shortSimulatorLabel(p: AccessProfile | null): string {
+  if (!p) return "Perfil no válido";
+  const cargo = p.cargo.trim();
+  return SHORT_BY_UID[p.uid] ?? SHORT_BY_CARGO[cargo] ?? (cargo || initialsOf(p));
+}
+
 /** Botón "Ver como: {cargo} · {nombre}" con popover (desktop) o bottom sheet (móvil). */
 export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" }) {
   const suite = useSuiteOptional();
@@ -100,9 +113,9 @@ export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" })
   }, [open, variant]);
   if (!suite) return null;
   const label = suite.profile ? simulatorLabel(suite.profile) : "Perfil no válido";
-  // Bajo 400 px el móvil muestra solo el cargo ("Ver como: Líder"); el nombre
-  // accesible completo va en aria-label (el texto oculto no cuenta para el nombre).
-  const short = label.split(" · ")[0];
+  // Bajo 400 px el móvil muestra solo una etiqueta corta ("Ver como: Líder",
+  // "Ver como: Admin"); el nombre accesible completo va en aria-label.
+  const short = shortSimulatorLabel(suite.profile);
   const id = `sx-sim-${variant}`;
   const close = () => setOpen(false);
   return (
@@ -119,7 +132,7 @@ export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" })
         <UserRoundCog size={14} aria-hidden="true" />
         <span className="sx-sim-label">
           Ver como: <span className="sx-sim-who">{label}</span>
-          {variant === "mobile" && short !== label && <span className="sx-sim-who-short">{short}</span>}
+          {variant === "mobile" && <span className="sx-sim-who-short">{short}</span>}
         </span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>

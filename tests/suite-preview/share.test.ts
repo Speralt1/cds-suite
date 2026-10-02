@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { AREAS, DEMO_NOW, DEMO_TODAY, EVENTS, LEAK_CANARIES, LEAK_STRINGS, SHARE_LINK, USERS } from "@/lib/suite-preview/fixtures";
-import { PUBLIC_AREA_KEYS, PUBLIC_CALENDAR_KEYS, PUBLIC_EVENT_KEYS, previewShareHref, productionShareUrl, resolvePublicCalendar, sortPublicEvents } from "@/lib/suite-preview/share";
+import {
+  PUBLIC_AREA_KEYS,
+  PUBLIC_CALENDAR_KEYS,
+  PUBLIC_EVENT_KEYS,
+  previewShareHref,
+  productionShareUrl,
+  publicRecurrenceLabel,
+  resolvePublicCalendar,
+  sortPublicEvents,
+} from "@/lib/suite-preview/share";
 import { applyAction, initialSuiteState } from "@/lib/suite-preview/store";
 import type { PublicArea } from "@/lib/suite-preview/types";
 
@@ -98,5 +107,32 @@ describe("proyección pública · correcciones ciclo 1", () => {
   it("C9: la URL con formato de producción usa un dominio neutro reservado", () => {
     expect(productionShareUrl("demo")).toBe("https://suite.casadesalvacion.example/calendario/compartir/demo");
     expect(productionShareUrl("demo")).not.toMatch(/web\.app|firebaseapp|cds-administracion/);
+  });
+});
+
+describe("proyección pública · correcciones ciclo 2", () => {
+  const culto = EVENTS.find((e) => e.id === "ev-culto")!;
+  const cancelFrom = (from: string) => ({ ...culto, seriesCancellation: { from, reason: "Motivo interno", by: "u-admin", at: `${DEMO_TODAY}T10:00` } });
+
+  it("C8: con la serie cancelada, el texto se repite hasta el día anterior a `from`", () => {
+    expect(publicRecurrenceLabel(cancelFrom("2026-10-11"))).toBe("Se repite cada domingo hasta el 10 oct 2026");
+    // Si el `until` original es anterior al corte, se mantiene.
+    expect(publicRecurrenceLabel({ ...cancelFrom("2026-12-31"), recurrence: { freq: "weekly", until: "2026-11-29" } })).toBe(
+      "Se repite cada domingo hasta el 29 nov 2026",
+    );
+    // Sin fechas antes del corte → null.
+    expect(publicRecurrenceLabel(cancelFrom(culto.startDate))).toBeNull();
+    // Sin cancelación: igual que antes.
+    expect(publicRecurrenceLabel(culto)).toBe("Se repite cada domingo hasta el 28 feb 2027");
+  });
+
+  it("C8: la proyección pública usa ese texto y nunca el motivo", () => {
+    const events = EVENTS.map((e) => (e.id === "ev-culto" ? cancelFrom("2026-10-11") : e));
+    const cal = resolve("demo", SHARE_LINK, events)!;
+    const cultos = cal.events.filter((e) => e.title === "Culto dominical");
+    expect(cultos.length).toBeGreaterThan(0);
+    expect(new Set(cultos.map((e) => e.recurrenceLabel))).toEqual(new Set(["Se repite cada domingo hasta el 10 oct 2026"]));
+    expect(cultos.filter((e) => e.startDate >= "2026-10-11").every((e) => e.status === "cancelada")).toBe(true);
+    expect(JSON.stringify(cal)).not.toContain("Motivo interno");
   });
 });

@@ -91,3 +91,15 @@ describe("validateEvent", () => {
     expect(validateEvent({ ...valid, title: " " }, { profile: lider, areas: AREAS, today }).title).toBeTruthy();
   });
 });
+
+describe("serie cancelada: la UI no ofrece lo que el store rechaza (ciclo 2, S2)", () => {
+  it("manage_assigned ve la serie cancelada en solo lectura con explicación; Administración conserva Editar", async () => {
+    const { eventActions, SERIES_CANCELLED_REASON } = await import("@/components/suite-preview/calendar/permissions");
+    const e = { ...ev("ev-jovenes"), seriesCancellation: { from: today, reason: "Se termina el ciclo", by: "lider", at: DEMO_NOW } };
+    const [o] = occurrencesInRange([e], today, "2026-10-31", DEMO_NOW).filter((x) => x.event.id === "ev-jovenes");
+    expect(o).toBeDefined();
+    const lider = eventActions(user("lider"), o, AREAS, today);
+    expect(lider).toMatchObject({ canEdit: false, canCancel: false, canArchive: false, canCancelSeries: false, reason: SERIES_CANCELLED_REASON });
+    expect(eventActions(user("admin"), o, AREAS, today).canEdit).toBe(true);
+  });
+});

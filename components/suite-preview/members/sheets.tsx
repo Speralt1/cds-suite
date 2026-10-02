@@ -278,6 +278,9 @@ const TYPES: FollowUpType[] = ["whatsapp", "llamada", "presencial", "otro"];
 const RESULTS: FollowUpResult[] = ["contactado", "sin_respuesta", "numero_invalido", "no_desea_contacto", "otro"];
 const NEXT_SUGGESTIONS = ["Invitar al culto del miércoles", "Llamar de nuevo", "Invitar a un grupo"];
 
+/** Valor del select para "Sin asignar" cuando "" significa "no cambiar". */
+const UNASSIGN = "__sin_asignar__";
+
 const INTENT_HINT: Record<FollowUpIntent, string> = {
   agradecer: "Agradece su visita y cuéntale que es bienvenida.",
   contactar: "Primer contacto: preséntate y agradece su visita.",
@@ -294,7 +297,12 @@ function FollowUpSheet({ open, onClose, person, intent }: SheetProps & { intent?
   const [note, setNote] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [nextDate, setNextDate] = useState("");
-  const [owner, setOwner] = useState(person.followUpOwnerUid ?? "");
+  // Si el responsable actual perdió acceso, el select parte en "Elige un
+  // responsable" y no se envía ownerUid salvo que se elija otro (se mantiene).
+  const currentOwner = person.followUpOwnerUid ?? null;
+  const ownerLost = !!currentOwner && !v.ownerValid;
+  const lostOwnerName = ownerLost ? (m.state.users.find((u) => u.uid === currentOwner)?.displayName ?? null) : null;
+  const [owner, setOwner] = useState(ownerLost ? "" : (currentOwner ?? ""));
   const [chkStatus, setChkStatus] = useState(true);
   const [chkDnc, setChkDnc] = useState(true);
   const [chkClose, setChkClose] = useState(true);
@@ -312,6 +320,9 @@ function FollowUpSheet({ open, onClose, person, intent }: SheetProps & { intent?
     setErrors(errs);
     if (Object.keys(errs).length || !result) return;
     const sug = suggestion;
+    // "" con responsable sin acceso = no tocar; UNASSIGN = dejar sin asignar.
+    const pickedOwner = owner === UNASSIGN ? null : owner === "" ? (ownerLost ? currentOwner : null) : owner;
+    const ownerChange = pickedOwner === currentOwner ? {} : { ownerUid: pickedOwner };
     const status =
       sug.status === "en_seguimiento" && chkStatus ? sug.status : sug.status === "sin_continuidad" && chkClose ? sug.status : undefined;
     const res = m.dispatch(
@@ -325,7 +336,7 @@ function FollowUpSheet({ open, onClose, person, intent }: SheetProps & { intent?
           ...(note.trim() ? { note } : {}),
           ...(nextAction.trim() ? { nextAction } : {}),
           ...(nextDate ? { nextActionDate: nextDate } : {}),
-          ownerUid: owner || null,
+          ...ownerChange,
         },
         ...(status ? { confirmStatus: status } : {}),
         ...(status === "sin_continuidad" ? { confirmClosedReason: "no_desea_contacto" as ClosedReason } : {}),
@@ -485,17 +496,30 @@ function FollowUpSheet({ open, onClose, person, intent }: SheetProps & { intent?
           </div>
           <div className="fx-field">
             <label htmlFor="sx-fu-owner">Responsable</label>
-            <select id="sx-fu-owner" className="fx-select" value={owner} onChange={(e) => setOwner(e.target.value)}>
-              <option value="">Sin asignar</option>
+            <select
+              id="sx-fu-owner"
+              className="fx-select"
+              value={owner}
+              aria-describedby={ownerLost ? "sx-fu-owner-help" : undefined}
+              onChange={(e) => setOwner(e.target.value)}
+            >
+              <option value="">{ownerLost ? "Elige un responsable" : "Sin asignar"}</option>
+              {ownerLost && <option value={UNASSIGN}>Sin asignar</option>}
               {ownerOptions.map((u) => (
                 <option key={u.uid} value={u.uid}>
                   {u.displayName}
                 </option>
               ))}
-              {owner && !ownerOptions.some((u) => u.uid === owner) && (
-                <option value={owner}>{m.state.users.find((u) => u.uid === owner)?.displayName ?? "Responsable"} (sin acceso)</option>
-              )}
             </select>
+            {ownerLost && (
+              <p id="sx-fu-owner-help" className="fx-help sx-owner-lost">
+                <TriangleAlert size={14} aria-hidden="true" />
+                <span>
+                  El responsable actual ya no tiene acceso{lostOwnerName ? ` (${lostOwnerName})` : ""}. Si no eliges otro, el seguimiento se
+                  guarda igual.
+                </span>
+              </p>
+            )}
           </div>
         </div>
       </form>

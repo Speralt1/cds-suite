@@ -440,3 +440,64 @@ describe("privacidad: «Llegó a» sin calendar.read solo ofrece actividades pú
     expect(opts.some((t) => t.startsWith("Ensayo de alabanza"))).toBe(false);
   });
 });
+
+describe("seguimiento con responsable sin acceso (ciclo 2 · M1)", () => {
+  /** Expone el último seguimiento de p-07 y su responsable actual para las aserciones. */
+  function FollowUpProbe() {
+    const suite = useSuite();
+    const mine = suite.state.followUps.filter((f) => f.personId === "p-07");
+    const last = mine[mine.length - 1];
+    const p = suite.state.persons.find((x) => x.id === "p-07");
+    return <output data-testid="fu-probe" data-count={mine.length} data-owner={last?.ownerUid ?? "null"} data-person-owner={p?.followUpOwnerUid ?? "null"} />;
+  }
+
+  const openFernanda = () => {
+    at(`${C}/persona?id=p-07&perfil=consolidacion`);
+    inSuite(
+      <>
+        <FollowUpProbe />
+        <PersonScreen />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Registrar seguimiento de Fernanda Morales" }));
+  };
+
+  it("parte en «Elige un responsable», avisa que ya no tiene acceso y guarda sin tocar el responsable", () => {
+    openFernanda();
+    const probe = screen.getByTestId("fu-probe");
+    const before = Number(probe.getAttribute("data-count"));
+    const owner = screen.getByLabelText("Responsable", { selector: "#sx-fu-owner" }) as HTMLSelectElement;
+    expect(owner.value).toBe("");
+    expect(owner.selectedOptions[0].textContent).toBe("Elige un responsable");
+    expect([...owner.options].some((o) => /sin acceso/.test(o.textContent ?? ""))).toBe(false);
+    expect(owner).toHaveAccessibleDescription(/El responsable actual ya no tiene acceso/);
+    fireEvent.click(screen.getByRole("radio", { name: "Contactado" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar seguimiento" }));
+    expect(screen.getByText("Seguimiento registrado. Simulación: no se guardó nada.")).toBeInTheDocument();
+    expect(Number(probe.getAttribute("data-count"))).toBe(before + 1);
+    // No se envió ownerUid: se conserva el responsable de la persona.
+    expect(probe).toHaveAttribute("data-owner", "lider");
+    expect(probe).toHaveAttribute("data-person-owner", "lider");
+    expect(screen.queryByText("El responsable debe tener acceso a Consolidación.")).not.toBeInTheDocument();
+  });
+
+  it("si se elige otro responsable con acceso, se envía y queda asignado", () => {
+    openFernanda();
+    const probe = screen.getByTestId("fu-probe");
+    fireEvent.change(screen.getByLabelText("Responsable", { selector: "#sx-fu-owner" }), { target: { value: "consolidacion" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Contactado" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar seguimiento" }));
+    expect(screen.getByText(/^Seguimiento registrado.*Simulación: no se guardó nada\.$/)).toBeInTheDocument();
+    expect(probe).toHaveAttribute("data-owner", "consolidacion");
+  });
+
+  it("con responsable válido el select parte en ese responsable y no muestra el aviso", () => {
+    at(`${C}/persona?id=p-04&perfil=consolidacion`);
+    inSuite(<PersonScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar seguimiento de Javier Rojas" }));
+    const owner = screen.getByLabelText("Responsable", { selector: "#sx-fu-owner" }) as HTMLSelectElement;
+    expect(owner.value).not.toBe("");
+    expect(owner.options[0].textContent).toBe("Sin asignar");
+    expect(screen.queryByText(/El responsable actual ya no tiene acceso/)).not.toBeInTheDocument();
+  });
+});

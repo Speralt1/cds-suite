@@ -76,6 +76,8 @@ export function canManageEvent(p: AccessProfile, e: CalendarEvent, areas: readon
   if (can(p, "calendar.events.manage_all")) return true;
   if (!can(p, "calendar.events.manage_assigned")) return false;
   if (!responsibleIsMine(p, e, areas)) return false;
+  // Una serie cancelada queda en solo lectura para manage_assigned (como canManageSeries).
+  if (e.seriesCancellation) return false;
   const ref = occurrenceDate ?? (isRecurring(e) ? (e.recurrence.until ?? e.endDate) : e.endDate);
   return compareLocal(ref, today) >= 0;
 }
@@ -88,12 +90,14 @@ export function isSeriesEnded(e: Pick<CalendarEvent, "recurrence">, today: Ymd):
 /**
  * Igual que canManageEvent sin la regla de pasado por fecha (las acciones de
  * serie solo tocan ≥ hoy). Con `today`, una serie terminada (until < hoy) es
- * solo lectura para manage_assigned.
+ * solo lectura para manage_assigned. Una serie cancelada (`seriesCancellation`)
+ * también es solo lectura para manage_assigned, igual que una simple cancelada.
  */
 export function canManageSeries(p: AccessProfile, e: CalendarEvent, areas: readonly Area[], today?: Ymd): boolean {
   if (e.status === "archivada") return false;
   if (can(p, "calendar.events.manage_all")) return true;
   if (!can(p, "calendar.events.manage_assigned") || !responsibleIsMine(p, e, areas)) return false;
+  if (e.seriesCancellation) return false;
   return !today || !isSeriesEnded(e, today);
 }
 

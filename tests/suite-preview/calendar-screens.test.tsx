@@ -13,6 +13,16 @@ import { ShareScreen } from "@/components/suite-preview/calendar/share-screen";
 import { CalendarReport } from "@/components/suite-preview/reports/calendar-report";
 import { SuiteProvider } from "@/components/suite-preview/provider";
 import { LEAK_CANARIES } from "@/lib/suite-preview/fixtures";
+import { FinanceReport } from "@/components/suite-preview/reports/finance-report";
+import { PreviewProvider } from "@/components/finance-preview/context";
+import { ReportesScreen } from "@/components/finance-preview/screens/analisis";
+import { segmentsFor, WeekGrid } from "@/components/suite-preview/calendar/week-view";
+import { areaOptions } from "@/components/suite-preview/calendar/calendar-screen";
+import { AREAS, DEMO_NOW, EVENTS } from "@/lib/suite-preview/fixtures";
+import { occurrencesInRange } from "@/lib/suite-preview/calendar";
+import { expandRecurrence } from "@/lib/suite-preview/recurrence";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 function at(path: string) {
   const [pathname] = path.split("?");
@@ -388,5 +398,123 @@ describe("Calendario › correcciones ciclo 1", () => {
     );
     expect((screen.getByLabelText("Enlace público") as HTMLInputElement).value).toBe("https://suite.casadesalvacion.example/calendario/compartir/demo");
     expect(container.innerHTML).not.toMatch(/web\.app|firebaseapp/);
+  });
+});
+
+describe("Calendario y Reportes › correcciones ciclo 2", () => {
+  const renderReport = (perfil: string) => {
+    at(`/preview/reportes/calendario?perfil=${perfil}`);
+    return render(
+      <SuiteProvider>
+        <CalendarReport />
+      </SuiteProvider>,
+    );
+  };
+
+  it("C1: Reportes › Finanzas usa el mismo segmented y 'Descargar PDF' (V2 standalone sigue con 'Exportar PDF')", () => {
+    // Los gráficos de V2 miden su contenedor: stubs solo para esta prueba.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }));
+    try {
+      financeReportChecks();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  function financeReportChecks() {
+    at("/preview/reportes/finanzas?perfil=admin");
+    const { unmount } = render(
+      <PreviewProvider>
+        <SuiteProvider>
+          <FinanceReport />
+        </SuiteProvider>
+      </PreviewProvider>,
+    );
+    const sections = screen.getByRole("navigation", { name: "Secciones de Reportes" });
+    expect(within(sections).getByRole("link", { name: "Finanzas" })).toHaveAttribute("aria-current", "page");
+    expect(within(sections).getByRole("link", { name: "Calendario" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("button", { name: "Descargar PDF" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Exportar PDF" })).toBeNull();
+    unmount();
+
+    render(
+      <PreviewProvider>
+        <ReportesScreen />
+      </PreviewProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Exportar PDF" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Secciones de Reportes" })).toBeNull();
+  }
+
+  it("C1: Reportes › Calendario (Admin) marca Calendario en el mismo segmented", () => {
+    renderReport("admin");
+    const sections = screen.getByRole("navigation", { name: "Secciones de Reportes" });
+    expect(within(sections).getByRole("link", { name: "Calendario" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Reportes$/);
+  });
+
+  it("C2: la vista previa muestra las filas que caben en la página 1 según el alto (no un número fijo)", () => {
+    renderReport("admin");
+    const fig = document.querySelector(".sx-pdf")!;
+    const caption = fig.querySelector("figcaption")!.textContent ?? "";
+    const m = caption.match(/Primera página · (\d+) de (\d+) filas · (\d+) páginas?/);
+    expect(m).not.toBeNull();
+    const [, onFirst, total, pages] = m!.map(Number);
+    expect(onFirst).toBeGreaterThan(12);
+    expect(onFirst).toBeLessThan(total);
+    expect(fig.querySelectorAll(".sx-pdf-tr:not(.is-head)")).toHaveLength(onFirst);
+    expect(fig.querySelector(".sx-pdf-foot")?.textContent).toBe(`Página 1 de ${pages}`);
+  });
+
+  it("C3: la fila de filtros tiene labels para Período, Área, Estado y Visibilidad, y el switch al final", () => {
+    renderReport("admin");
+    const row = document.querySelector(".sx-rep-filters")!;
+    expect(within(row as HTMLElement).getByRole("group", { name: "Período" })).toBeInTheDocument();
+    const desktop = row.querySelector(".sx-rep-filters-desktop")!;
+    expect(desktop.lastElementChild).toHaveClass("sx-rep-switch");
+    expect(desktop.querySelector("label[for='sx-rep-area']")?.textContent).toBe("Área");
+    expect([...desktop.querySelectorAll("legend")].map((l) => l.textContent)).toEqual(["Estado", "Visibilidad"]);
+    // El sheet móvil no duplica ids.
+    expect(document.querySelectorAll("#sx-rep-area")).toHaveLength(1);
+  });
+
+  it("C4: el filtro por área ofrece las 9 áreas activas (incluida Consolidación) y el sheet no recorta la lista", () => {
+    const opts = areaOptions([], AREAS, false);
+    expect(opts.filter((o) => o.area.active)).toHaveLength(9);
+    expect(opts.map((o) => o.area.name)).toContain("Consolidación");
+    const css = readFileSync(join(process.cwd(), "components/suite-preview/calendar/calendar.css"), "utf8");
+    expect(css).toMatch(/\.fx-sheet-body \.sx-filter-list \{\s*max-height: none;/);
+  });
+
+  it("C5: en la semana, a igual hora, las columnas siguen compareDayOrder (Escuela antes que Culto)", () => {
+    const day = "2026-10-04";
+    const occ = occurrencesInRange(EVENTS, day, day, DEMO_NOW, AREAS);
+    const segs = segmentsFor(occ, [day], AREAS);
+    const col = (title: string) => segs.find((x) => x.o.event.title === title)!.col;
+    expect(col("Escuela dominical")).toBe(0);
+    expect(col("Culto dominical")).toBe(1);
+  });
+
+  it("C9: el '+n' de la fila de todo el día tiene aria-label 'Ver n actividades más del {día}'", () => {
+    const base = EVENTS.find((e) => e.id === "ev-campamento")!;
+    const days = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
+    const occ = [0, 1, 2, 3].flatMap((i) =>
+      expandRecurrence(
+        { ...base, id: `ev-x${i}`, title: `Todo el día ${i}`, allDay: true, startDate: "2026-10-14", endDate: "2026-10-14", recurrence: { freq: "none" } },
+        "2026-10-12",
+        "2026-10-18",
+        DEMO_NOW,
+      ),
+    );
+    render(<WeekGrid days={days} occurrences={occ} areas={AREAS} today="2026-10-04" nowMinutes={600} onOpen={() => {}} onOpenDay={() => {}} />);
+    expect(screen.getByRole("button", { name: "Ver 2 actividades más del miércoles 14" })).toHaveTextContent("+2");
   });
 });

@@ -52,6 +52,7 @@
 .fx .sx-ink-review { color: var(--fx-review); }
 .fx .sx-ink-neutral { color: var(--fx-neutral); }
 .fx .sx-muted { color: var(--fx-muted); }
+.fx .sx-nowrap { white-space: nowrap; }
 .fx .sx-inline {
   display: inline-flex;
   align-items: center;
@@ -358,14 +359,24 @@
   padding-top: 6px;
   padding-bottom: 6px;
 }
+/* Nombre = columna flexible (≥260 px a 1440): el resto queda al ancho justo de
+   su contenido, con 10 px de padding lateral (16 px en el borde del panel). */
+.fx .sx-people-table th,
+.fx .sx-people-table td {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.fx .sx-people-table .c-name {
+  padding-left: 16px;
+}
 .fx .sx-people-table .c-age { width: 56px; }
 .fx .sx-people-table .c-phone { width: 140px; }
-.fx .sx-people-table .c-entry { width: 96px; }
+.fx .sx-people-table .c-entry { width: 100px; }
 .fx .sx-people-table .c-last { width: 104px; }
 .fx .sx-people-table .c-visits { width: 64px; }
-.fx .sx-people-table .c-owner { width: 120px; }
-.fx .sx-people-table .c-status { width: 140px; }
-.fx .sx-people-table .c-next { width: 160px; }
+.fx .sx-people-table .c-owner { width: 112px; }
+.fx .sx-people-table .c-status { width: 144px; }
+.fx .sx-people-table .c-next { width: 152px; }
 .fx .sx-people-table .c-actions {
   width: 48px;
   padding-left: 0;
@@ -388,8 +399,9 @@
 }
 .fx .sx-name-sub {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   min-height: 16px;
   margin-top: 2px;
 }
@@ -448,13 +460,18 @@
 .fx .sx-people-table .c-inline-next {
   display: none;
 }
-@container sx-people (max-width: 1099px) {
-  .fx .sx-people-table .c-entry,
+/* "Visitas" pasa a la línea 2 de "Última visita" antes que recortar el nombre o el motivo. */
+@container sx-people (max-width: 1279px) {
   .fx .sx-people-table .c-visits {
     display: none;
   }
   .fx .sx-people-table .c-inline-visits {
     display: block;
+  }
+}
+@container sx-people (max-width: 1099px) {
+  .fx .sx-people-table .c-entry {
+    display: none;
   }
 }
 @container sx-people (max-width: 939px) {
@@ -463,11 +480,6 @@
   }
   .fx .sx-people-table .c-inline-phone {
     display: inline;
-  }
-  /* La alerta principal no se recorta: el teléfono baja de línea si no cabe. */
-  .fx .sx-name-sub {
-    flex-wrap: wrap;
-    row-gap: 2px;
   }
 }
 @container sx-people (max-width: 807px) {
@@ -1072,6 +1084,17 @@
   font-size: 14px;
   font-weight: 600;
 }
+/* Seguimiento: el responsable actual perdió acceso (ícono + texto). */
+.fx .sx-owner-lost {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--fx-warning);
+}
+.fx .sx-owner-lost svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .fx .sx-dup .fx-help {
   margin-top: 2px;
   color: var(--fx-ink);
@@ -1328,29 +1351,35 @@
     padding: 10px 0 10px 16px;
     min-width: 0;
   }
+  /* Línea 1: nombre completo (envuelve, nunca se recorta) + badges que bajan
+     de línea si no caben; el estado queda arriba a la derecha y no se encoge. */
   .fx .sx-prow-l1 {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    align-self: start;
+    gap: 4px 6px;
     min-width: 0;
   }
   .fx .sx-prow-name {
     min-width: 0;
-    overflow: hidden;
     color: var(--fx-ink-strong);
     font-size: 15px;
     font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 22px;
+    overflow-wrap: anywhere;
   }
   .fx .sx-prow-l1 .sx-dbadges {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
   .fx .sx-prow-status {
     display: inline-flex;
+    flex-shrink: 0;
     grid-column: 2;
     grid-row: 1;
+    align-self: start;
     align-items: center;
+    min-height: 22px;
     gap: 4px;
     color: var(--fx-ink);
     font-size: 12px;

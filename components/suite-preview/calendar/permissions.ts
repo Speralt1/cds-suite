@@ -28,6 +28,7 @@ export interface EventActions {
 }
 
 export const PAST_REASON = "Las actividades pasadas solo las corrige Pastor o Administración.";
+export const SERIES_CANCELLED_REASON = "Esta serie está cancelada: solo Pastor o Administración pueden modificarla.";
 
 export function eventActions(p: AccessProfile | null, o: Occurrence, areas: readonly Area[], today: Ymd): EventActions {
   const none: EventActions = {
@@ -67,6 +68,8 @@ export function eventActions(p: AccessProfile | null, o: Occurrence, areas: read
       : `Solo el área responsable (${respName}), Pastor o Administración pueden modificar esta actividad.`;
   } else if (!manageAll && resp && !resp.active) {
     reason = `${respName} está inactiva: solo Pastor o Administración pueden modificar sus actividades.`;
+  } else if (!manageAll && recurring && e.seriesCancellation) {
+    reason = SERIES_CANCELLED_REASON;
   } else if (!canEdit && !canCancel && !canArchive) {
     reason = e.status === "archivada" ? "Esta actividad está eliminada." : PAST_REASON;
   }

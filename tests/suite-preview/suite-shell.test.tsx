@@ -233,3 +233,87 @@ describe("shell: correcciones ciclo 1 (S)", () => {
     expect(within(pop).getByText("* Su módulo inicial (Finanzas) ya no está permitido.")).toBeInTheDocument();
   });
 });
+
+describe("shell: correcciones ciclo 2 (S)", () => {
+  it.each([
+    ["admin", "Ver como: Administración (demo)", "Admin"],
+    ["consolidacion", "Ver como: Consolidación · Carolina Vidal", "Consolid."],
+    ["sin-permisos", "Ver como: Usuario sin permisos", "Sin acceso"],
+    ["lider", "Ver como: Líder · Matías Contreras", "Líder"],
+  ])("Ver como (%s): etiqueta corta móvil nunca vacía y nombre accesible completo", (uid, name, short) => {
+    at(`/preview/calendario?perfil=${uid}`);
+    shell();
+    expect(screen.getAllByRole("button", { name }).length).toBeGreaterThan(0);
+    const el = document.querySelector(".sx-banner-mobile .sx-sim-who-short");
+    expect(el?.textContent).toBe(short);
+  });
+
+  it("Nueva persona es una tarea enfocada: sin barra inferior; Personas sí la tiene", () => {
+    at("/preview/integrantes/consolidacion/nueva?perfil=consolidacion");
+    const { unmount } = shell();
+    expect(screen.queryByRole("navigation", { name: "Navegación principal" })).toBeNull();
+    expect(document.querySelector(".fx-shell")).toHaveClass("sx-focused");
+    unmount();
+    at("/preview/integrantes/consolidacion/personas?perfil=consolidacion");
+    shell();
+    expect(screen.getByRole("navigation", { name: "Navegación principal" })).toBeInTheDocument();
+    expect(document.querySelector(".fx-shell")).not.toHaveClass("sx-focused");
+  });
+
+  it("Reportes usa íconos de reporte (no los de los módulos Finanzas/Calendario)", () => {
+    at("/preview/reportes/calendario?perfil=admin");
+    shell();
+    const bottom = screen.getByRole("navigation", { name: "Navegación principal" });
+    const cal = within(bottom).getByRole("link", { name: "Calendario" });
+    const fin = within(bottom).getByRole("link", { name: "Finanzas" });
+    expect(cal.querySelector("svg")?.getAttribute("class")).toMatch(/file-chart/);
+    expect(fin.querySelector("svg")?.getAttribute("class")).toMatch(/file-chart/);
+    const reportes = screen.getByRole("navigation", { name: "Reportes" });
+    for (const a of within(reportes).getAllByRole("link")) expect(a.querySelector("svg")?.getAttribute("class")).toMatch(/file-chart/);
+  });
+
+  it("Configuración: la sección se llama «Ajustes de finanzas»; el atajo financiero conserva su nombre", () => {
+    at("/preview/configuracion/areas?perfil=admin");
+    const { unmount } = shell();
+    const cfg = screen.getByRole("navigation", { name: "Configuración" });
+    expect(within(cfg).getByRole("link", { name: "Ajustes de finanzas" })).toHaveAttribute("href", expect.stringMatching(/^\/preview\/configuracion\/finanzas/));
+    expect(within(cfg).queryByText("Finanzas e integraciones")).toBeNull();
+    unmount();
+    at("/preview/finanzas-2026?perfil=admin");
+    shell();
+    const fin = screen.getByRole("navigation", { name: "Finanzas" });
+    expect(within(fin).getByRole("link", { name: "Configuración financiera" })).toBeInTheDocument();
+  });
+});
+
+describe("PreviewProvider.sync (ciclo 2, S3)", () => {
+  it("un QUERY_EVENT sin cambios de período ni de estado no re-renderiza a los consumidores", async () => {
+    const { act } = await import("@testing-library/react");
+    const { PreviewProvider, usePreview } = await import("@/components/finance-preview/context");
+    const { QUERY_EVENT } = await import("@/components/suite-preview/use-query");
+    const renders = { n: 0 };
+    function Consumer() {
+      const { period, demoState } = usePreview();
+      renders.n += 1;
+      return <p data-testid="q">{`${period.year}-${demoState}`}</p>;
+    }
+    at("/preview/finanzas-2026?periodo=2026-09&perfil=admin");
+    render(
+      <PreviewProvider>
+        <Consumer />
+      </PreviewProvider>,
+    );
+    const settled = renders.n;
+    act(() => {
+      window.history.replaceState(null, "", "/preview/finanzas-2026?periodo=2026-09&perfil=admin&vista=lista");
+      window.dispatchEvent(new Event(QUERY_EVENT));
+    });
+    expect(renders.n).toBe(settled);
+    act(() => {
+      window.history.replaceState(null, "", "/preview/finanzas-2026?periodo=2026-08&perfil=admin&estado=error");
+      window.dispatchEvent(new Event(QUERY_EVENT));
+    });
+    expect(renders.n).toBeGreaterThan(settled);
+    expect(screen.getByTestId("q")).toHaveTextContent("error");
+  });
+});

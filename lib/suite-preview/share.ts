@@ -1,9 +1,9 @@
 // Proyección pública del calendario (16c §E). Se arma por LISTA BLANCA con
 // literales explícitos: nunca spread de la actividad interna.
 
-import { addMonthsClamped, firstOfMonth, lastOfMonth } from "./dates";
+import { addDays, addMonthsClamped, compareLocal, firstOfMonth, lastOfMonth } from "./dates";
 import { compareDayOrder, occurrencesInRange } from "./calendar";
-import { recurrenceDetailText } from "./recurrence";
+import { candidateDates, recurrenceDetailText } from "./recurrence";
 import type { Area, CalendarEvent, LocalDateTime, Occurrence, PublicArea, PublicCalendar, PublicEvent, ShareLink, Ymd } from "./types";
 
 export const PUBLIC_EVENT_KEYS = [
@@ -72,8 +72,23 @@ export function toPublicEvent(o: Occurrence, e: CalendarEvent, areas: ReadonlyMa
       .filter((a): a is Area => !!a)
       .map(toPublicArea),
     status: o.status === "cancelada" ? "cancelada" : "programada",
-    recurrenceLabel: recurrenceDetailText({ startDate: e.startDate, recurrence: e.recurrence }),
+    recurrenceLabel: publicRecurrenceLabel(e),
   };
+}
+
+/**
+ * Texto de recurrencia publicado. Con la serie cancelada (`seriesCancellation`)
+ * se repite "hasta" el día anterior a `from` (o el `until` original si es
+ * anterior); si no queda ninguna fecha antes del corte, null.
+ */
+export function publicRecurrenceLabel(e: Pick<CalendarEvent, "startDate" | "endDate" | "recurrence" | "seriesCancellation">): string | null {
+  if (!e.seriesCancellation) return recurrenceDetailText({ startDate: e.startDate, recurrence: e.recurrence });
+  if (e.recurrence.freq === "none") return null;
+  const cut = addDays(e.seriesCancellation.from, -1);
+  const until = e.recurrence.until && compareLocal(e.recurrence.until, cut) < 0 ? e.recurrence.until : cut;
+  if (compareLocal(until, e.startDate) < 0) return null;
+  if (!candidateDates({ startDate: e.startDate, endDate: e.startDate, recurrence: e.recurrence }, e.startDate, until).length) return null;
+  return recurrenceDetailText({ startDate: e.startDate, recurrence: { ...e.recurrence, until } });
 }
 
 /** Rango navegable: desde el primer día del mes anterior hasta el último día de hoy + 6 meses. */

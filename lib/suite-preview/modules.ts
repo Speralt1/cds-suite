@@ -29,7 +29,9 @@ export type IconName =
   | "Tags"
   | "UserCog"
   | "Plug"
-  | "PieChart";
+  | "PieChart"
+  | "FileChartColumn"
+  | "FileChartLine";
 
 export interface NavSection {
   id: string;
@@ -177,8 +179,9 @@ export function moduleSections(m: ModuleId, p: AccessProfile): NavGroupDef[] {
       return filterGroups(p, [
         {
           items: [
-            { id: "finanzas", label: "Finanzas", href: "/preview/reportes/finanzas", icon: "CircleDollarSign", requires: "finance.details.read" },
-            { id: "calendario", label: "Calendario", href: "/preview/reportes/calendario", icon: "CalendarDays", requires: "calendar.read" },
+            // Íconos de reporte (no los de los módulos Finanzas/Calendario) para no confundir destinos.
+            { id: "finanzas", label: "Finanzas", href: "/preview/reportes/finanzas", icon: "FileChartColumn", requires: "finance.details.read" },
+            { id: "calendario", label: "Calendario", href: "/preview/reportes/calendario", icon: "FileChartLine", requires: "calendar.read" },
           ],
         },
       ]);
@@ -188,7 +191,7 @@ export function moduleSections(m: ModuleId, p: AccessProfile): NavGroupDef[] {
           items: [
             { id: "areas", label: "Áreas", href: "/preview/configuracion/areas", icon: "Tags" },
             { id: "usuarios", label: "Usuarios y permisos", href: "/preview/configuracion/usuarios", icon: "UserCog" },
-            { id: "finanzas", label: "Finanzas e integraciones", href: "/preview/configuracion/finanzas", icon: "Plug" },
+            { id: "finanzas", label: "Ajustes de finanzas", href: "/preview/configuracion/finanzas", icon: "Plug" },
           ],
         },
       ];
@@ -250,6 +253,16 @@ export type BottomTab =
 /** Href del "+ Crear" de Calendario: la pantalla abre el formulario al leer `?crear=1`. */
 export const CALENDAR_CREATE_HREF = "/preview/calendario?crear=1";
 export const MEMBERS_CREATE_HREF = `${C}/nueva`;
+
+/**
+ * Rutas de tarea enfocada: en móvil ocultan la barra inferior (el formulario
+ * trae su propio footer sticky con Guardar/Cancelar).
+ */
+export const FOCUSED_ROUTES: readonly string[] = [MEMBERS_CREATE_HREF];
+
+export function isFocusedRoute(pathname: string): boolean {
+  return FOCUSED_ROUTES.includes(normalizePath(pathname));
+}
 
 function createFor(m: ModuleId, p: AccessProfile): BottomTab | null {
   if (m === "finanzas" && can(p, "finance.records.manage")) return { kind: "create", action: "finance-register", label: "Registrar" };

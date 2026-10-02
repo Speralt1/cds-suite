@@ -22,6 +22,7 @@ import {
   activeSectionId,
   bottomTabs,
   flatSections,
+  isFocusedRoute,
   moduleLinkHref,
   moduleSections,
   moreSections,
@@ -227,6 +228,8 @@ function MobileChrome({ model }: { model: ShellModel }) {
   const moreActive = more.some((g) => g.items.some((s) => s.id === current && !s.shortcut));
   const otherModules = model.modules.filter((m) => m !== activeModule);
   const simulate = (what: string) => (preview ?? suite)?.simulate(what);
+  // Tarea enfocada (p. ej. Nueva persona): sin barra inferior; el formulario trae su footer.
+  const focused = isFocusedRoute(model.pathname);
 
   const tab = (t: BottomTab, i: number) => {
     switch (t.kind) {
@@ -343,13 +346,15 @@ function MobileChrome({ model }: { model: ShellModel }) {
           </button>
         </span>
       </header>
-      <nav
-        className="fx-bottombar sx-bottombar"
-        aria-label="Navegación principal"
-        style={{ "--sx-tabs": tabs.length } as React.CSSProperties}
-      >
-        {tabs.map(tab)}
-      </nav>
+      {!focused && (
+        <nav
+          className="fx-bottombar sx-bottombar"
+          aria-label="Navegación principal"
+          style={{ "--sx-tabs": tabs.length } as React.CSSProperties}
+        >
+          {tabs.map(tab)}
+        </nav>
+      )}
 
       <Sheet open={sheet === "modules"} onClose={close} title="Cambiar de módulo" labelId="sx-modules-title">
         <ul>
@@ -450,7 +455,7 @@ export function SuiteShell({ children }: { children: React.ReactNode }) {
       <a className="fx-skip" href="#fx-main">
         Saltar al contenido
       </a>
-      <div className="fx-shell">
+      <div className={`fx-shell${isFocusedRoute(model.pathname) ? " sx-focused" : ""}`}>
         <SuiteSidebar model={model} />
         <div className="fx-column">
           <MobileChrome model={model} />
