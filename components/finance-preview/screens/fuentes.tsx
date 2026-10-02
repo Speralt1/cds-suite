@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, Info, Search, UserRoundSearch, HandCoins } from "lucide-react";
 import { CAMPAIGN_SUBMISSIONS, DEMO_TODAY, INTEGRATIONS, PAYOUTS, TITHE_PROFILES, TRANSACTIONS } from "@/lib/finance-preview/fixtures";
-import { clp, dayMonth, monthLabel, numericDate, shortDate, timeOf } from "@/lib/finance-preview/format";
+import { clp, dayMonth, monthLabel, shortDate, timeOf } from "@/lib/finance-preview/format";
 import {
   AREA_LABEL,
   AVAILABLE_MONTHS,
@@ -71,6 +71,7 @@ function AreaScreen({ area }: { area: AreaKey }) {
     const day = TRANSACTIONS.filter((t) => t.date === w.date && t.status === "active" && t.category === category && t.type === "income");
     return {
       x: w.label.split(" ").slice(1).join(" ") + (w.inProgress ? "*" : ""),
+      xs: `${Number(w.date.slice(8, 10))}/${Number(w.date.slice(5, 7))}${w.inProgress ? "*" : ""}`,
       full: `${w.label}${w.inProgress ? " (en curso)" : ""}`,
       sumup: day.filter((t) => t.origin === "sumup").reduce((a, t) => a + t.amount, 0),
       cash: day.filter((t) => t.method === "cash").reduce((a, t) => a + t.amount, 0),
@@ -136,13 +137,16 @@ function AreaScreen({ area }: { area: AreaKey }) {
             subtitle="Tarjeta SumUp en bruto y efectivo registrado, por culto."
             data={series}
             xKey="x"
+            xKeyMobile="xs"
             fullLabelKey="full"
             series={[
               { key: "sumup", label: "SumUp (bruto)", color: SERIES_COLOR.sumup },
               { key: "cash", label: "Efectivo", color: SERIES_COLOR.cash },
             ]}
             summary={`${AREA_LABEL[area]} en los últimos 8 cultos, separado en tarjeta SumUp y efectivo.`}
-            footnote="* Culto en curso. Un culto sin barra de efectivo puede indicar «Falta efectivo» (ver tabla)."
+            footnote={`* Culto en curso. Un culto sin barra de efectivo puede indicar «Falta efectivo» (ver tabla).${
+              series.some((x) => x.sumup + x.cash === 0) ? ` Sin registros: ${series.filter((x) => x.sumup + x.cash === 0).map((x) => x.full).join(", ")}.` : ""
+            }`}
             height={{ desktop: 240, mobile: 200 }}
           />
 
@@ -310,6 +314,9 @@ export function DiezmosScreen() {
                         <th scope="col" className="fx-hide-mobile">
                           Último registro
                         </th>
+                        <th scope="col" className="fx-hide-mobile">
+                          Estado
+                        </th>
                         <th scope="col">
                           <span className="fx-sr">Acción</span>
                         </th>
@@ -320,19 +327,24 @@ export function DiezmosScreen() {
                         <tr key={p.id}>
                           <td>
                             <span className="fx-cell-main">{p.name}</span>
-                            <span className="fx-cell-sub">
-                              {p.active ? (p.last ? `Último: ${numericDate(p.last)}` : "Sin registros en el período") : "Inactiva"}
-                            </span>
+                            <span className="fx-cell-sub fx-show-mobile-inline">{p.last ? `Último: ${shortDate(p.last)}` : "Sin registros"}</span>
                           </td>
                           <td className="fx-hide-mobile">{p.type === "family" ? "Familia" : "Persona"}</td>
-                          <td className="fx-hide-mobile fx-num">{p.last ? numericDate(p.last) : "—"}</td>
+                          <td className="fx-hide-mobile fx-num">{p.last ? shortDate(p.last) : "—"}</td>
+                          <td className="fx-hide-mobile">
+                            {!p.active ? (
+                              <span className="fx-help">Ficha inactiva</span>
+                            ) : p.last && p.last.startsWith(DEMO_TODAY.slice(0, 7)) ? (
+                              <StatusBadge status="recorded" detail="este mes" />
+                            ) : (
+                              <span className="fx-help">Sin registro este mes</span>
+                            )}
+                          </td>
                           <td className="is-num">
-                            {p.active ? (
-                              <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => simulate(`Registrar diezmo · ${p.name}`)}>
+                            {p.active && (
+                              <button type="button" className="fx-btn fx-btn-ghost fx-btn-sm" onClick={() => simulate(`Registrar diezmo · ${p.name}`)}>
                                 Registrar
                               </button>
-                            ) : (
-                              <StatusBadge status="voided" />
                             )}
                           </td>
                         </tr>
@@ -412,7 +424,11 @@ export function CampanasScreen() {
                 title={
                   <>
                     {c.name}{" "}
-                    {c.status === "active" ? <StatusBadge status="open" detail="activa" /> : <StatusBadge status="closedBalanced" detail="cerrada" />}
+                    {c.status === "active" ? (
+                      <StatusBadge status="open" />
+                    ) : (
+                      <StatusBadge status="campaignDone" />
+                    )}
                   </>
                 }
                 labelledBy={`camp-${c.id}`}
@@ -421,7 +437,7 @@ export function CampanasScreen() {
                   <MoneyAmount value={c.verified} />
                 </p>
                 <p className="fx-help-13">
-                  verificado de una meta de {clp(c.goal)} · {c.progress} %
+                  {c.status === "closed" ? "recaudado (cerrada, meta cumplida)" : "verificado"} de una meta de {clp(c.goal)} · {c.percent} %
                   {c.installment ? ` · cuota ${c.installment.current} de ${c.installment.total}` : ""}
                 </p>
                 <div
@@ -430,6 +446,7 @@ export function CampanasScreen() {
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={c.progress}
+                  aria-valuetext={`${c.percent} % de la meta`}
                   aria-label={`Avance de ${c.name}`}
                   style={{ marginTop: 10 }}
                 >

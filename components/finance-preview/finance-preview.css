@@ -815,13 +815,24 @@
   font-weight: 500;
 }
 .fx-att-compact .fx-att-item {
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
   min-height: 0;
 }
-.fx-att-compact .fx-att-side .fx-btn {
-  height: 30px;
-  padding: 0 10px;
-  font-size: 12px;
+.fx-att-compact .fx-att-side {
+  grid-column: 2;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fx-att-amount-col {
+  min-width: 96px;
+  text-align: right;
+}
+.fx-att-age-col {
+  min-width: 92px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ---------- Charts ---------- */
@@ -1136,12 +1147,36 @@
 }
 .fx-mobile-list,
 .fx-show-mobile-only,
-.fx-show-mobile-tabs {
+.fx-show-mobile-inline {
   display: none;
 }
 .fx-filter-stack {
   display: grid;
-  gap: 12px;
+  gap: 16px;
+}
+.fx-radio-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.fx-radio-group legend {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.fx-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-top: 1px solid var(--fx-line);
+  font-size: 15px;
+  cursor: pointer;
+}
+.fx-radio input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--fx-primary);
 }
 .fx-filter-stack .fx-chip,
 .fx-filter-stack .fx-chip select {
@@ -1193,6 +1228,7 @@
   align-items: center;
 }
 .fx-chip select {
+  field-sizing: content;
   appearance: none;
   height: 32px;
   padding: 0 30px 0 12px;
@@ -1356,6 +1392,18 @@
 .fx-dl dd {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+.fx-dl dt {
+  min-width: 0;
+}
+.fx-dl dd .fx-badge {
+  height: auto;
+  min-height: 22px;
+  padding: 3px 8px;
+  line-height: 16px;
+  white-space: normal;
+  text-align: left;
 }
 .fx-timeline li {
   position: relative;
@@ -1543,6 +1591,7 @@
   font-variant-numeric: tabular-nums;
 }
 .fx-count-total {
+  box-sizing: border-box;
   position: sticky;
   bottom: 0;
   display: grid;
@@ -1714,6 +1763,11 @@
     gap: 16px;
   }
   .fx-md-span-12 { grid-column: span 12; }
+  .fx-m-order-1 { order: 1; }
+  .fx-m-order-2 { order: 2; }
+  .fx-m-order-3 { order: 3; }
+  .fx-m-order-4 { order: 4; }
+  .fx-m-order-5 { order: 5; }
   .fx-md-span-6 { grid-column: span 6; }
   .fx-hide-md {
     display: none;
@@ -1743,6 +1797,7 @@
   }
   .fx-shell {
     display: block;
+    background: none;
   }
   .fx-sidebar,
   .fx-banner {
@@ -1883,7 +1938,11 @@
   }
   .fx-period {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fx-period .fx-segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
   .fx-segmented button {
     height: 42px;
@@ -1902,9 +1961,7 @@
   .fx-link {
     min-height: 44px;
   }
-  .fx-src-label .fx-link {
-    min-height: 32px;
-  }
+
   .fx-att-compact .fx-att-item {
     grid-template-columns: 32px minmax(0, 1fr);
   }
@@ -1912,11 +1969,7 @@
     height: 44px;
     font-size: 15px;
   }
-  .fx-m-order-1 { order: 1; }
-  .fx-m-order-2 { order: 2; }
-  .fx-m-order-3 { order: 3; }
-  .fx-m-order-4 { order: 4; }
-  .fx-m-order-5 { order: 5; }
+
   .fx-stepper {
     height: 42px;
     justify-content: space-between;
@@ -2042,8 +2095,9 @@
   .fx-mlist-meta {
     grid-column: 1 / -1;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 4px 8px;
     min-width: 0;
     color: var(--fx-muted);
     font-size: 13px;
@@ -2051,8 +2105,9 @@
   }
   .fx-mlist-meta > span:first-child {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .fx-mlist-amount {
     white-space: nowrap;
   }
   .fx-toolbar {
@@ -2068,11 +2123,8 @@
   .fx-show-mobile-only {
     display: inline-flex;
   }
-  .fx-show-mobile-tabs {
-    display: flex;
-  }
-  .fx-mobile-hidden {
-    display: none;
+  .fx-show-mobile-inline {
+    display: inline-flex;
   }
   .fx-toolbar-end {
     margin-left: 0;
@@ -2148,6 +2200,7 @@
     bottom: calc(64px + env(safe-area-inset-bottom));
     margin: 12px -16px -16px;
     padding: 12px 16px;
+    width: calc(100% + 32px);
   }
   .fx-tabs button {
     height: 44px;

@@ -120,9 +120,11 @@ describe("Caja", () => {
     fireEvent.click(within(ofrendas).getByRole("button", { name: "Terminar conteo 2" }));
     fireEvent.click(within(ofrendas).getByRole("button", { name: "Cerrar con diferencia" }));
     expect(within(ofrendas).getByRole("alert")).toHaveTextContent(/Explica la diferencia/);
-    // el esperado de Cafetería es texto calculado, nunca un input
+    // el esperado de Cafetería es texto calculado de ejemplo, nunca un input
+    fireEvent.click(screen.getByRole("tab", { name: "Cafetería" }));
     const cafe = container.querySelector('[aria-labelledby="caja-cafeteria"]') as HTMLElement;
     expect(within(cafe).getByText("Esperado en caja")).toBeInTheDocument();
+    expect(within(cafe).getByText("Ejemplo")).toBeInTheDocument();
     expect(within(cafe).queryAllByRole("textbox")).toHaveLength(0);
   });
 });
@@ -157,9 +159,9 @@ describe("Conciliación, fuentes y reportes", () => {
 
 describe("primitivas", () => {
   it("MoneyAmount usa el signo menos real y lo lee en voz", () => {
-    render(<MoneyAmount value={-4500} />);
-    const el = screen.getByLabelText("menos 4.500 pesos");
-    expect(el.textContent).toBe("−$4.500");
+    const { container } = render(<MoneyAmount value={-4500} />);
+    expect(container.querySelector('[aria-hidden="true"]')?.textContent).toBe("\u2212$4.500");
+    expect(screen.getByText("menos 4.500 pesos")).toHaveClass("fx-sr");
   });
 
   it("los estados nunca dependen solo del color: ícono + texto", () => {

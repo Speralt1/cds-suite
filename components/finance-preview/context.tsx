@@ -84,7 +84,15 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div className="fx-toast-region" role="status" aria-live="polite">
         {current && (
-          <div className="fx-toast" key={current.id}>
+          <div
+            className="fx-toast"
+            key={current.id}
+            onMouseEnter={() => timer.current && clearTimeout(timer.current)}
+            onFocus={() => timer.current && clearTimeout(timer.current)}
+            onMouseLeave={() => {
+              timer.current = setTimeout(() => setCurrent(null), 3000);
+            }}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 16v-4M12 8h.01" />

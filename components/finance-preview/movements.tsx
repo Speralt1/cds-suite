@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, Download, Lock, Search, SlidersHorizontal, SearchX } from "lucide-react";
 import { clp, numericDate, shortDate, timeOf } from "@/lib/finance-preview/format";
 import { auditFor, TITHE_PROFILES } from "@/lib/finance-preview/fixtures";
@@ -79,6 +79,43 @@ export function activeFilterCount(f: MovementFilters) {
   return (["type", "source", "method", "status"] as const).filter((k) => f[k] !== "all").length;
 }
 
+function RadioGroup({
+  legend,
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  legend: string;
+  name: string;
+  value: string;
+  options: readonly (readonly [string, string])[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <fieldset className="fx-radio-group">
+      <legend>{legend}</legend>
+      {options.map(([v, l]) => (
+        <label className="fx-radio" key={v}>
+          <input type="radio" name={name} value={v} checked={value === v} onChange={() => onChange(v)} />
+          {v === "all" ? "Todos" : l}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function FilterRadios({ f, set }: { f: MovementFilters; set: (f: MovementFilters) => void }) {
+  return (
+    <div className="fx-filter-stack">
+      <RadioGroup legend="Tipo" name="fx-f-type" value={f.type} options={TYPE_OPTIONS} onChange={(v) => set({ ...f, type: v as MovementFilters["type"] })} />
+      <RadioGroup legend="Método" name="fx-f-method" value={f.method} options={METHOD_OPTIONS} onChange={(v) => set({ ...f, method: v as MovementFilters["method"] })} />
+      <RadioGroup legend="Estado" name="fx-f-status" value={f.status} options={STATUS_OPTIONS} onChange={(v) => set({ ...f, status: v as MovementFilters["status"] })} />
+      <RadioGroup legend="Fuente o categoría" name="fx-f-source" value={f.source} options={SOURCE_OPTIONS} onChange={(v) => set({ ...f, source: v })} />
+    </div>
+  );
+}
+
 function FilterFields({ f, set }: { f: MovementFilters; set: (f: MovementFilters) => void }) {
   return (
     <>
@@ -110,7 +147,7 @@ export function FilterToolbar({
         <input
           className="fx-input"
           type="search"
-          placeholder="Buscar descripción, fuente o fecha"
+          placeholder="Buscar descripción o monto"
           value={filters.q}
           onChange={(e) => onChange({ ...filters, q: e.target.value })}
         />
@@ -140,14 +177,12 @@ export function FilterToolbar({
               Limpiar
             </button>
             <button type="button" className="fx-btn fx-btn-primary" onClick={() => setSheet(false)}>
-              Ver {resultCount} resultados
+              Ver {resultCount} {resultCount === 1 ? "registro" : "registros"}
             </button>
           </>
         }
       >
-        <div className="fx-filter-stack">
-          <FilterFields f={filters} set={onChange} />
-        </div>
+        <FilterRadios f={filters} set={onChange} />
       </Sheet>
     </div>
   );
@@ -156,7 +191,7 @@ export function FilterToolbar({
 export function TotalsStrip({ items }: { items: readonly DemoTransaction[] }) {
   const t = totalsStrip(items);
   return (
-    <div className="fx-strip" aria-live="polite">
+    <div className="fx-strip">
       <span>
         Entradas<strong>{clp(t.income)}</strong>
       </span>
@@ -168,7 +203,10 @@ export function TotalsStrip({ items }: { items: readonly DemoTransaction[] }) {
       </span>
       <span>
         <strong style={{ marginLeft: 0 }}>{t.count.toLocaleString("es-CL")}</strong> registros activos
-        {t.voided ? ` · ${t.voided} anulados (no suman)` : ""}
+        {t.voided ? ` · ${t.voided} ${t.voided === 1 ? "anulado (no suma)" : "anulados (no suman)"}` : ""}
+      </span>
+      <span className="fx-sr" aria-live="polite">
+        {t.count} registros coinciden con los filtros
       </span>
     </div>
   );
@@ -216,7 +254,7 @@ function TxRow({
         <button type="button" className="fx-row-btn" onClick={() => onOpen(t)}>
           <span className="fx-cell-main" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <TypeIcon type={t.type} />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{child ? `Pago con tarjeta · ${timeOf(`${t.date}T${t.time}`)}` : t.description}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{child ? "Pago con tarjeta" : t.description}</span>
           </span>
           {!child && <span className="fx-cell-sub">{categoryLabel(t.category, t.type)}</span>}
         </button>
@@ -251,7 +289,7 @@ function GroupRows({
   const id = useId();
   const n = entry.items.length;
   return (
-    <>
+    <tbody id={id}>
       <tr className="fx-group-row">
         <td className="fx-num" style={{ whiteSpace: "nowrap" }}>
           {shortDate(entry.date)}
@@ -267,7 +305,7 @@ function GroupRows({
               type="button"
               className="fx-toggle"
               aria-expanded={open}
-              aria-controls={open ? id : undefined}
+              aria-controls={id}
               onClick={() => setOpen((v) => !v)}
               style={{ height: 24, padding: "0 4px", marginLeft: -4 }}
             >
@@ -287,9 +325,8 @@ function GroupRows({
           <MoneyAmount value={entry.amount} struck={entry.status === "voided"} />
         </td>
       </tr>
-      {open &&
-        entry.items.map((t, i) => <TxRow key={t.id} t={t} onOpen={onOpen} child rowId={i === 0 ? id : undefined} />)}
-    </>
+      {open && entry.items.map((t) => <TxRow key={t.id} t={t} onOpen={onOpen} child />)}
+    </tbody>
   );
 }
 
@@ -365,6 +402,24 @@ function MobileList({ entries, onOpen }: { entries: MovementEntry[]; onOpen: (t:
   );
 }
 
+/** Los grupos SumUp van en su propio <tbody> (aria-controls apunta ahí); las
+ *  filas individuales consecutivas comparten uno. */
+function chunkEntries(entries: MovementEntry[]) {
+  const out: (
+    | { kind: "group"; entry: Extract<MovementEntry, { kind: "group" }> }
+    | { kind: "rows"; key: string; rows: DemoTransaction[] }
+  )[] = [];
+  for (const e of entries) {
+    if (e.kind === "group") out.push({ kind: "group", entry: e });
+    else {
+      const last = out[out.length - 1];
+      if (last?.kind === "rows") last.rows.push(e.tx);
+      else out.push({ kind: "rows", key: `rows-${e.key}`, rows: [e.tx] });
+    }
+  }
+  return out;
+}
+
 export function TransactionsTable({
   items,
   pageSize = 40,
@@ -425,17 +480,17 @@ export function TransactionsTable({
               </th>
             </tr>
           </thead>
-          <tbody>
-            {visible.map((e) =>
-              e.kind === "group" ? (
-                <GroupRows key={e.key} entry={e} onOpen={setSelected} />
-              ) : (
-                <Fragment key={e.key}>
-                  <TxRow t={e.tx} onOpen={setSelected} />
-                </Fragment>
-              ),
-            )}
-          </tbody>
+          {chunkEntries(visible).map((chunk) =>
+            chunk.kind === "group" ? (
+              <GroupRows key={chunk.entry.key} entry={chunk.entry} onOpen={setSelected} />
+            ) : (
+              <tbody key={chunk.key}>
+                {chunk.rows.map((t) => (
+                  <TxRow key={t.id} t={t} onOpen={setSelected} />
+                ))}
+              </tbody>
+            ),
+          )}
         </table>
       </div>
       <MobileList entries={visible} onOpen={setSelected} />
@@ -465,6 +520,10 @@ export function DetailSheet({ tx, onClose }: { tx: DemoTransaction | null; onClo
   const [voiding, setVoiding] = useState(false);
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (voiding) reasonRef.current?.focus();
+  }, [voiding]);
   const actions = tx ? rowActions(tx) : [];
   const profile = tx?.profileId ? TITHE_PROFILES.find((p) => p.id === tx.profileId) : undefined;
   const close = () => {
@@ -552,10 +611,11 @@ export function DetailSheet({ tx, onClose }: { tx: DemoTransaction | null; onClo
                 <label htmlFor="fx-void-reason">Motivo (obligatorio)</label>
                 <textarea
                   id="fx-void-reason"
+                  ref={reasonRef}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   aria-invalid={touched && reason.trim().length < 3}
-                  aria-describedby="fx-void-err"
+                  aria-describedby={touched && reason.trim().length < 3 ? "fx-void-err" : undefined}
                 />
                 {touched && reason.trim().length < 3 && (
                   <p className="fx-error" id="fx-void-err" role="alert">
@@ -612,21 +672,22 @@ export function DetailSheet({ tx, onClose }: { tx: DemoTransaction | null; onClo
           </div>
 
           <div className="fx-sheet-section">
-            <h3 className="fx-h3" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Historial <ProposalPill />
-            </h3>
+            <h3 className="fx-h3">Historial</h3>
             <ol className="fx-timeline">
               {auditFor(tx).map((a) => (
                 <li key={a.at + a.action}>
                   <strong style={{ fontWeight: 600 }}>{a.action}</strong> · {a.actor}
                   <br />
                   <span className="fx-help">
-                    {numericDate(a.at)} {a.at.slice(11, 16)}
+                    {shortDate(a.at)} {a.at.slice(0, 4)} · {a.at.slice(11, 16)}
                     {a.detail ? ` · ${a.detail}` : ""}
                   </span>
                 </li>
               ))}
             </ol>
+            <p className="fx-help" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+              Cambios antes → después, con motivo <ProposalPill />
+            </p>
           </div>
         </>
       )}

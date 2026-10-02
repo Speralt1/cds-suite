@@ -21,11 +21,19 @@ function walk(dir) {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) walk(full);
-    else if (/\.(html|js|txt|json)$/.test(name) && readFileSync(full, "utf8").includes(SENTINEL))
-      offenders.push(full.slice(process.cwd().length + 1));
+    else if (/\.(html|js|txt|json)$/.test(name)) {
+      const content = readFileSync(full, "utf8");
+      if (content.includes(SENTINEL) || content.includes("/preview/finanzas-2026"))
+        offenders.push(full.slice(process.cwd().length + 1));
+    }
   }
 }
-walk(OUT);
+try {
+  walk(OUT);
+} catch (error) {
+  console.error(`No se pudo revisar out/: ${error instanceof Error ? error.message : error}`);
+  process.exit(1);
+}
 
 if (offenders.length) {
   console.error(

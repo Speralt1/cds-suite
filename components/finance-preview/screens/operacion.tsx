@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
 import { ChevronDown, CircleCheck, Inbox, Lock, Minus, Plus, ScanSearch, TriangleAlert } from "lucide-react";
 import { CASH_SESSIONS, DEMO_TODAY, DEPOSITS, PAYOUTS } from "@/lib/finance-preview/fixtures";
@@ -29,7 +30,7 @@ import type { CashSession, Payout } from "@/lib/finance-preview/types";
 import { AttentionList } from "../attention";
 import { usePreview } from "../context";
 import { FilterToolbar, TotalsStrip, TransactionsTable } from "../movements";
-import { FinancialHeader } from "../shell";
+import { BASE, FinancialHeader } from "../shell";
 import {
   Callout,
   EmptyState,
@@ -293,7 +294,8 @@ function AreaCash({ area }: { area: AreaKey }) {
   const sessions = CASH_SESSIONS.filter((s) => s.area === area);
   const today = sessions.find((s) => s.date === DEMO_TODAY);
   return (
-    <div className="fx-stack">
+    <div className="fx-grid">
+      <div className="fx-span-7 fx-md-span-12">
       <Panel title={`${AREA_LABEL[area]} · ${shortDate(DEMO_TODAY)}`} labelledBy={`caja-${area}`}>
         {today?.state === "counting" ? (
           <>
@@ -317,13 +319,13 @@ function AreaCash({ area }: { area: AreaKey }) {
                 <MoneyAmount value={today.float ?? 0} />
               </dd>
               <dt>Esperado en caja</dt>
-              <dd>
-                <MoneyAmount value={today.expected ?? 0} />
+              <dd style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                <MoneyAmount value={today.expected ?? 0} /> <ExampleBadge />
               </dd>
             </dl>
             <p className="fx-help" style={{ marginTop: 8 }}>
-              El esperado es un cálculo (fondo + ventas en efectivo) y no se edita. Requiere registrar el efectivo de cada
-              venta, algo que CDS hoy no hace.
+              El esperado se calcularía con el fondo y las ventas en efectivo, y nunca se edita. Requiere registrar el
+              efectivo de cada venta, algo que CDS hoy no hace: el monto es de ejemplo.
             </p>
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
               <button type="button" className="fx-btn fx-btn-secondary" onClick={() => simulate("Registrar salida de caja")}>
@@ -338,8 +340,10 @@ function AreaCash({ area }: { area: AreaKey }) {
           <EmptyState icon={Lock} title="Sin caja abierta" />
         )}
       </Panel>
+      </div>
 
-      <Panel title="Efectivo registrado por culto" labelledBy={`efectivo-${area}`}>
+      <div className="fx-span-5 fx-md-span-12 fx-stack">
+      <Panel title={`${AREA_LABEL[area]} · efectivo por culto`} labelledBy={`efectivo-${area}`}>
         <p className="fx-help" style={{ marginTop: -8, marginBottom: 8 }}>
           Lo que existe hoy en CDS: un monto de efectivo por área y día.
         </p>
@@ -391,7 +395,7 @@ function AreaCash({ area }: { area: AreaKey }) {
       <Panel
         title={
           <>
-            Cierres anteriores <ProposalPill />
+            {AREA_LABEL[area]} · cierres anteriores <ProposalPill />
           </>
         }
         labelledBy={`cierres-${area}`}
@@ -423,6 +427,7 @@ function AreaCash({ area }: { area: AreaKey }) {
             })}
         </ul>
       </Panel>
+      </div>
     </div>
   );
 }
@@ -431,22 +436,30 @@ export function CajaScreen() {
   const [area, setArea] = useState<AreaKey>("ofrendas");
   return (
     <>
-      <FinancialHeader title="Caja" subtitle="Efectivo por culto y por área. Ofrendas y Cafetería se cuentan por separado." period={false} />
+      <FinancialHeader
+        title="Caja"
+        subtitle="Efectivo por culto y por área. Ofrendas y Cafetería se cuentan por separado."
+        period={false}
+        primary="none"
+      />
       <DemoStates empty={<EmptyState icon={Lock} title="No hubo culto en este período" />}>
-        <div className="fx-tabs fx-show-mobile-tabs" role="tablist" aria-label="Área">
+        <div className="fx-tabs" role="tablist" aria-label="Área">
           {(["ofrendas", "cafeteria"] as const).map((a) => (
-            <button key={a} type="button" role="tab" aria-selected={area === a} onClick={() => setArea(a)}>
+            <button
+              key={a}
+              type="button"
+              role="tab"
+              id={`caja-tab-${a}`}
+              aria-selected={area === a}
+              aria-controls="caja-panel"
+              onClick={() => setArea(a)}
+            >
               {AREA_LABEL[a]}
             </button>
           ))}
         </div>
-        <div className="fx-grid">
-          <div className={`fx-span-6 fx-md-span-6 fx-sm-span-12 ${area === "ofrendas" ? "" : "fx-mobile-hidden"}`}>
-            <AreaCash area="ofrendas" />
-          </div>
-          <div className={`fx-span-6 fx-md-span-6 fx-sm-span-12 ${area === "cafeteria" ? "" : "fx-mobile-hidden"}`}>
-            <AreaCash area="cafeteria" />
-          </div>
+        <div role="tabpanel" id="caja-panel" aria-labelledby={`caja-tab-${area}`}>
+          <AreaCash key={area} area={area} />
         </div>
       </DemoStates>
     </>
@@ -494,7 +507,15 @@ function PayoutRow({ p }: { p: Payout }) {
             </span>
           )}
         </td>
-        <td className="is-num">{net === null ? <span className="fx-help">—</span> : <MoneyAmount value={net} />}</td>
+        <td className="is-num">
+          {net === null ? (
+            <span className="fx-help">—</span>
+          ) : (
+            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <MoneyAmount value={net} /> <ExampleBadge />
+            </span>
+          )}
+        </td>
         <td className="is-num">{depTotal ? <MoneyAmount value={depTotal} /> : <span className="fx-help">—</span>}</td>
         <td>
           <StatusBadge
@@ -524,7 +545,15 @@ function PayoutRow({ p }: { p: Payout }) {
                 </li>
               ))}
             </ul>
+            <p className="fx-help" style={{ marginTop: 8 }}>
+              {state === "reconciled"
+                ? "Conciliado: el depósito vinculado coincide con el líquido esperado, calculado con una comisión de ejemplo."
+                : "El estado se recalcula al vincular depósitos. Comisiones de ejemplo."}
+            </p>
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <Link className="fx-link fx-btn-sm" href={`${BASE}/movimientos?periodo=${p.salesFrom.slice(0, 7)}&fuente=${encodeURIComponent(AREA_LABEL[p.account])}`} style={{ marginRight: 8 }}>
+                Ver movimientos →
+              </Link>
               {state === "difference" && (
                 <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => simulate("Explicar diferencia")}>
                   Explicar diferencia
@@ -566,7 +595,7 @@ function MobilePayouts({ list }: { list: readonly Payout[] }) {
                 <MoneyAmount value={p.gross} basis="bruto" />
               </span>
               <span className="fx-mlist-meta">
-                <span>{net === null ? "Comisión pendiente de SumUp" : `Líquido ${clp(net)} (ejemplo)`}</span>
+                <span style={{ flexBasis: "100%" }}>{net === null ? "Comisión pendiente de SumUp" : `Líquido ${clp(net)} · comisión de ejemplo`}</span>
                 <StatusBadge
                   status={REC_BADGE[state]}
                   detail={state === "difference" && gap !== null ? clp(gap) : undefined}
@@ -680,30 +709,36 @@ export function ConciliacionScreen() {
                         <th scope="col" className="is-num">
                           A depositar
                         </th>
-                        <th scope="col">Depósito</th>
+                        <th scope="col" className="fx-hide-mobile">
+                          Depósito
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {cash.map((s) => {
                         const dep = DEPOSITS.find((d) => d.id === s.depositId);
                         const age = s.date < DEMO_TODAY ? Math.round((Date.parse(DEMO_TODAY) - Date.parse(s.date)) / 86400000) : 0;
+                        const badge = dep ? (
+                          <StatusBadge status="deposited" detail={shortDate(dep.date)} />
+                        ) : s.state === "reopened" ? (
+                          <StatusBadge status="cashPending" detail="caja reabierta" />
+                        ) : (
+                          <StatusBadge status={age > 3 ? "overdue" : "cashPending"} detail={`${age} d sin depositar`} />
+                        );
                         return (
                           <tr key={s.id}>
                             <td>
-                              {AREA_LABEL[s.area]} · {shortDate(s.date)}
+                              <span className="fx-cell-main" style={{ whiteSpace: "nowrap" }}>
+                                {AREA_LABEL[s.area]} · {shortDate(s.date)}
+                              </span>
+                              <span className="fx-show-mobile-inline" style={{ marginTop: 4 }}>
+                                {badge}
+                              </span>
                             </td>
                             <td className="is-num">
                               <MoneyAmount value={sessionToDeposit(s) ?? sessionCounted(s) ?? 0} />
                             </td>
-                            <td>
-                              {dep ? (
-                                <StatusBadge status="deposited" detail={numericDate(dep.date).slice(0, 5)} />
-                              ) : s.state === "reopened" ? (
-                                <StatusBadge status="reopened" />
-                              ) : (
-                                <StatusBadge status="overdue" detail={`${age} d sin depositar`} />
-                              )}
-                            </td>
+                            <td className="fx-hide-mobile">{badge}</td>
                           </tr>
                         );
                       })}

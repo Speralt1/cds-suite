@@ -49,12 +49,14 @@ export function MoneyAmount({
 }) {
   const text = signed && value > 0 ? `+${clp(value)}` : clp(value);
   const label = `${clpSpoken(value)}${basis ? ", bruto" : ""}${struck ? ", anulado" : ""}`;
+  // El texto visible se oculta a lectores de pantalla y se lee la versión
+  // hablada (con signo y base) desde un span visualmente oculto: un aria-label
+  // sobre un <span> genérico no es fiable en todos los lectores.
   return (
     <span
       className={`fx-money ${size === "lg" ? "fx-money-lg" : ""} ${struck ? "is-struck" : ""} ${
         diff && value < 0 ? "fx-is-diff-neg" : ""
       } ${className}`}
-      aria-label={label}
     >
       <span aria-hidden="true">{text}</span>
       {basis && (
@@ -62,6 +64,7 @@ export function MoneyAmount({
           bruto
         </span>
       )}
+      <span className="fx-sr">{label}</span>
     </span>
   );
 }
@@ -103,6 +106,8 @@ export const STATUS: Record<string, { icon: LucideIcon; text: string; tone: Tone
   review: { icon: Flag, text: "Requiere revisión", tone: "review" },
   missingSession: { icon: TriangleAlert, text: "Sin cierre registrado", tone: "warning" },
   notComparable: { icon: CircleDashed, text: "No comparable", tone: "neutral" },
+  campaignDone: { icon: CircleCheck, text: "Cerrada · meta cumplida", tone: "success" },
+  cashPending: { icon: Clock, text: "Sin depositar", tone: "warning" },
 };
 
 export type StatusKey = keyof typeof STATUS;

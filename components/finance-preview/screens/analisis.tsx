@@ -4,7 +4,9 @@ import { Clock, Download, Flag, Info, RefreshCw } from "lucide-react";
 import { CAMPAIGNS, INTEGRATIONS, PEOPLE } from "@/lib/finance-preview/fixtures";
 import { timeOf } from "@/lib/finance-preview/format";
 import {
+  comparabilityNote,
   comparisonBase,
+  periodKey,
   expenseByCategory,
   incomeByMethod,
   incomeBySource,
@@ -32,10 +34,12 @@ export function ReportesScreen() {
   const prevP = previousPeriod(period);
   const base = comparisonBase(period);
   const prevMethods = prevP && periodRangeNote(period) === null ? incomeByMethod(prevP) : null;
-  const campaigns = CAMPAIGNS.filter((c) => c.status === "active").reduce((a, c) => a + c.verified, 0);
+  const activeCampaign = CAMPAIGNS.find((c) => c.status === "active");
+  const prevNote = comparabilityNote(period);
 
   const worship = worshipSeries(8).map((w) => ({
     x: w.label.split(" ").slice(1).join(" ") + (w.inProgress ? "*" : ""),
+    xs: `${Number(w.date.slice(8, 10))}/${Number(w.date.slice(5, 7))}${w.inProgress ? "*" : ""}`,
     full: `${w.label}${w.inProgress ? " (en curso)" : ""}`,
     ofrendas: w.ofrendas,
     cafeteria: w.cafeteria,
@@ -96,12 +100,16 @@ export function ReportesScreen() {
             </ul>
           </Panel>
 
-          <EvolutionChart id="rep-evo" />
+          <EvolutionChart id="rep-evo" until={period.view === "month" ? periodKey(period) : undefined} />
 
           <div className="fx-grid">
             <div className="fx-span-6 fx-md-span-12">
               <Panel title="¿De dónde vino el dinero?" labelledBy="rep-src">
-                <SourceBreakdown rows={sources.rows} total={sources.total} campaignsOutside={campaigns} />
+                <SourceBreakdown
+                  rows={sources.rows}
+                  total={sources.total}
+                  campaign={activeCampaign ? { name: activeCampaign.name, amount: activeCampaign.verified } : undefined}
+                />
               </Panel>
             </div>
             <div className="fx-span-6 fx-md-span-12">
@@ -111,13 +119,16 @@ export function ReportesScreen() {
                 subtitle="Donaciones y ventas por separado: nunca se suman."
                 data={worship}
                 xKey="x"
+                xKeyMobile="xs"
                 fullLabelKey="full"
                 series={[
                   { key: "ofrendas", label: "Ofrendas", color: SERIES_COLOR["Ofrendas"] },
                   { key: "cafeteria", label: "Cafetería", color: SERIES_COLOR["Cafetería"] },
                 ]}
                 summary="Ofrendas y Cafetería en los últimos 8 cultos, en series separadas."
-                footnote="* Culto en curso. Incluye tarjeta SumUp en bruto y efectivo registrado."
+                footnote={`* Culto en curso. Incluye tarjeta SumUp en bruto y efectivo registrado.${
+                  worship.some((w) => w.ofrendas + w.cafeteria === 0) ? ` Sin registros: ${worship.filter((w) => w.ofrendas + w.cafeteria === 0).map((w) => w.full).join(", ")}.` : ""
+                }`}
                 height={{ desktop: 240, mobile: 200 }}
               />
             </div>
@@ -139,7 +150,7 @@ export function ReportesScreen() {
                           %
                         </th>
                         <th scope="col" className="is-num fx-hide-mobile">
-                          {prevP && prevMethods ? periodTitle(prevP) : "Mes anterior"}
+                          {prevP && prevMethods ? `${periodTitle(prevP)}${prevNote ? " · no homogéneo" : ""}` : "Mes anterior"}
                         </th>
                       </tr>
                     </thead>

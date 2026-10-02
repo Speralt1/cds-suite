@@ -56,7 +56,8 @@ function toProd(t: DemoTransaction): FinanceTransaction {
     createdBy: t.origin === "sumup" ? "system:sumup" : "user_demo",
     updatedBy: "user_demo",
     period: t.date.slice(0, 7),
-    day: t.date.slice(8, 10),
+    // producción normaliza el día sin cero a la izquierda ("4", no "04")
+    day: String(Number(t.date.slice(8, 10))),
     createdAt: undefined as never,
     updatedAt: undefined as never,
     date: undefined as never,
@@ -149,18 +150,25 @@ describe("invariantes financieros", () => {
 
   it("I9/I10 · Falta efectivo coincide con producción en días pasados y nunca antes del 09/09", () => {
     const prodItems = TRANSACTIONS.map(toProd);
-    for (const date of [...datesOfMonth("2026-09"), ...datesOfMonth("2026-10")].filter((d) => d < DEMO_TODAY)) {
+    for (const date of [...datesOfMonth("2026-09"), ...datesOfMonth("2026-10")].filter((d) => d <= DEMO_TODAY)) {
       const mine = dayStatus(date).missingCash.map((m) => (m.area === "ofrendas" ? "Ofrendas" : "Cafetería"));
-      const prod = prodDayStatus(date, prodItems, DEMO_TODAY).missingCashAreas;
-      expect(mine, date).toEqual(prod);
+      const prod = prodDayStatus(date, prodItems, DEMO_TODAY);
+      expect(mine, date).toEqual(prod.missingCashAreas);
+      expect(dayStatus(date).noRecords, date).toBe(prod.noRecords);
       if (date < SPLIT_DATE) expect(mine).toEqual([]);
     }
+    // el test no pasa en vacío: producción "ve" los ingresos de días con un dígito
+    expect(prodDayStatus("2026-09-02", prodItems, DEMO_TODAY).totalIncome).toBeGreaterThan(0);
+    expect(prodDayStatus("2026-09-09", prodItems, DEMO_TODAY).totalIncome).toBeGreaterThan(0);
     expect(dayStatus("2026-09-30").missingCash.map((m) => m.area)).toEqual(["cafeteria"]);
     expect(dayStatus("2026-09-23").noRecords).toBe(true);
   });
 
-  it("I10b · hoy no se marca Falta efectivo si la caja del área sigue abierta o en conteo", () => {
-    expect(dayStatus(DEMO_TODAY).missingCash).toEqual([]);
+  it("I10b · hoy se trata igual que producción, pero Atención lo presenta como efectivo por registrar (no atrasado)", () => {
+    expect(dayStatus(DEMO_TODAY).missingCash.map((m) => m.area)).toEqual(["ofrendas", "cafeteria"]);
+    const today = attentionItems().filter((i) => i.date === DEMO_TODAY && i.group === "records");
+    expect(today.length).toBe(2);
+    expect(today.every((i) => i.title.startsWith("Efectivo por registrar") && !i.overdue)).toBe(true);
   });
 
   it("I12 · Diezmos es parte de Ingresos, no una cuarta métrica paralela", () => {
@@ -173,7 +181,12 @@ describe("invariantes financieros", () => {
   it("I13 · las campañas no entran al libro", () => {
     const campaignTotal = CAMPAIGNS.reduce((a, c) => a + c.verified, 0);
     expect(campaignTotal).toBeGreaterThan(0);
-    expect(TRANSACTIONS.some((t) => /campaña|techo/i.test(t.category))).toBe(false);
+    expect(TRANSACTIONS.some((t) => /campaña|techo/i.test(`${t.category} ${t.description}`))).toBe(false);
+    for (const p of [SEP, OCT, YEAR]) {
+      const { rows, total } = incomeBySource(p);
+      expect(rows.some((r) => /campaña/i.test(r.label))).toBe(false);
+      expect(total).toBe(periodSummary(p).income);
+    }
   });
 
   it("I14 · Conciliado solo con depósito vinculado por el monto exacto", () => {
@@ -228,6 +241,12 @@ describe("invariantes financieros", () => {
   it("la comparación con agosto se marca como no homogénea (diezmos no registrados antes)", () => {
     expect(headlineMetrics(SEP)[0].comparabilityNote).toMatch(/No homogénea/);
     expect(reportNarrative(SEP)).toMatch(/no es homogénea/);
+  });
+
+  it("Gastos y Resultado advierten cuando la base casi no tiene gastos registrados", () => {
+    const [, expense, result] = headlineMetrics(OCT);
+    expect(expense.previous).toBe(0);
+    expect(result.comparabilityNote).toMatch(/gastos/);
   });
 
   it("el mes en curso se compara contra el mismo rango de días del mes anterior, nunca contra el mes completo", () => {

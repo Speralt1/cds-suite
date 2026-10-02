@@ -180,6 +180,8 @@ export interface ActivityEvent {
   text: string;
   amount?: number;
   kind: "cash" | "sync" | "tithe" | "expense" | "void" | "campaign" | "deposit";
+  /** TO-BE: el evento depende de un concepto que CDS aún no registra (caja, depósito). */
+  proposal?: boolean;
 }
 
 export interface AuditEntry {

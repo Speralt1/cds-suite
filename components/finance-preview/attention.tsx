@@ -40,10 +40,13 @@ const PROPOSAL_GROUPS: AttentionGroup[] = ["duplicate", "link", "difference", "r
 
 function Item({ item, compact, onResolve }: { item: AttentionItem; compact?: boolean; onResolve: (i: AttentionItem) => void }) {
   const Icon = item.title.startsWith("Culto sin registros") ? CircleDashed : GROUP_ICON[item.group];
-  const tone = item.tone === "neutral" ? "neutral" : item.tone;
+  const age = item.overdue ? null : ageLabel(item.date, DEMO_TODAY);
+  const amount = item.amount !== undefined && (
+    <MoneyAmount value={item.amount} diff={item.group === "difference"} />
+  );
   return (
     <li className="fx-att-item">
-      <span className={`fx-att-icon fx-tone-${tone}`} aria-hidden="true">
+      <span className={`fx-att-icon fx-tone-${item.tone}`} aria-hidden="true">
         <Icon size={18} />
       </span>
       <div style={{ minWidth: 0 }}>
@@ -51,34 +54,29 @@ function Item({ item, compact, onResolve }: { item: AttentionItem; compact?: boo
         <p className="fx-att-meta">
           {compact ? `${ATTENTION_GROUP_LABEL[item.group]} · ` : ""}
           {item.detail}
+          {age ? ` · ${age}` : ""}
           {compact && item.proposal ? " · Propuesta" : ""}
         </p>
-        {compact && (item.amount !== undefined || item.overdue) && (
-          <p className="fx-att-meta" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
-            {item.amount !== undefined && (
-              <span className="fx-att-amount" style={{ color: "var(--fx-ink)" }}>
-                <MoneyAmount value={item.amount} diff={item.group === "difference"} />
-              </span>
-            )}
+      </div>
+      {compact ? (
+        <div className="fx-att-side">
+          {amount && <span className="fx-att-amount">{amount}</span>}
+          {item.overdue && <StatusBadge status="overdue" detail={`${item.ageDays} d`} />}
+          <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => onResolve(item)}>
+            {item.cta}
+          </button>
+        </div>
+      ) : (
+        <div className="fx-att-side">
+          <span className="fx-att-amount fx-att-amount-col">{amount}</span>
+          <span className="fx-att-age-col">
             {item.overdue && <StatusBadge status="overdue" detail={`${item.ageDays} d`} />}
-          </p>
-        )}
-      </div>
-      <div className="fx-att-side">
-        {!compact && item.amount !== undefined && (
-          <span className="fx-att-amount">
-            <MoneyAmount value={item.amount} diff={item.group === "difference"} />
           </span>
-        )}
-        {compact ? null : item.overdue ? (
-          <StatusBadge status="overdue" detail={`${item.ageDays} d`} />
-        ) : (
-          item.date && <span className="fx-help">{ageLabel(item.date, DEMO_TODAY)}</span>
-        )}
-        <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => onResolve(item)}>
-          {item.cta}
-        </button>
-      </div>
+          <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => onResolve(item)}>
+            {item.cta}
+          </button>
+        </div>
+      )}
     </li>
   );
 }

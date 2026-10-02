@@ -591,13 +591,13 @@ export const CAMPAIGN_SUBMISSIONS: readonly CampaignSubmission[] = [
 // ---------- Actividad reciente ----------
 
 export const ACTIVITY: readonly ActivityEvent[] = [
-  { id: "a1", at: "2026-10-04T13:12", actor: PEOPLE.treasurer, text: "Registró el primer conteo de la caja de Ofrendas", amount: 186_000, kind: "cash" },
+  { id: "a1", at: "2026-10-04T13:12", actor: PEOPLE.treasurer, text: "Registró el primer conteo de la caja de Ofrendas", amount: 186_000, kind: "cash", proposal: true },
   { id: "a2", at: "2026-10-04T13:04", actor: "Sistema", text: "SumUp Ofrendas: 9 pagos nuevos sincronizados", kind: "sync" },
   { id: "a3", at: "2026-10-04T13:04", actor: "Sistema", text: "SumUp Cafetería no respondió; se reintentará a las 14:04", kind: "sync" },
-  { id: "a4", at: "2026-10-04T09:12", actor: PEOPLE.cafeteria, text: "Abrió la caja de Cafetería con fondo inicial", amount: 20_000, kind: "cash" },
+  { id: "a4", at: "2026-10-04T09:12", actor: PEOPLE.cafeteria, text: "Abrió la caja de Cafetería con fondo inicial", amount: 20_000, kind: "cash", proposal: true },
   { id: "a5", at: "2026-10-03T17:02", actor: PEOPLE.treasurer, text: "Registró un gasto: Artículos de aseo", amount: -36_990, kind: "expense" },
   { id: "a6", at: "2026-10-02T18:22", actor: PEOPLE.treasurer, text: "Anuló un gasto de Mantención (monto mal ingresado)", amount: -45_000, kind: "void" },
-  { id: "a7", at: "2026-10-02T12:30", actor: PEOPLE.treasurer, text: "Registró el depósito del efectivo de Ofrendas del 30-09", amount: 98_000, kind: "deposit" },
+  { id: "a7", at: "2026-10-02T12:30", actor: PEOPLE.treasurer, text: "Registró el depósito del efectivo de Ofrendas del 30-09", amount: 98_000, kind: "deposit", proposal: true },
   { id: "a8", at: "2026-10-02T10:15", actor: "Página pública", text: "2 aportes nuevos para Reparación del techo", amount: 70_000, kind: "campaign" },
   { id: "a9", at: "2026-10-01T16:40", actor: PEOPLE.counter, text: "Registró un diezmo por transferencia", amount: 50_000, kind: "tithe" },
 ];

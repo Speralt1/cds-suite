@@ -103,3 +103,28 @@ describe("aislamiento del preview Financial UX 2026", () => {
     expect(offenders.map((f) => relative(ROOT, f))).toEqual([]);
   });
 });
+
+describe("estructura de app/preview (barrera de compilación)", () => {
+  const SPECIAL = /^(page|route|default|not-found|loading|error|template|global-error)\./;
+
+  it("todo archivo especial de ruta usa la extensión .preview.tsx (salvo layout.tsx, sin páginas propias)", () => {
+    const offenders = walk(join(ROOT, "app", "preview"))
+      .map((f) => relative(join(ROOT, "app", "preview"), f))
+      .filter((rel) => {
+        const name = rel.split("/").pop()!;
+        if (name === "layout.tsx") return false;
+        return SPECIAL.test(name) && !name.endsWith(".preview.tsx");
+      });
+    expect(offenders).toEqual([]);
+  });
+
+  it("cada ruta del preview tiene su page.preview.tsx", () => {
+    const pages = walk(join(ROOT, "app", "preview")).filter((f) => f.endsWith("page.preview.tsx"));
+    expect(pages.length).toBeGreaterThanOrEqual(11);
+  });
+
+  it("el walker detecta Firebase cuando existe (no pasa en vacío)", () => {
+    const source = readFileSync(join(ROOT, "lib", "finance", "formatters.ts"), "utf8");
+    expect([...source.matchAll(IMPORT_RE)].some((m) => FORBIDDEN_PACKAGES.some((re) => re.test(m[1] ?? "")))).toBe(true);
+  });
+});

@@ -29,6 +29,7 @@ import { DEMO_TODAY } from "@/lib/finance-preview/fixtures";
 import {
   AVAILABLE_MONTHS,
   attentionItems,
+  parsePeriod,
   periodKey,
   periodRangeNote,
   periodTitle,
@@ -291,11 +292,35 @@ function MobileNav({ pathname }: { pathname: string }) {
   );
 }
 
+function KeepPeriodInUrl({ pathname }: { pathname: string }) {
+  const { period, setPeriod } = usePreview();
+  const periodRef = useRef(period);
+  useEffect(() => {
+    periodRef.current = period;
+  }, [period]);
+  // Al navegar con Link: si el destino trae ?periodo= válido se adopta; si no
+  // trae, se repone el período visible para que la URL siga describiéndolo.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get("periodo");
+    const current = periodKey(periodRef.current);
+    if (raw && raw !== current && periodKey(parsePeriod(raw)) === raw) {
+      setPeriod(parsePeriod(raw));
+      return;
+    }
+    if (raw === current) return;
+    url.searchParams.set("periodo", current);
+    window.history.replaceState(window.history.state, "", url);
+  }, [pathname, setPeriod]);
+  return null;
+}
+
 export function FinancialShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? BASE;
   return (
     <div className="fx" lang="es-CL" data-preview={FX_PREVIEW_SENTINEL}>
       <PreviewProvider>
+        <KeepPeriodInUrl pathname={pathname} />
         <a className="fx-skip" href="#fx-main">
           Saltar al contenido
         </a>
@@ -370,10 +395,11 @@ export function PeriodSelector({ allowYear = true }: { allowYear?: boolean }) {
                 {AVAILABLE_MONTHS.map((m) => (
                   <option key={m} value={m}>
                     {periodTitle({ view: "month", year: Number(m.slice(0, 4)), month: Number(m.slice(5)) })}
+                    {m === DEMO_TODAY.slice(0, 7) ? " · en curso" : ""}
                   </option>
                 ))}
               </select>
-              {range && <small>{range}</small>}
+              {range && <small>{range.split(" · ")[0]}</small>}
             </label>
             <button type="button" aria-label="Mes siguiente" disabled={!next} onClick={() => next && setPeriod(next)}>
               <ChevronRight size={18} />
@@ -419,19 +445,18 @@ export function RegisterMenu() {
       <button
         type="button"
         className="fx-btn fx-btn-primary"
-        aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls="fx-register-list"
         onClick={() => setOpen((v) => !v)}
       >
         <Plus size={16} aria-hidden="true" /> Registrar <ChevronDown size={14} aria-hidden="true" />
       </button>
       {open && (
-        <div className="fx-menu-list" role="menu">
+        <div className="fx-menu-list" id="fx-register-list">
           {REGISTER_ACTIONS.map((a) => (
             <button
               key={a}
               type="button"
-              role="menuitem"
               className="fx-menu-item"
               onClick={() => {
                 setOpen(false);

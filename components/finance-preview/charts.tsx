@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowRight, ChartColumn, Table2 } from "lucide-react";
 import { clp, clpShort } from "@/lib/finance-preview/format";
 import { SOURCE } from "@/lib/finance-preview/types";
@@ -100,6 +100,7 @@ export function FinancialChart({
   subtitle,
   data,
   xKey,
+  xKeyMobile,
   fullLabelKey,
   series,
   summary,
@@ -114,9 +115,12 @@ export function FinancialChart({
   subtitle?: React.ReactNode;
   data: Record<string, string | number | boolean>[];
   xKey: string;
+  /** Etiqueta corta del eje X en móvil (p. ej. "9/9"). */
+  xKeyMobile?: string;
   fullLabelKey: string;
   series: ChartSeries[];
   summary: string;
+  /** Sombrea desde la categoría `x` hasta el final, con un rótulo arriba. */
   annotation?: { x: string; label: string };
   footnote?: React.ReactNode;
   extraRow?: { label: string; key: string };
@@ -127,6 +131,9 @@ export function FinancialChart({
   const reduced = useReducedMotion();
   const mobile = useIsMobile();
   const h = mobile ? height.mobile : height.desktop;
+  const xk = mobile && xKeyMobile ? xKeyMobile : xKey;
+  const lastX = data.length ? String(data[data.length - 1][xk]) : "";
+  const annotationX = annotation ? data.find((d) => String(d[xKey]) === annotation.x)?.[xk] : undefined;
 
   return (
     <section className="fx-panel" aria-labelledby={`${id}-title`}>
@@ -205,34 +212,39 @@ export function FinancialChart({
       ) : (
         <div className="fx-chart" role="img" aria-label={summary} style={{ height: h }}>
           <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 600, height: h }}>
-            <BarChart data={data} margin={{ top: annotation ? 22 : 8, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%" barGap={4}>
+            <BarChart data={data} margin={{ top: annotation ? 24 : 12, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%" barGap={4}>
               <CartesianGrid vertical={false} stroke="#e3e7e0" />
               <XAxis
-                dataKey={xKey}
+                dataKey={xk}
                 tickLine={false}
                 axisLine={{ stroke: "#e3e7e0" }}
-                tick={{ fontSize: 12, fill: "#5f6e65" }}
+                tick={{ fontSize: mobile ? 11 : 12, fill: "#5f6e65" }}
                 interval={0}
                 minTickGap={4}
               />
               <YAxis
-                width={mobile ? 48 : 56}
+                width={mobile ? 60 : 68}
                 axisLine={false}
                 tickLine={false}
                 tickCount={4}
-                tick={{ fontSize: 12, fill: "#5f6e65" }}
-                tickFormatter={(v: number) => clpShort(v)}
+                allowDecimals={false}
+                tick={{ fontSize: mobile ? 11 : 12, fill: "#5f6e65" }}
+                // espacio duro: el tick nunca se parte en dos líneas ("$210 mil")
+                tickFormatter={(v: number) => clpShort(v).replace(/ /g, "\u00a0")}
               />
               <Tooltip
                 cursor={{ fill: "rgba(40,91,69,.06)" }}
                 content={<ChartTooltip series={series} titleKey={fullLabelKey} extraRow={extraRow} />}
               />
-              {annotation && (
-                <ReferenceLine
-                  x={annotation.x}
-                  stroke="#7f8c84"
-                  strokeDasharray="3 3"
-                  label={{ value: annotation.label, position: "insideTopRight", fontSize: 11, fill: "#5f6e65", dy: -18, dx: -4 }}
+              {annotation && annotationX !== undefined && (
+                <ReferenceArea
+                  x1={String(annotationX)}
+                  x2={lastX}
+                  fill="#285b45"
+                  fillOpacity={0.05}
+                  stroke="none"
+                  ifOverflow="extendDomain"
+                  label={{ value: annotation.label, position: "insideTop", fontSize: 11, fill: "#5f6e65", dy: -20 }}
                 />
               )}
               {series.map((s) => (
@@ -261,13 +273,14 @@ export function SourceBreakdown({
   rows,
   total,
   totalLabel = "Ingresos registrados",
-  campaignsOutside,
+  campaign,
   linkFor,
 }: {
   rows: BreakdownRow[];
   total: number;
   totalLabel?: string;
-  campaignsOutside?: number;
+  /** Campaña activa: acumulado, fuera del libro (no es una cifra del período). */
+  campaign?: { name: string; amount: number };
   linkFor?: (row: BreakdownRow) => string;
 }) {
   const max = Math.max(...rows.map((r) => r.amount), 1);
@@ -311,9 +324,9 @@ export function SourceBreakdown({
           <MoneyAmount value={total} /> <span className="fx-help">· 100 %</span>
         </span>
       </div>
-      {campaignsOutside !== undefined && (
+      {campaign && (
         <p className="fx-help" style={{ marginTop: 6 }}>
-          Campañas: <MoneyAmount value={campaignsOutside} /> fuera del libro, no suman aquí ·{" "}
+          Campaña «{campaign.name}»: <MoneyAmount value={campaign.amount} /> acumulado, fuera del libro; no suma aquí ·{" "}
           <Link className="fx-link" href="/preview/finanzas-2026/campanas">
             Ver Campañas <ArrowRight size={12} aria-hidden="true" />
           </Link>

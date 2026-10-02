@@ -1,7 +1,7 @@
 // Selectores puros del preview: toda cifra visible sale de aquí, para que
 // Hoy, Movimientos y Reportes no puedan contradecirse.
 
-import { clp, dayMonth, daysBetween, monthLabel, percent, shortDate, weekdayOf } from "./format";
+import { clp, clpAbs, dayMonth, daysBetween, monthLabel, percent, shortDate, weekdayOf } from "./format";
 import {
   CAMPAIGN_SUBMISSIONS,
   CAMPAIGNS,
@@ -219,15 +219,23 @@ export function categoryLabel(category: string, type: "income" | "expense") {
   return type === "expense" && category === SOURCE.cafeteria ? "Insumos de Cafetería" : category;
 }
 
-/** Diezmos y gastos se registran en CDS desde sep 2026: antes no hay base comparable. */
-export function comparabilityNote(p: Period): string | undefined {
+/** Diezmos (desde sep 2026) y gastos (desde el 24-09-2026) se registran en CDS
+ *  hace poco: si la base casi no los tiene, la comparación no es homogénea. */
+export function comparabilityNote(p: Period, metric: "income" | "expense" | "result" = "income"): string | undefined {
   const prevP = previousPeriod(p);
   if (!prevP) return undefined;
   const s = periodSummary(p);
-  const prev = comparisonBase(p)?.summary ?? periodSummary(prevP);
-  if (s.tithes > 0 && prev.tithes < s.tithes * 0.2)
-    return `No homogénea: en ${periodTitle(prevP).toLocaleLowerCase("es")} casi no se registraban diezmos en CDS.`;
-  return undefined;
+  const base = comparisonBase(p);
+  const prev = base?.summary ?? periodSummary(prevP);
+  const baseLabel = base?.label.replace(/^vs /, "") ?? periodTitle(prevP).toLocaleLowerCase("es");
+  const tithesGap = s.tithes > 0 && prev.tithes < s.tithes * 0.2;
+  const expenseGap = s.expense > 0 && prev.expense < s.expense * 0.2;
+  const missing =
+    metric === "income" ? (tithesGap ? ["diezmos"] : []) :
+    metric === "expense" ? (expenseGap ? ["gastos"] : []) :
+    [...(tithesGap ? ["diezmos"] : []), ...(expenseGap ? ["gastos"] : [])];
+  if (!missing.length) return undefined;
+  return `No homogénea: en ${baseLabel} casi no se registraban ${missing.join(" ni ")} en CDS.`;
 }
 
 /** Base de comparación de las métricas.
@@ -253,7 +261,7 @@ export function headlineMetrics(p: Period): Metric[] {
   const s = periodSummary(p);
   const base = comparisonBase(p);
   const topExpense = Object.entries(s.expenseByCategory).sort((a, b) => b[1] - a[1])[0];
-  const note = base ? comparabilityNote(p) : undefined;
+  const note = (m: "income" | "expense" | "result") => (base ? comparabilityNote(p, m) : undefined);
   const expenseCount = p.view === "month" && hasDetail(p)
     ? transactionsIn(p).filter((t) => isActive(t) && t.type === "expense").length
     : null;
@@ -264,7 +272,7 @@ export function headlineMetrics(p: Period): Metric[] {
       value: s.income,
       previous: base?.summary.income ?? null,
       comparisonLabel: base?.label,
-      comparabilityNote: note,
+      comparabilityNote: note("income"),
       composition: s.tithes
         ? `Incluye diezmos ${clp(s.tithes)} (${percent(s.tithes, s.income)})`
         : "Sin diezmos registrados en el período",
@@ -276,6 +284,7 @@ export function headlineMetrics(p: Period): Metric[] {
       value: s.expense,
       previous: base?.summary.expense ?? null,
       comparisonLabel: base?.label,
+      comparabilityNote: note("expense"),
       composition: topExpense
         ? `${expenseCount !== null ? `${expenseCount} gastos · ` : ""}mayor: ${categoryLabel(topExpense[0], "expense")} ${clp(topExpense[1])}`
         : "No se registraron gastos en el período. ¿Faltan egresos?",
@@ -286,7 +295,7 @@ export function headlineMetrics(p: Period): Metric[] {
       value: s.result,
       previous: base?.summary.result ?? null,
       comparisonLabel: base?.label,
-      comparabilityNote: note,
+      comparabilityNote: note("result"),
       composition: "Ingresos − gastos. No representa el saldo bancario.",
       note: s.sumUpGross ? "Aún no descuenta la comisión SumUp." : undefined,
     },
@@ -330,7 +339,9 @@ export function incomeBySource(p: Period): { rows: BreakdownRow[]; total: number
             ? "Ventas (tarjeta en bruto + efectivo)"
             : key === SOURCE.ofrendas
               ? "Donaciones del culto (tarjeta en bruto + efectivo)"
-              : undefined,
+              : key === SOURCE.donaciones
+                ? "Aportes fuera del culto; no son ofrendas"
+                : undefined,
     }));
   return { rows, total: s.income };
 }
@@ -389,8 +400,9 @@ export interface MonthPoint {
   partial: boolean;
 }
 
-export function monthlySeries(lastN = 10): MonthPoint[] {
-  return AVAILABLE_MONTHS.slice(-lastN).map((period) => {
+export function monthlySeries(lastN = 10, until?: string): MonthPoint[] {
+  const months = until ? AVAILABLE_MONTHS.filter((m) => m <= until) : AVAILABLE_MONTHS;
+  return months.slice(-lastN).map((period) => {
     const s = monthSummary(period);
     return {
       period,
@@ -458,7 +470,7 @@ export interface DayStatus {
 }
 
 /** Un área "falta efectivo" si, desde el 09/09 y hasta hoy, tiene SumUp > 0 y no tiene efectivo.
- *  Hoy no se marca si la caja del área sigue abierta o en conteo. */
+ *  Misma regla que producción (lib/finance/insights.ts#dayStatus), incluido hoy. */
 export function dayStatus(date: string, items: readonly DemoTransaction[] = TRANSACTIONS): DayStatus {
   const day = items.filter((t) => t.date === date && isActive(t));
   const missingCash: DayStatus["missingCash"] = [];
@@ -467,10 +479,7 @@ export function dayStatus(date: string, items: readonly DemoTransaction[] = TRAN
       const cat = AREA_CATEGORY[area];
       const sumUp = day.filter((t) => isSumUp(t) && t.category === cat).reduce((a, t) => a + t.amount, 0);
       const cash = day.filter((t) => t.method === "cash" && t.category === cat).length;
-      const sessionInProgress =
-        date === DEMO_TODAY &&
-        CASH_SESSIONS.some((s) => s.date === date && s.area === area && (s.state === "open" || s.state === "counting"));
-      if (sumUp > 0 && cash === 0 && !sessionInProgress) missingCash.push({ area, sumUp });
+      if (sumUp > 0 && cash === 0) missingCash.push({ area, sumUp });
     }
   }
   const worship = isWorshipDay(date);
@@ -637,7 +646,7 @@ export function filterMovements(items: readonly DemoTransaction[], f: MovementFi
       (f.method === "all" || t.method === f.method) &&
       (f.status === "all" || t.status === f.status) &&
       (!q ||
-        `${t.description} ${t.category} ${isSumUp(t) ? "sumup" : ""} ${shortDate(t.date)}`
+        `${t.description} ${t.category} ${isSumUp(t) ? "sumup" : ""} ${shortDate(t.date)} ${t.amount} ${clp(t.amount)}`
           .toLocaleLowerCase("es")
           .includes(q)),
   );
@@ -711,11 +720,14 @@ export function attentionItems(): AttentionItem[] {
   for (const date of [...datesOfMonth("2026-09"), ...datesOfMonth("2026-10")].filter((d) => d <= DEMO_TODAY)) {
     const st = dayStatus(date);
     for (const m of st.missingCash) {
+      const today = date === DEMO_TODAY;
       out.push({
         id: `cash-${date}-${m.area}`,
         group: "records",
-        title: `Falta efectivo · ${AREA_LABEL[m.area]}`,
-        detail: `${shortDate(date)}: SumUp ${clp(m.sumUp)} en bruto y ningún efectivo registrado.`,
+        title: today ? `Efectivo por registrar · ${AREA_LABEL[m.area]}` : `Falta efectivo · ${AREA_LABEL[m.area]}`,
+        detail: today
+          ? `Culto en curso: SumUp ${clp(m.sumUp)} en bruto; registra el efectivo al terminar.`
+          : `${shortDate(date)}: SumUp ${clp(m.sumUp)} en bruto y ningún efectivo registrado.`,
         amount: m.sumUp,
         date,
         ageDays: age(date),
@@ -723,7 +735,7 @@ export function attentionItems(): AttentionItem[] {
         cta: "Registrar efectivo",
         href: `/preview/finanzas-2026/${m.area === "ofrendas" ? "ofrendas" : "cafeteria"}`,
         proposal: false,
-        tone: "warning",
+        tone: today ? "info" : "warning",
       });
     }
     if (st.noRecords) {
@@ -783,7 +795,7 @@ export function attentionItems(): AttentionItem[] {
       id: `diff-${p.id}`,
       group: "difference",
       title: `Payout ${AREA_LABEL[p.account]} del ${dayMonth(p.date)} con diferencia`,
-      detail: `Llegó ${clp(gap)} respecto de lo esperado (ejemplo).`,
+      detail: `Llegaron ${clpAbs(gap)} ${gap < 0 ? "menos" : "más"} de lo esperado (comisión de ejemplo).`,
       amount: gap,
       date: p.date,
       ageDays: age(p.date),
@@ -861,8 +873,11 @@ export function reportNarrative(p: Period) {
   const prevP = previousPeriod(p);
   const prev = prevP ? periodSummary(prevP) : null;
   const parts: string[] = [];
+  const incomeCount = hasDetail(p) ? transactionsIn(p).filter((t) => isActive(t) && t.type === "income").length : null;
   parts.push(
-    `En ${periodTitle(p).toLocaleLowerCase("es")} se registraron ingresos por ${clp(s.income)} en ${s.count.toLocaleString("es-CL")} movimientos activos.`,
+    `En ${periodTitle(p).toLocaleLowerCase("es")} se registraron ingresos por ${clp(s.income)}${
+      incomeCount !== null ? ` en ${incomeCount.toLocaleString("es-CL")} movimientos de ingreso` : ""
+    }.`,
   );
   if (sources.length) {
     const [first, ...rest] = sources;
@@ -883,7 +898,7 @@ export function reportNarrative(p: Period) {
     const caveat = comparabilityNote(p);
     parts.push(
       caveat
-        ? `Frente a ${periodTitle(prevP!).toLocaleLowerCase("es")} los ingresos ${diff >= 0 ? "subieron" : "bajaron"} un ${Math.abs(diff).toLocaleString("es-CL", { maximumFractionDigits: 1 })} %, pero la comparación no es homogénea: ese mes casi no se registraban diezmos en CDS.`
+        ? `Frente a ${periodTitle(prevP!).toLocaleLowerCase("es")} los ingresos ${diff >= 0 ? "subieron" : "bajaron"} un ${Math.abs(diff).toLocaleString("es-CL", { maximumFractionDigits: 1 })} %, pero la comparación no es homogénea: ese mes casi no se registraban diezmos ni gastos en CDS.`
         : `Frente a ${periodTitle(prevP!).toLocaleLowerCase("es")}, los ingresos ${diff >= 0 ? "subieron" : "bajaron"} un ${Math.abs(diff).toLocaleString("es-CL", { maximumFractionDigits: 1 })} %.`,
     );
   }
@@ -945,6 +960,7 @@ export function worshipDaysTable(period: string) {
 export function campaignTotals() {
   return CAMPAIGNS.map((c) => ({
     ...c,
+    percent: c.goal ? Math.round((c.verified / c.goal) * 100) : 0,
     progress: c.goal ? Math.min(100, Math.round((c.verified / c.goal) * 100)) : 0,
     pending: CAMPAIGN_SUBMISSIONS.filter((s) => s.campaignId === c.id && s.status === "pending"),
   }));

@@ -81,7 +81,7 @@ export function MetricCard({ m }: { m: Metric }) {
       ) : (
         <p className="fx-metric-delta is-muted">Sin base comparable</p>
       )}
-      {m.comparabilityNote && v && <p className="fx-help" style={{ marginTop: 2 }}>{m.comparabilityNote}</p>}
+      {m.comparabilityNote && m.previous !== null && <p className="fx-help" style={{ marginTop: 2 }}>{m.comparabilityNote}</p>}
       {how && (
         <p className="fx-popover" id={`${id}-how`}>
           {METRIC_HOW[m.id]}
@@ -110,9 +110,9 @@ export function MetricCard({ m }: { m: Metric }) {
   );
 }
 
-export function EvolutionChart({ id = "evo" }: { id?: string }) {
+export function EvolutionChart({ id = "evo", until }: { id?: string; until?: string }) {
   const [range, setRange] = useState<6 | 10>(6);
-  const data = monthlySeries(range).map((p) => ({
+  const data = monthlySeries(range, until).map((p) => ({
     ...p,
     x: p.partial ? `${p.label}*` : p.label,
     full: `${periodTitle({ view: "month", year: Number(p.period.slice(0, 4)), month: Number(p.period.slice(5)) })}${p.partial ? " (en curso)" : ""}`,
@@ -131,9 +131,9 @@ export function EvolutionChart({ id = "evo" }: { id?: string }) {
         { key: "expense", label: "Gastos", color: SERIES_COLOR.expense },
       ]}
       extraRow={{ label: "Resultado", key: "result" }}
-      annotation={{ x: "Sep", label: "Diezmos y gastos en CDS desde sep" }}
+      annotation={data.some((d) => d.x.startsWith("Sep")) ? { x: data.find((d) => d.x.startsWith("Sep"))!.x, label: "Diezmos y gastos en CDS desde sep" } : undefined}
       summary={`Ingresos y gastos de los últimos ${data.length} meses. ${last.full}: ingresos ${last.income} pesos, gastos ${last.expense} pesos.`}
-      footnote="* Mes en curso. Antes de septiembre 2026 casi no se registraban diezmos ni gastos en CDS y SumUp no separaba áreas: esos meses no son comparables."
+      footnote={`${data.some((d) => d.partial) ? "* Mes en curso. " : ""}Antes de septiembre 2026 casi no se registraban diezmos ni gastos en CDS y SumUp no separaba áreas: esos meses no son comparables.`}
       controls={
         <div className="fx-segmented fx-hide-mobile" role="group" aria-label="Rango">
           <button type="button" aria-pressed={range === 6} onClick={() => setRange(6)}>
@@ -160,24 +160,27 @@ function OpsStatus() {
     <Panel title="Estado operativo" labelledBy="ops-title">
       <p className="fx-section-label">Hoy por área · {shortDate(DEMO_TODAY)}</p>
       <div className="fx-kv">
-        <div className="fx-kv-row">
-          <span>
-            Ofrendas
-            <span className="fx-help" style={{ display: "block" }}>
-              Efectivo aún sin registrar
+        {(
+          [
+            ["Ofrendas", SOURCE.ofrendas, ""],
+            ["Cafetería", SOURCE.cafeteria, ` hasta ${timeOf(cafe.lastSuccessAt)}`],
+          ] as const
+        ).map(([label, cat, until]) => (
+          <div className="fx-kv-row" key={label} style={{ alignItems: "flex-start", padding: "4px 0" }}>
+            <span>
+              {label}
+              <span className="fx-help" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                Efectivo: <StatusBadge status="pending" detail="por registrar" />
+              </span>
             </span>
-          </span>
-          <MoneyAmount value={todaySumUp(SOURCE.ofrendas)} basis="bruto" />
-        </div>
-        <div className="fx-kv-row">
-          <span>
-            Cafetería
-            <span className="fx-help" style={{ display: "block" }}>
-              SumUp hasta las {cafe.lastSuccessAt.slice(11, 16)} · efectivo sin registrar
+            <span style={{ textAlign: "right" }}>
+              <span className="fx-help" style={{ display: "block" }}>
+                SumUp{until}
+              </span>
+              <MoneyAmount value={todaySumUp(cat)} basis="bruto" />
             </span>
-          </span>
-          <MoneyAmount value={todaySumUp(SOURCE.cafeteria)} basis="bruto" />
-        </div>
+          </div>
+        ))}
       </div>
       <p className="fx-section-label" style={{ marginTop: 14 }}>
         Integraciones
@@ -231,6 +234,12 @@ function RecentActivity() {
                   · <MoneyAmount value={a.amount} />
                 </>
               )}
+              {a.proposal && (
+                <>
+                  {" "}
+                  <ProposalPill />
+                </>
+              )}
             </span>
           </li>
         ))}
@@ -244,7 +253,7 @@ export function HoyScreen() {
   const metrics = headlineMetrics(period);
   const sources = incomeBySource(period);
   const attention = attentionItems();
-  const campaignsVerified = CAMPAIGNS.filter((c) => c.status === "active").reduce((a, c) => a + c.verified, 0);
+  const activeCampaign = CAMPAIGNS.find((c) => c.status === "active");
 
   return (
     <>
@@ -281,10 +290,10 @@ export function HoyScreen() {
             ))}
           </div>
           <div className="fx-grid">
-            <div className="fx-span-8 fx-md-span-12 fx-fill fx-m-order-2">
+            <div className="fx-span-8 fx-md-span-12 fx-m-order-2" style={{ alignSelf: "start" }}>
               <EvolutionChart />
             </div>
-            <div className="fx-span-4 fx-md-span-12 fx-fill fx-m-order-1">
+            <div className="fx-span-4 fx-md-span-12 fx-m-order-1" style={{ alignSelf: "start" }}>
               <Panel
                 title={
                   <>
@@ -293,7 +302,7 @@ export function HoyScreen() {
                 }
                 labelledBy="hoy-att"
               >
-                <AttentionList items={attention} compact max={4} />
+                <AttentionList items={attention} compact max={3} />
               </Panel>
             </div>
             <div className="fx-span-4 fx-md-span-6 fx-sm-span-12 fx-fill fx-m-order-3">
@@ -304,7 +313,7 @@ export function HoyScreen() {
                 <SourceBreakdown
                   rows={sources.rows}
                   total={sources.total}
-                  campaignsOutside={campaignsVerified}
+                  campaign={activeCampaign ? { name: activeCampaign.name, amount: activeCampaign.verified } : undefined}
                   linkFor={(r) => `${BASE}/movimientos?fuente=${encodeURIComponent(r.key)}`}
                 />
               </Panel>
