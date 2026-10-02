@@ -4,6 +4,9 @@ import { SuiteProvider } from "@/components/suite-preview/provider";
 import { AccessGate } from "@/components/suite-preview/access-gate";
 import "@/components/finance-preview/finance-preview.css";
 import "@/components/suite-preview/suite-preview.css";
+import "@/components/suite-preview/calendar/calendar.css";
+import "@/components/suite-preview/members/members.css";
+import "@/components/suite-preview/settings/settings.css";
 
 // Preview CDS Suite (Finanzas V2 + Calendario + Integrantes) · SOLO datos de demostración.
 // Barrera 1: las páginas usan `.preview.tsx`, que solo se compila en `next dev` o
