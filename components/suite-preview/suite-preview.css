@@ -546,3 +546,10 @@
   font-size: 12px;
   font-weight: 400;
 }
+
+/* Sidebar ≥1280: evita la barra de scroll horizontal de 1 px en la lista de módulos. */
+@media (min-width: 1280px) {
+  .fx .sx-modules {
+    overflow-x: hidden;
+  }
+}
