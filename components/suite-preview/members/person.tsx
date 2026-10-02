@@ -172,7 +172,8 @@ function PersonTimeline({ personId }: { personId: string }) {
         </h2>
         <div className="fx-segmented sx-tl-filter" role="group" aria-label="Filtrar historial">
           {FILTERS.map((f) => (
-            <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+            // aria-label: en móvil el texto largo se oculta con CSS y el corto es decorativo.
+            <button key={f.id} type="button" aria-pressed={filter === f.id} aria-label={f.label} onClick={() => setFilter(f.id)}>
               <span className="sx-tl-filter-long">{f.label}</span>
               <span className="sx-tl-filter-short" aria-hidden="true">
                 {f.short}
@@ -320,7 +321,12 @@ function DataPanel({ v }: { v: PersonView }) {
       <span className="sx-dd-owner" key="o">
         {v.ownerValid ? v.ownerName : p.followUpOwnerUid ? `${v.ownerName} (sin acceso)` : <span className="sx-owner-missing">Sin asignar</span>}
         {m.canManage && p.lifecycleStage === "en_consolidacion" && (
-          <button type="button" className="fx-toggle sx-dd-btn" onClick={() => open("assign", p.id)}>
+          <button
+            type="button"
+            className="fx-toggle sx-dd-btn"
+            aria-label={`${p.followUpOwnerUid && v.ownerValid ? "Cambiar" : "Asignar"} responsable de ${p.fullName}`}
+            onClick={() => open("assign", p.id)}
+          >
             {p.followUpOwnerUid && v.ownerValid ? "Cambiar" : "Asignar"}
           </button>
         )}
@@ -380,7 +386,7 @@ function PersonHeader({ v }: { v: PersonView }) {
       </div>
       <div className="sx-ph-actions">
         {manage && (
-          <button type="button" className="fx-btn fx-btn-primary" onClick={() => open("visit", p.id)}>
+          <button type="button" className="fx-btn fx-btn-primary" aria-label={`Registrar visita a ${p.fullName}`} onClick={() => open("visit", p.id)}>
             <CalendarPlus size={16} aria-hidden="true" />
             <span className="sx-ph-long">Registrar visita</span>
             <span className="sx-ph-short" aria-hidden="true">
@@ -389,7 +395,12 @@ function PersonHeader({ v }: { v: PersonView }) {
           </button>
         )}
         {manage && (
-          <button type="button" className="fx-btn fx-btn-secondary" onClick={() => open("followup", p.id)}>
+          <button
+            type="button"
+            className="fx-btn fx-btn-secondary"
+            aria-label={`Registrar seguimiento de ${p.fullName}`}
+            onClick={() => open("followup", p.id)}
+          >
             <MessageSquarePlus size={16} aria-hidden="true" />
             <span className="sx-ph-long">Registrar seguimiento</span>
             <span className="sx-ph-short" aria-hidden="true">

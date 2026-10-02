@@ -91,8 +91,12 @@ export function validateArea(input: AreaInput, areas: readonly Area[]): Partial<
   else if (name.length > 40) errors.name = "Máximo 40 caracteres.";
   else if (areas.some((a) => a.id !== input.id && a.name.trim().toLocaleLowerCase("es") === name.toLocaleLowerCase("es")))
     errors.name = "Ya existe un área con ese nombre.";
+  // Al editar sin `active`, manda el estado actual del área (una inactiva puede
+  // conservar un color que hoy usa otra activa).
+  const current = input.id ? areas.find((a) => a.id === input.id) : undefined;
+  const active = input.active ?? current?.active ?? true;
   if (!AREA_COLORS.includes(input.color)) errors.color = "Elige un color de la paleta.";
-  else if ((input.active ?? true) && !freeColors(areas, input.id).includes(input.color))
+  else if (active && !freeColors(areas, input.id).includes(input.color))
     errors.color = "Ese color ya lo usa otra área activa.";
   if ((input.description ?? "").length > 200) errors.description = "Máximo 200 caracteres.";
   return errors;

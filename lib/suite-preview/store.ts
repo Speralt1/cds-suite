@@ -4,9 +4,9 @@
 
 import { can, validateProfileChange } from "./access";
 import { slugify, validateArea } from "./areas";
-import { canArchiveEvent, canManageEvent, canManageSeries, mergeEventPatch, validateEvent, validateSeriesPatch } from "./calendar";
+import { canArchiveEvent, canManageEvent, canManageSeries, isSeriesEnded, mergeEventPatch, validateEvent, validateSeriesPatch } from "./calendar";
 import { DEMO_NOW } from "./clock";
-import { DEFAULT_CONSOLIDATION_SETTINGS, isValidOwner, validatePerson } from "./consolidation";
+import { DEFAULT_CONSOLIDATION_SETTINGS, FOLLOWUP_RESULT_LABEL, FOLLOWUP_TYPE_LABEL, isValidOwner, validatePerson } from "./consolidation";
 import { compareLocal, dateOf } from "./dates";
 import { AREAS, EVENTS, FOLLOWUPS, PERSONS, PERSON_CHANGES, SHARE_LINK, USERS, VISITS } from "./fixtures";
 import { normalizeEmail, normalizePhone } from "./phone";
@@ -134,6 +134,7 @@ function validReason(reason: string | undefined): boolean {
 
 const REASON_ERROR = "Escribe un motivo (entre 3 y 300 caracteres).";
 const NO_PERMISSION = "Tu perfil no tiene permiso para esta acción.";
+const ALREADY_MEMBER = "Esta persona ya está integrada; se gestiona desde Integrantes.";
 
 function replace<T extends { id: string }>(list: readonly T[], item: T): T[] {
   return list.map((x) => (x.id === item.id ? item : x));
@@ -214,7 +215,7 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
     case "event/updateSeries": {
       const e = s.events.find((x) => x.id === a.id);
       if (!e) return fail(s, "La actividad no existe.");
-      const allowed = isRecurring(e) ? canManageSeries(actor, e, s.areas) : canManageEvent(actor, e, s.areas, today);
+      const allowed = isRecurring(e) ? canManageSeries(actor, e, s.areas, today) : canManageEvent(actor, e, s.areas, today);
       if (!allowed) return fail(s, NO_PERMISSION);
       const errors = validateSeriesPatch(e, a.patch, { profile: actor, areas: s.areas, today });
       const first = Object.values(errors)[0];
@@ -279,7 +280,8 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
       if (!e) return fail(s, "La actividad no existe.");
       if (!isRecurring(e)) return fail(s, "Esta actividad no se repite.");
       if (e.seriesCancellation) return fail(s, "La serie ya está cancelada.");
-      if (!canManageSeries(actor, e, s.areas)) return fail(s, NO_PERMISSION);
+      if (isSeriesEnded(e, today)) return fail(s, "La serie ya terminó: no quedan fechas por cancelar.");
+      if (!canManageSeries(actor, e, s.areas, today)) return fail(s, NO_PERMISSION);
       if (!validReason(a.reason)) return fail(s, REASON_ERROR);
       const next: CalendarEvent = {
         ...e,
@@ -425,6 +427,7 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
       if (!can(actor, "members.consolidation.manage")) return fail(s, NO_PERMISSION);
       const p = s.persons.find((x) => x.id === a.personId);
       if (!p) return fail(s, "La persona no existe.");
+      if (p.lifecycleStage === "integrante") return fail(s, ALREADY_MEMBER);
       const patch = a.patch;
       const errors = validatePerson(
         {
@@ -477,6 +480,7 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
       if (!can(actor, "members.consolidation.manage")) return fail(s, NO_PERMISSION);
       const p = s.persons.find((x) => x.id === a.input.personId);
       if (!p) return fail(s, "La persona no existe.");
+      if (p.lifecycleStage === "integrante") return fail(s, ALREADY_MEMBER);
       if (compareLocal(a.input.date, today) > 0) return fail(s, "La visita no puede ser futura.");
       if ((a.input.note ?? "").length > 500) return fail(s, "La nota admite máximo 500 caracteres.");
       const [id, seq] = nextId(s, "v");
@@ -500,12 +504,19 @@ export function applyAction(s: SuiteState, a: SuiteAction, now: LocalDateTime = 
       if (!v) return fail(s, "La visita no existe.");
       if (v.voided) return fail(s, "La visita ya está anulada.");
       if (!validReason(a.reason)) return fail(s, REASON_ERROR);
-      return { ok: true, state: { ...s, visits: replace(s.visits, { ...v, voided: true, voidReason: a.reason.trim() }) } };
+      return {
+        ok: true,
+        state: { ...s, visits: replace(s.visits, { ...v, voided: true, voidReason: a.reason.trim(), voidedBy: actor.uid, voidedAt: now }) },
+      };
     }
     case "followup/register": {
       if (!can(actor, "members.consolidation.manage")) return fail(s, NO_PERMISSION);
       const p = s.persons.find((x) => x.id === a.input.personId);
       if (!p) return fail(s, "La persona no existe.");
+      if (p.lifecycleStage === "integrante") return fail(s, ALREADY_MEMBER);
+      if (!Object.hasOwn(FOLLOWUP_TYPE_LABEL, a.input.type)) return fail(s, "Elige un tipo de seguimiento válido.");
+      if (!Object.hasOwn(FOLLOWUP_RESULT_LABEL, a.input.result)) return fail(s, "Elige un resultado válido.");
+      if (a.input.ownerUid && !isValidOwner(a.input.ownerUid, s.users)) return fail(s, "El responsable debe tener acceso a Consolidación.");
       const at = a.input.at ?? now;
       if (compareLocal(at, now) > 0) return fail(s, "El seguimiento no puede ser futuro.");
       if ((a.input.note ?? "").length > 1000) return fail(s, "La nota admite máximo 1.000 caracteres.");

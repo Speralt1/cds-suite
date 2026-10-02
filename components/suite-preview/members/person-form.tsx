@@ -7,14 +7,13 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, CalendarCheck, Check, Info, TriangleAlert } from "lucide-react";
-import { occurrencesInRange } from "@/lib/suite-preview/calendar";
 import { STATUS_LABEL, TRISTATE_LABEL, ageAt, duplicateCandidates, validatePerson } from "@/lib/suite-preview/consolidation";
 import { normalizePhone } from "@/lib/suite-preview/phone";
 import type { Person, TriState } from "@/lib/suite-preview/types";
 import { longDate, shortDate } from "@/lib/finance-preview/format";
 import { Callout } from "@/components/finance-preview/ui";
 import { PageHeader } from "../primitives";
-import { C_BASE, firstName, personHref } from "./model";
+import { C_BASE, arrivalOccurrences, dateEcho, firstName, personHref } from "./model";
 import { MemberActions, useMemberActions } from "./sheets";
 import { useMembers } from "./use-members";
 
@@ -106,14 +105,13 @@ function PersonFormContent() {
   const formRef = useRef<HTMLFormElement>(null);
 
   // "Llegó a": actividades del calendario de hoy; por defecto la más cercana a la hora actual.
+  // Sin calendar.read solo se ofrecen las actividades públicas.
   const today = m.today;
   const nowTime = m.now.slice(11, 16);
+  const canReadCalendar = m.eff.has("calendar.read");
   const occurrences = useMemo(
-    () =>
-      occurrencesInRange(m.state.events, today, today, m.now)
-        .filter((o) => o.status !== "cancelada")
-        .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? "")),
-    [m.state.events, today, m.now],
+    () => arrivalOccurrences(m.state.events, today, m.now, canReadCalendar),
+    [m.state.events, today, m.now, canReadCalendar],
   );
   const nearest = useMemo(() => {
     const toMin = (t?: string) => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : 720);
@@ -254,19 +252,25 @@ function PersonFormContent() {
               id="sx-np-birth"
               className="fx-input sx-input-date"
               type="date"
+              lang="es-CL"
               max={today}
               value={birth}
               aria-invalid={!!(birth && errors.birthDate)}
+              aria-describedby="sx-np-birth-help"
               onChange={(e) => setBirth(e.target.value)}
             />
             {birth && errors.birthDate ? (
-              <p className="fx-error" role="alert">
+              <p className="fx-error" id="sx-np-birth-help" role="alert">
                 <TriangleAlert size={14} aria-hidden="true" /> {errors.birthDate}
               </p>
             ) : age !== null ? (
-              <p className="fx-help-13">{age < 18 ? `Tiene ${age} años · menor de edad` : `Tiene ${age} años`}</p>
+              <p className="fx-help-13" id="sx-np-birth-help">
+                {dateEcho(birth, { weekday: false })} · {age < 18 ? `tiene ${age} años · menor de edad` : `tiene ${age} años`}
+              </p>
             ) : (
-              <p className="fx-help">Opcional. La edad se calcula sola.</p>
+              <p className="fx-help" id="sx-np-birth-help">
+                Opcional. La edad se calcula sola.
+              </p>
             )}
           </div>
         </section>

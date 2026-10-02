@@ -18,7 +18,7 @@ import type { Area, CalendarEvent, EventInput, Visibility, Ymd } from "@/lib/sui
 import { ProposalPill, Sheet } from "@/components/finance-preview/ui";
 import { AreaChip, AreaSwatch, areaStyle } from "../primitives";
 import { useSuite } from "../provider";
-import { maxUntil, repeatOptions, repeatValueOf, ruleFromRepeat, seriesSummary, type RepeatValue } from "./labels";
+import { longDateEcho, maxUntil, repeatOptions, repeatValueOf, ruleFromRepeat, seriesSummary, timeRangeEcho, type RepeatValue } from "./labels";
 
 interface FormState {
   responsibleAreaId: string;
@@ -227,10 +227,18 @@ function EventForm({ event, defaultDate, onSaved }: { event: CalendarEvent | nul
 
   const fid = (k: string) => `${uid}-${k}`;
   const err = (k: FieldKey) => errors[k];
-  const invalid = (k: FieldKey) => ({
+  const invalid = (k: FieldKey, describedBy?: string) => ({
     "aria-invalid": err(k) ? (true as const) : undefined,
-    "aria-describedby": err(k) ? fid(`${k}-err`) : undefined,
+    "aria-describedby": [err(k) ? fid(`${k}-err`) : null, describedBy].filter(Boolean).join(" ") || undefined,
   });
+  /** Eco legible bajo los inputs nativos de fecha/hora (16b: lectura en es-CL). */
+  const echo = (id: string, text: string) =>
+    text ? (
+      <p className="sx-input-echo" id={fid(id)}>
+        {text}
+      </p>
+    ) : null;
+  const timeEcho = !s.allDay ? timeRangeEcho(s.startTime, s.endTime) : "";
 
   const summary = recurring && !locked ? seriesSummary(ruleFromRepeat(s.repeat, s.startDate, s.until || undefined), s.startDate) : null;
   const lockedSummary = locked && event && isRecurring(event) ? seriesSummary({ ...event.recurrence, until: s.until || event.recurrence.until }, event.startDate) : null;
@@ -308,7 +316,16 @@ function EventForm({ event, defaultDate, onSaved }: { event: CalendarEvent | nul
         <div className="sx-cal-form-row">
           <div className="sx-field">
             <label htmlFor={fid("date")}>Fecha *</label>
-            <input id={fid("date")} type="date" className="fx-input" value={s.startDate} onChange={(e) => e.target.value && update({ startDate: e.target.value })} {...invalid("startDate")} />
+            <input
+              id={fid("date")}
+              type="date"
+              lang="es-CL"
+              className="fx-input"
+              value={s.startDate}
+              onChange={(e) => e.target.value && update({ startDate: e.target.value })}
+              {...invalid("startDate", longDateEcho(s.startDate) ? fid("date-echo") : undefined)}
+            />
+            {echo("date-echo", longDateEcho(s.startDate))}
             <FieldError id={fid("startDate-err")} message={err("startDate")} />
           </div>
           <label className="sx-switch">
@@ -320,16 +337,33 @@ function EventForm({ event, defaultDate, onSaved }: { event: CalendarEvent | nul
           <div className="sx-cal-form-row sx-cal-form-row-2">
             <div className="sx-field">
               <label htmlFor={fid("start")}>Hora de inicio</label>
-              <input id={fid("start")} type="time" className="fx-input" value={s.startTime} onChange={(e) => update({ startTime: e.target.value })} {...invalid("startTime")} />
+              <input
+                id={fid("start")}
+                type="time"
+                lang="es-CL"
+                className="fx-input"
+                value={s.startTime}
+                onChange={(e) => update({ startTime: e.target.value })}
+                {...invalid("startTime", timeEcho ? fid("time-echo") : undefined)}
+              />
               <FieldError id={fid("startTime-err")} message={err("startTime")} />
             </div>
             <div className="sx-field">
               <label htmlFor={fid("end")}>Hora de término</label>
-              <input id={fid("end")} type="time" className="fx-input" value={s.endTime} onChange={(e) => update({ endTime: e.target.value })} {...invalid("endTime")} />
+              <input
+                id={fid("end")}
+                type="time"
+                lang="es-CL"
+                className="fx-input"
+                value={s.endTime}
+                onChange={(e) => update({ endTime: e.target.value })}
+                {...invalid("endTime", timeEcho ? fid("time-echo") : undefined)}
+              />
               <FieldError id={fid("endTime-err")} message={err("endTime")} />
             </div>
           </div>
         )}
+        {echo("time-echo", timeEcho)}
         <label className="sx-cal-check">
           <input type="checkbox" checked={s.multiDay} onChange={(e) => update({ multiDay: e.target.checked, endDate: e.target.checked ? s.endDate : s.startDate })} />
           <span>Termina otro día</span>
@@ -337,7 +371,17 @@ function EventForm({ event, defaultDate, onSaved }: { event: CalendarEvent | nul
         {s.multiDay && (
           <div className="sx-field">
             <label htmlFor={fid("endDate")}>Fecha de término</label>
-            <input id={fid("endDate")} type="date" className="fx-input" min={s.startDate} value={s.endDate} onChange={(e) => e.target.value && update({ endDate: e.target.value })} {...invalid("endDate")} />
+            <input
+              id={fid("endDate")}
+              type="date"
+              lang="es-CL"
+              className="fx-input"
+              min={s.startDate}
+              value={s.endDate}
+              onChange={(e) => e.target.value && update({ endDate: e.target.value })}
+              {...invalid("endDate", longDateEcho(s.endDate) ? fid("endDate-echo") : undefined)}
+            />
+            {echo("endDate-echo", longDateEcho(s.endDate))}
             <FieldError id={fid("endDate-err")} message={err("endDate")} />
           </div>
         )}
@@ -373,13 +417,15 @@ function EventForm({ event, defaultDate, onSaved }: { event: CalendarEvent | nul
             <input
               id={fid("until")}
               type="date"
+              lang="es-CL"
               className="fx-input"
               min={locked ? today : s.startDate}
               max={maxUntil(locked && event ? event.startDate : s.startDate)}
               value={s.until}
               onChange={(e) => update({ until: e.target.value })}
-              {...invalid("recurrence")}
+              {...invalid("recurrence", longDateEcho(s.until) ? fid("until-echo") : undefined)}
             />
+            {echo("until-echo", longDateEcho(s.until))}
             <p className="fx-help">Incluye esa fecha. Máximo 12 meses.</p>
             <FieldError id={fid("recurrence-err")} message={err("recurrence")} />
           </div>

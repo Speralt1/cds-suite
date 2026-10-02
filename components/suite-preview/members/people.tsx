@@ -28,7 +28,7 @@ import { shortDate } from "@/lib/finance-preview/format";
 import { EmptyState, ErrorState, Sheet, SkeletonRows } from "@/components/finance-preview/ui";
 import { PageHeader } from "../primitives";
 import { replaceQueryParam, useQueryParam } from "../use-query";
-import { C_BASE, agoText, fold, personHref, plural, relDay, shortName, type PersonView } from "./model";
+import { C_BASE, agoText, alertReason, fold, personHref, plural, relDay, shortName, type PersonView } from "./model";
 import { MemberActions, useMemberActions } from "./sheets";
 import { useMembers, type MembersModel } from "./use-members";
 import { ALERT_VIS, DerivedBadges, PersonStatusBadge, STATUS_VIS } from "./vocab";
@@ -342,22 +342,26 @@ function RowMenu({ v }: { v: PersonView }) {
 
 // ---------- Celdas ----------
 
-function AlertIcons({ v }: { v: PersonView }) {
-  const shown = v.alerts.slice(0, 3);
-  if (!shown.length) return null;
+/** Alerta principal con ícono + texto ("Sin responsable", "21 días sin volver") y "+n" (16b §9.3). */
+function AlertSummary({ v, today }: { v: PersonView; today: string }) {
+  const primary = v.attention[0] ?? v.alerts[0];
+  if (!primary) return null;
+  const vis = ALERT_VIS[primary.type];
+  const Icon = vis.icon;
+  const others = v.alerts.filter((a) => a.type !== primary.type);
+  const text = alertReason(primary, v, today).strong;
   return (
-    <span className="sx-alert-icons">
-      {shown.map((a) => {
-        const vis = ALERT_VIS[a.type];
-        const Icon = vis.icon;
-        return (
-          <span key={a.type} className={`sx-alert-mini sx-ink-${vis.tone}`} title={ALERT_LABEL[a.type]}>
-            <Icon size={14} aria-hidden="true" />
-            <span className="fx-sr">{ALERT_LABEL[a.type]}</span>
+    <span className={`sx-alert-sum sx-ink-${vis.tone}`} title={v.alerts.map((a) => ALERT_LABEL[a.type]).join(", ")}>
+      <Icon size={14} aria-hidden="true" />
+      <span className="sx-alert-sum-text">{text}</span>
+      {others.length > 0 && (
+        <>
+          <span className="sx-alert-more" aria-hidden="true">
+            +{others.length}
           </span>
-        );
-      })}
-      {v.alerts.length > 3 && <span className="sx-alert-more">+{v.alerts.length - 3}</span>}
+          <span className="fx-sr">{`. Además: ${others.map((a) => ALERT_LABEL[a.type]).join(", ")}`}</span>
+        </>
+      )}
     </span>
   );
 }
@@ -384,7 +388,7 @@ function Owner({ v }: { v: PersonView }) {
   return (
     <span className="sx-owner-missing" title={v.person.followUpOwnerUid ? `${v.ownerName} ya no tiene acceso` : undefined}>
       <UserX size={13} aria-hidden="true" />
-      {v.person.followUpOwnerUid ? "Sin acceso" : "Sin asignar"}
+      {v.person.followUpOwnerUid ? "Responsable sin acceso" : "Sin asignar"}
     </span>
   );
 }
@@ -424,7 +428,7 @@ function PeopleTable({ rows }: { rows: PersonView[] }) {
                   </span>
                   <span className="fx-cell-sub sx-name-sub">
                     <DerivedBadges kinds={v.badges} short />
-                    <AlertIcons v={v} />
+                    <AlertSummary v={v} today={m.today} />
                     <span className="c-inline-phone fx-num">{v.phone}</span>
                   </span>
                 </td>

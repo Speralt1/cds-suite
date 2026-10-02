@@ -6,20 +6,57 @@ import { addDays, compareLocal, dayLabel, daysBetween, daysInMonth, isValidTime,
 import { expandRecurrence, isRecurring, validateRecurrence } from "./recurrence";
 import type { AccessProfile, Area, CalendarEvent, EventInput, EventPatch, LocalDateTime, Occurrence, Ymd } from "./types";
 
-/** Ocurrencias visibles (sin archivadas) en [from, to], ordenadas. */
-export function occurrencesInRange(events: readonly CalendarEvent[], from: Ymd, to: Ymd, now: LocalDateTime): Occurrence[] {
-  return sortOccurrences(events.flatMap((e) => expandRecurrence(e, from, to, now)));
+/**
+ * Ocurrencias visibles (sin archivadas) en [from, to], ordenadas con
+ * compareDayOrder. Pasa `areas` para desempatar por nombre del área responsable.
+ */
+export function occurrencesInRange(
+  events: readonly CalendarEvent[],
+  from: Ymd,
+  to: Ymd,
+  now: LocalDateTime,
+  areas?: readonly Area[],
+): Occurrence[] {
+  return sortOccurrences(events.flatMap((e) => expandRecurrence(e, from, to, now)), areas);
 }
 
-/** Por fecha; dentro del día, primero todo el día y después por hora de inicio. */
-export function sortOccurrences(list: readonly Occurrence[]): Occurrence[] {
-  return [...list].sort(
-    (a, b) =>
-      compareLocal(a.date, b.date) ||
-      Number(b.allDay) - Number(a.allDay) ||
-      compareLocal(a.startTime ?? "", b.startTime ?? "") ||
-      a.event.title.localeCompare(b.event.title, "es"),
+/** Claves de orden de una actividad dentro de un día (mismo orden en todas las vistas). */
+export interface DayOrderKey {
+  date: Ymd;
+  allDay: boolean;
+  startTime?: string | null;
+  areaName: string;
+  title: string;
+}
+
+/**
+ * Comparador ÚNICO (Mes, Semana, Agenda, móvil, público y reporte): por fecha;
+ * dentro del día, primero todo el día, luego hora de inicio, nombre del área
+ * responsable y título.
+ */
+export function compareDayOrder(a: DayOrderKey, b: DayOrderKey): number {
+  return (
+    compareLocal(a.date, b.date) ||
+    Number(b.allDay) - Number(a.allDay) ||
+    compareLocal(a.allDay ? "" : (a.startTime ?? ""), b.allDay ? "" : (b.startTime ?? "")) ||
+    a.areaName.localeCompare(b.areaName, "es") ||
+    a.title.localeCompare(b.title, "es")
   );
+}
+
+/**
+ * Clave de orden de una ocurrencia. El nombre del área sale de `areas`; sin
+ * ellas no se desempata por área (solo por título).
+ */
+export function occurrenceOrderKey(o: Occurrence, areas?: readonly Area[]): DayOrderKey {
+  const areaName = areas ? (areaById(areas, o.event.responsibleAreaId)?.name ?? "") : "";
+  return { date: o.date, allDay: o.allDay, startTime: o.startTime, areaName, title: o.event.title };
+}
+
+/** Ordena con compareDayOrder. */
+export function sortOccurrences(list: readonly Occurrence[], areas?: readonly Area[]): Occurrence[] {
+  const keys = new Map(list.map((o) => [o, occurrenceOrderKey(o, areas)] as const));
+  return [...list].sort((a, b) => compareDayOrder(keys.get(a)!, keys.get(b)!));
 }
 
 function responsibleIsMine(p: AccessProfile, e: CalendarEvent, areas: readonly Area[]): boolean {
@@ -34,6 +71,8 @@ function responsibleIsMine(p: AccessProfile, e: CalendarEvent, areas: readonly A
  */
 export function canManageEvent(p: AccessProfile, e: CalendarEvent, areas: readonly Area[], today: Ymd, occurrenceDate?: Ymd): boolean {
   if (e.status === "archivada") return false;
+  // Una actividad simple cancelada queda en solo lectura (para todos).
+  if (e.status === "cancelada" && !isRecurring(e)) return false;
   if (can(p, "calendar.events.manage_all")) return true;
   if (!can(p, "calendar.events.manage_assigned")) return false;
   if (!responsibleIsMine(p, e, areas)) return false;
@@ -41,11 +80,21 @@ export function canManageEvent(p: AccessProfile, e: CalendarEvent, areas: readon
   return compareLocal(ref, today) >= 0;
 }
 
-/** Igual que canManageEvent sin la regla de pasado (las acciones de serie solo tocan ≥ hoy). */
-export function canManageSeries(p: AccessProfile, e: CalendarEvent, areas: readonly Area[]): boolean {
+/** La serie ya terminó: su fecha final (`until`) es anterior a hoy. Sin `until` nunca termina. */
+export function isSeriesEnded(e: Pick<CalendarEvent, "recurrence">, today: Ymd): boolean {
+  return !!e.recurrence.until && compareLocal(e.recurrence.until, today) < 0;
+}
+
+/**
+ * Igual que canManageEvent sin la regla de pasado por fecha (las acciones de
+ * serie solo tocan ≥ hoy). Con `today`, una serie terminada (until < hoy) es
+ * solo lectura para manage_assigned.
+ */
+export function canManageSeries(p: AccessProfile, e: CalendarEvent, areas: readonly Area[], today?: Ymd): boolean {
   if (e.status === "archivada") return false;
   if (can(p, "calendar.events.manage_all")) return true;
-  return can(p, "calendar.events.manage_assigned") && responsibleIsMine(p, e, areas);
+  if (!can(p, "calendar.events.manage_assigned") || !responsibleIsMine(p, e, areas)) return false;
+  return !today || !isSeriesEnded(e, today);
 }
 
 /** "Eliminar" (archivar): manage_assigned no archiva actividades que ya empezaron (16c §C.5, R10). */
@@ -82,7 +131,7 @@ export function myActivities(
 ): MyActivity[] {
   const mine = new Set(p.areaIds);
   const today = now.slice(0, 10);
-  return occurrencesInRange(events, from, to, now)
+  return occurrencesInRange(events, from, to, now, areas)
     .filter((o) => mine.has(o.event.responsibleAreaId) || o.event.participantAreaIds.some((id) => mine.has(id)))
     .map((o) => {
       const role = mine.has(o.event.responsibleAreaId) ? "responsable" : "participante";
@@ -144,9 +193,9 @@ export interface AgendaGroup {
  * Agenda: solo días con actividades. Cada ocurrencia va en su día de inicio;
  * si empezó antes del rango (vigilia, campamento), va en el primer día del rango.
  */
-export function agendaGroups(list: readonly Occurrence[], today: Ymd, from?: Ymd): AgendaGroup[] {
+export function agendaGroups(list: readonly Occurrence[], today: Ymd, from?: Ymd, areas?: readonly Area[]): AgendaGroup[] {
   const groups = new Map<Ymd, Occurrence[]>();
-  for (const o of sortOccurrences(list)) {
+  for (const o of sortOccurrences(list, areas)) {
     const day = from && compareLocal(o.date, from) < 0 ? from : o.date;
     groups.set(day, [...(groups.get(day) ?? []), o]);
   }

@@ -4,7 +4,7 @@
 
 import { can } from "@/lib/suite-preview/access";
 import { areaById } from "@/lib/suite-preview/areas";
-import { canArchiveEvent, canManageEvent, canManageSeries } from "@/lib/suite-preview/calendar";
+import { canArchiveEvent, canManageEvent, canManageSeries, isSeriesEnded } from "@/lib/suite-preview/calendar";
 import { compareLocal } from "@/lib/suite-preview/dates";
 import { isRecurring } from "@/lib/suite-preview/recurrence";
 import type { AccessProfile, Area, Occurrence, Ymd } from "@/lib/suite-preview/types";
@@ -51,12 +51,12 @@ export function eventActions(p: AccessProfile | null, o: Occurrence, areas: read
   const mine = p.areaIds.includes(e.responsibleAreaId);
   const participates = e.participantAreaIds.some((id) => p.areaIds.includes(id));
 
-  const canEdit = recurring ? canManageSeries(p, e, areas) : canManageEvent(p, e, areas, today);
+  const canEdit = recurring ? canManageSeries(p, e, areas, today) : canManageEvent(p, e, areas, today);
   const futureDate = compareLocal(o.date, today) >= 0;
   const canCancelThisDate = recurring
     ? canManageEvent(p, e, areas, today, o.date) && futureDate && o.status !== "cancelada" && !e.exceptions.some((x) => x.date === o.date)
     : canManageEvent(p, e, areas, today) && e.status === "programada" && compareLocal(e.endDate, today) >= 0;
-  const canCancelSeries = recurring && canManageSeries(p, e, areas) && !e.seriesCancellation;
+  const canCancelSeries = recurring && canManageSeries(p, e, areas, today) && !e.seriesCancellation && !isSeriesEnded(e, today);
   const canCancel = canCancelThisDate || canCancelSeries;
   const canArchive = canArchiveEvent(p, e, areas, today);
 

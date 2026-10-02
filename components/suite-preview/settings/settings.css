@@ -842,38 +842,4 @@
   line-height: 16px;
 }
 
-/* ---------- Ingreso /preview (16b §3.4): pulido a cargo de Configuración ---------- */
-.fx .sx-login-text {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.fx .sx-login-row > svg {
-  flex: 0 0 auto;
-  color: var(--fx-muted);
-}
-.fx .sx-login-row:focus-visible {
-  outline-offset: -2px;
-}
-@media (max-width: 480px) {
-  .fx .sx-login-row {
-    flex-wrap: nowrap;
-    min-height: 64px;
-  }
-  .fx .sx-login-text {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-  }
-  .fx .sx-login-name {
-    flex: 0 1 auto;
-    font-size: 15px;
-  }
-  .fx .sx-login-enters {
-    flex-basis: auto;
-    padding-left: 0;
-    font-size: 13px;
-  }
-}
+/* Ingreso /preview (16b §3.4): sus estilos viven en suite-preview.css (.sx-login-*). */

@@ -246,6 +246,8 @@ export interface PublicEvent {
   responsibleArea: PublicArea;
   participantAreas: PublicArea[];
   status: "programada" | "cancelada";
+  /** "Se repite cada domingo hasta el 28 feb 2027" (null si no se repite). */
+  recurrenceLabel: string | null;
 }
 
 export interface PublicCalendar {
@@ -296,6 +298,9 @@ export interface Visit {
   note?: string;
   voided: boolean;
   voidReason?: string;
+  /** Quién y cuándo anuló la visita (visit/void). */
+  voidedBy?: string;
+  voidedAt?: LocalDateTime;
   createdBy: string;
   createdAt: LocalDateTime;
 }

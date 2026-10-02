@@ -88,3 +88,24 @@ describe("aislamiento de la preview de CDS Suite", () => {
     expect([...source.matchAll(IMPORT_RE)].some((m) => FORBIDDEN_PACKAGES.some((re) => re.test(m[1] ?? "")))).toBe(true);
   });
 });
+
+describe("aislamiento: los barridos no son vacíos (controles)", () => {
+  it("cada barrido regex recorre archivos reales", () => {
+    // files(): red/almacenamiento, reloj y jspdf.
+    expect(files().length).toBeGreaterThan(60);
+    for (const dir of ENTRY_DIRS) expect(walkFiles(dir).length, rel(dir)).toBeGreaterThan(0);
+    expect(files().some((f) => f.endsWith(join("lib", "suite-preview", "dates.ts")))).toBe(true);
+    expect(files().some((f) => f.endsWith(join("lib", "suite-preview", "report-pdf.ts")))).toBe(true);
+    // lib/suite-preview puro y allowlist de public/.
+    expect(walkFiles(join(ROOT, "lib", "suite-preview")).length).toBeGreaterThan(10);
+    expect(walkFiles(join(ROOT, "components", "suite-preview", "public")).length).toBeGreaterThan(0);
+  });
+
+  it("collectImportGraph detecta un import de lib/finance (control positivo)", () => {
+    const entry = join(ROOT, "components", "finance", "shared.tsx");
+    expect(importsOf(entry).some((s) => s.startsWith("@/lib/finance/"))).toBe(true);
+    const { seen, offenders } = collectImportGraph({ entries: [entry], forbiddenPackages: [], forbiddenLocal: ["lib/finance/"] });
+    expect(seen.size).toBeGreaterThan(0);
+    expect(offenders.some((o) => o.startsWith("components/finance/shared.tsx → lib/finance/"))).toBe(true);
+  });
+});

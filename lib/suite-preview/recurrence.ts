@@ -165,6 +165,41 @@ export function recurrenceSummary(e: Pick<CalendarEvent, "startDate" | "recurren
   }
 }
 
+const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"] as const;
+
+/** "domingos", "lunes", "sábados". */
+export function weekdayPluralName(wd: number): string {
+  const name = WEEKDAY_NAMES[wd];
+  return name.endsWith("s") ? name : `${name}s`;
+}
+
+/**
+ * Texto de la recurrencia en el detalle (16b §5.7), también publicado en la
+ * proyección pública: "Se repite cada viernes hasta el 18 dic 2026",
+ * "Cada 2 semanas, los martes, hasta el …", "El primer sábado de cada mes hasta el …".
+ */
+export function recurrenceDetailText(e: Pick<CalendarEvent, "startDate" | "recurrence">): string | null {
+  const r = e.recurrence;
+  if (r.freq === "none") return null;
+  const wd = weekdayOf(e.startDate);
+  let until = "";
+  if (r.until) {
+    const { y, m, d } = parseYmd(r.until);
+    until = ` hasta el ${d} ${MONTHS_SHORT[m - 1]} ${y}`;
+  }
+  switch (r.freq) {
+    case "weekly":
+      return `Se repite cada ${WEEKDAY_NAMES[wd]}${until}`;
+    case "biweekly":
+      return `Cada 2 semanas, los ${weekdayPluralName(wd)}${until ? `,${until}` : ""}`;
+    case "monthly": {
+      if (!r.monthly) return `Cada mes${until}`;
+      const text = `el ${ordinalLabel(r.monthly.ordinal)} ${WEEKDAY_NAMES[r.monthly.weekday]} de cada mes${until}`;
+      return text[0].toLocaleUpperCase("es") + text.slice(1);
+    }
+  }
+}
+
 /** Errores de la regla (vacío = válida). */
 export function validateRecurrence(rule: RecurrenceRule, startDate: Ymd, endDate: Ymd): string[] {
   const errors: string[] = [];

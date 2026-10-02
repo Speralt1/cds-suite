@@ -171,7 +171,7 @@ export function SuiteProvider({ children }: { children: React.ReactNode }) {
       if (!profileValid || current === profileId) return;
       url.searchParams.set(PROFILE_PARAM, profileId);
     }
-    window.history.replaceState(window.history.state, "", url);
+    window.history.replaceState(null, "", url);
     notifyQueryChange();
   }, [ready, pathname, profileId, profileValid]);
 
@@ -202,7 +202,7 @@ export function SuiteProvider({ children }: { children: React.ReactNode }) {
     <SuiteContext.Provider value={value}>
       <SuiteToastContext.Provider value={toastValue}>
         {children}
-        <div className="fx fx-toast-host" lang="es-CL">
+        <div className="fx sx-toast-host" lang="es-CL">
           <div className="fx-toast-region" role="status" aria-live="polite">
             {current && (
               <div

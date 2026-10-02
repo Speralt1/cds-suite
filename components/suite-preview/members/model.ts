@@ -12,10 +12,11 @@ import {
   type ConsolidationData,
   type PersonStats,
 } from "@/lib/suite-preview/consolidation";
-import { compareLocal, daysBetween, parseYmd } from "@/lib/suite-preview/dates";
+import { occurrencesInRange } from "@/lib/suite-preview/calendar";
+import { compareLocal, daysBetween, isValidYmd, parseYmd } from "@/lib/suite-preview/dates";
 import { formatPhone } from "@/lib/suite-preview/phone";
-import type { AccessProfile, Alert, ConsolidationSettings, Person, Ymd } from "@/lib/suite-preview/types";
-import { shortDate } from "@/lib/finance-preview/format";
+import type { AccessProfile, Alert, CalendarEvent, ConsolidationSettings, LocalDateTime, Occurrence, Person, Ymd } from "@/lib/suite-preview/types";
+import { longDate, shortDate } from "@/lib/finance-preview/format";
 import type { DerivedBadge } from "./vocab";
 
 export const C_BASE = "/preview/integrantes/consolidacion";
@@ -155,4 +156,26 @@ export function alertReason(a: Alert, v: PersonView, today: Ymd): { strong: stri
     case "cumpleanos_proximo":
       return { strong: "Cumpleaños próximo", rest: a.detail };
   }
+}
+
+/**
+ * Eco legible bajo un input de fecha: "domingo 4 de octubre de 2026" (o sin el
+ * día de la semana, p. ej. para nacimientos: "15 de enero de 1992").
+ */
+export function dateEcho(d: string, opts: { weekday?: boolean } = {}): string | null {
+  if (!isValidYmd(d)) return null;
+  const text = longDate(d);
+  return opts.weekday === false ? text.slice(text.indexOf(" ") + 1) : text;
+}
+
+/**
+ * Actividades del calendario para "Llegó a" / "Actividad o servicio" en un día.
+ * Sin calendar.read solo se listan las actividades públicas (privacidad: no se
+ * revelan títulos de actividades solo para el equipo).
+ */
+export function arrivalOccurrences(events: readonly CalendarEvent[], date: Ymd, now: LocalDateTime, canReadCalendar: boolean): Occurrence[] {
+  if (!isValidYmd(date)) return [];
+  return occurrencesInRange(events, date, date, now)
+    .filter((o) => o.status !== "cancelada" && (canReadCalendar || o.event.visibility === "public"))
+    .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 }

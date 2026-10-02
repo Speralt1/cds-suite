@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { areaById } from "@/lib/suite-preview/areas";
-import { monthGrid, occurrencesOnDay } from "@/lib/suite-preview/calendar";
+import { compareDayOrder, monthGrid, occurrenceOrderKey, occurrencesOnDay } from "@/lib/suite-preview/calendar";
 import { compareLocal, dayLabel, parseYmd, WEEKDAY_HEADERS_MON_FIRST } from "@/lib/suite-preview/dates";
 import type { Area, Occurrence, Ymd } from "@/lib/suite-preview/types";
 import { Sheet } from "@/components/finance-preview/ui";
@@ -16,7 +16,11 @@ import { AgendaRow, MonthChip } from "./event-bits";
 
 const WEEKDAY_FULL = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
-/** Orden dentro del día: todo el día, por hora de inicio y por nombre de área. */
+/**
+ * Orden dentro del día (comparador único compareDayOrder: todo el día, hora de
+ * inicio, nombre de área, título); las que vienen del día anterior van antes
+ * de las que empiezan ese día.
+ */
 export function sortDay(list: Occurrence[], areas: readonly Area[], date: Ymd): Occurrence[] {
   return [...list].sort((a, b) => {
     const ac = compareLocal(a.date, date) < 0 ? 0 : 1;
@@ -24,8 +28,7 @@ export function sortDay(list: Occurrence[], areas: readonly Area[], date: Ymd): 
     return (
       Number(b.allDay) - Number(a.allDay) ||
       ac - bc ||
-      compareLocal(a.startTime ?? "", b.startTime ?? "") ||
-      (areaById(areas, a.event.responsibleAreaId)?.name ?? "").localeCompare(areaById(areas, b.event.responsibleAreaId)?.name ?? "", "es")
+      compareDayOrder({ ...occurrenceOrderKey(a, areas), date }, { ...occurrenceOrderKey(b, areas), date })
     );
   });
 }

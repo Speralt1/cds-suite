@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, FlaskConical, UserRoundCog } from "lucide-react";
-import { landingLabel, resolveInitialModule } from "@/lib/suite-preview/access";
+import { INITIAL_MODULE_LABEL, landingLabel, resolveInitialModule } from "@/lib/suite-preview/access";
 import { DEMO_PROFILES, initialsOf, profileTitle, simulatorLabel } from "@/lib/suite-preview/fixtures";
 import type { AccessProfile } from "@/lib/suite-preview/types";
 import { Sheet } from "@/components/finance-preview/ui";
@@ -61,6 +61,14 @@ function ProfileRows({ onPick }: { onPick: () => void }) {
   );
 }
 
+/** "* Su módulo inicial (Finanzas) ya no está permitido." si algún perfil lleva asterisco. */
+function FallbackNote() {
+  const profiles = useDemoProfiles();
+  const fallback = profiles.map(resolveInitialModule).find((l) => l.kind === "module" && l.invalidInitial);
+  if (fallback?.kind !== "module" || !fallback.invalidInitial) return null;
+  return <p className="sx-sim-note">* Su módulo inicial ({INITIAL_MODULE_LABEL[fallback.invalidInitial]}) ya no está permitido.</p>;
+}
+
 function SimulatorFooter({ onPick }: { onPick: () => void }) {
   return (
     <p className="sx-sim-foot">
@@ -92,6 +100,9 @@ export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" })
   }, [open, variant]);
   if (!suite) return null;
   const label = suite.profile ? simulatorLabel(suite.profile) : "Perfil no válido";
+  // Bajo 400 px el móvil muestra solo el cargo ("Ver como: Líder"); el nombre
+  // accesible completo va en aria-label (el texto oculto no cuenta para el nombre).
+  const short = label.split(" · ")[0];
   const id = `sx-sim-${variant}`;
   const close = () => setOpen(false);
   return (
@@ -99,6 +110,7 @@ export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" })
       <button
         type="button"
         className="sx-sim-trigger"
+        aria-label={`Ver como: ${label}`}
         aria-expanded={open}
         aria-controls={variant === "desktop" ? id : undefined}
         aria-haspopup="dialog"
@@ -107,6 +119,7 @@ export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" })
         <UserRoundCog size={14} aria-hidden="true" />
         <span className="sx-sim-label">
           Ver como: <span className="sx-sim-who">{label}</span>
+          {variant === "mobile" && short !== label && <span className="sx-sim-who-short">{short}</span>}
         </span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
@@ -114,12 +127,14 @@ export function ProfileSimulator({ variant }: { variant: "desktop" | "mobile" })
         <div className="sx-sim-popover" id={id} role="dialog" aria-label="Ver como (vista previa)">
           <p className="sx-sim-title">Ver como (vista previa)</p>
           <ProfileRows onPick={close} />
+          <FallbackNote />
           <SimulatorFooter onPick={close} />
         </div>
       )}
       {variant === "mobile" && (
         <Sheet open={open} onClose={close} title="Ver como (vista previa)" labelId="sx-sim-sheet-title">
           <ProfileRows onPick={close} />
+          <FallbackNote />
           <SimulatorFooter onPick={close} />
         </Sheet>
       )}

@@ -80,7 +80,7 @@ export function CalendarScreen() {
         : { from: isCurrentMonth && !showEarlier ? today : firstOfMonth(anchor), to: addDays(lastOfMonth(anchor), 14) };
 
   // Expansión barata (decenas de actividades): sin memo manual (React Compiler).
-  const all = occurrencesInRange(state.events, range.from, range.to, DEMO_NOW);
+  const all = occurrencesInRange(state.events, range.from, range.to, DEMO_NOW, state.areas);
   const options = areaOptions(all, state.areas, onlyResponsible);
   const filtered = estado === "vacio" ? [] : selected.includes(NO_AREAS) ? [] : filterByAreas(all, selected, onlyResponsible);
 

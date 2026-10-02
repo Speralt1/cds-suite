@@ -2,8 +2,8 @@
 // etiquetas accesibles. Puro (sin React). Fechas siempre locales "YYYY-MM-DD".
 
 import { areaById } from "@/lib/suite-preview/areas";
-import { addMonthsClamped, compareLocal, dayLabel, MONTH_NAMES, parseYmd, weekdayOf, WEEKDAY_NAMES } from "@/lib/suite-preview/dates";
-import { candidateDates, isRecurring, monthlyOrdinalOptions, ordinalLabel } from "@/lib/suite-preview/recurrence";
+import { addMonthsClamped, compareLocal, dayLabel, isValidYmd, MONTH_NAMES, parseYmd, weekdayOf, WEEKDAY_NAMES } from "@/lib/suite-preview/dates";
+import { candidateDates, isRecurring, monthlyOrdinalOptions, ordinalLabel, recurrenceDetailText, weekdayPluralName } from "@/lib/suite-preview/recurrence";
 import type { AccessProfile, Area, CalendarEvent, Occurrence, Ordinal, RecurrenceRule, Ymd } from "@/lib/suite-preview/types";
 
 export const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"] as const;
@@ -37,8 +37,7 @@ export function weekTitle(from: Ymd, to: Ymd): string {
 
 /** "domingos", "lunes", "sábados". */
 export function weekdayPlural(wd: number): string {
-  const name = WEEKDAY_NAMES[wd];
-  return name.endsWith("s") ? name : `${name}s`;
+  return weekdayPluralName(wd);
 }
 
 export function capitalize(text: string): string {
@@ -63,20 +62,7 @@ export function spokenTime(o: Pick<Occurrence, "allDay" | "startTime" | "endTime
 
 /** Texto de la recurrencia en el detalle: "Se repite cada viernes hasta el 18 dic 2026". */
 export function recurrenceText(e: Pick<CalendarEvent, "startDate" | "recurrence">): string | null {
-  const r = e.recurrence;
-  if (r.freq === "none") return null;
-  const wd = weekdayOf(e.startDate);
-  const until = r.until ? ` hasta el ${shortDateYear(r.until)}` : "";
-  switch (r.freq) {
-    case "weekly":
-      return `Se repite cada ${WEEKDAY_NAMES[wd]}${until}`;
-    case "biweekly":
-      return `Cada 2 semanas, los ${weekdayPlural(wd)},${until}`;
-    case "monthly":
-      return r.monthly
-        ? `${capitalize(`el ${ordinalLabel(r.monthly.ordinal)} ${WEEKDAY_NAMES[r.monthly.weekday]} de cada mes`)}${until}`
-        : `Cada mes${until}`;
-  }
+  return recurrenceDetailText(e);
 }
 
 /** "1 fecha cancelada (vie 16 oct)". */
@@ -122,17 +108,22 @@ export interface RepeatOption {
   label: string;
 }
 
-/** Etiquetas calculadas desde la fecha de inicio ("Cada domingo", "El primer sábado de cada mes"…). */
+/**
+ * Etiquetas calculadas desde la fecha de inicio (16b §5.8): "Cada semana, los
+ * domingos", "Cada 2 semanas, los domingos", "Cada mes, el primer domingo",
+ * "Cada mes, el último viernes".
+ */
 export function repeatOptions(startDate: Ymd): RepeatOption[] {
   const wd = weekdayOf(startDate);
   const name = WEEKDAY_NAMES[wd];
+  const plural = weekdayPlural(wd);
   const opts: RepeatOption[] = [
     { value: "none", label: "No se repite" },
-    { value: "weekly", label: `Cada ${name}` },
-    { value: "biweekly", label: `Cada 2 ${weekdayPlural(wd)}` },
+    { value: "weekly", label: `Cada semana, los ${plural}` },
+    { value: "biweekly", label: `Cada 2 semanas, los ${plural}` },
   ];
   for (const ord of monthlyOrdinalOptions(startDate)) {
-    opts.push({ value: `monthly:${ord}`, label: `El ${ordinalLabel(ord)} ${name} de cada mes` });
+    opts.push({ value: `monthly:${ord}`, label: `Cada mes, el ${ordinalLabel(ord)} ${name}` });
   }
   return opts;
 }
@@ -176,3 +167,15 @@ export function monthName(date: Ymd): string {
 }
 
 export { isRecurring };
+
+/** Eco legible de un input de fecha: "domingo 4 de octubre de 2026" ("" si no es válida). */
+export function longDateEcho(date: string): string {
+  if (!isValidYmd(date)) return "";
+  return `${dayLabel(date)} de ${parseYmd(date).y}`;
+}
+
+/** Eco legible de las horas: "19:00 – 21:00", "desde las 19:00" ("" sin hora de inicio). */
+export function timeRangeEcho(start: string, end: string): string {
+  if (!start) return "";
+  return end ? `${start} – ${end}` : `desde las ${start}`;
+}

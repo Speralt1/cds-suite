@@ -3,19 +3,13 @@
    Colores de área vía --sx-area-{swatch|ink|soft} (areaStyle en primitives.tsx). */
 
 /* ---------- Comunes ---------- */
-.fx .fx-btn[aria-disabled="true"] {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.fx .fx-btn-secondary[aria-disabled="true"]:hover {
-  background: var(--fx-surface);
-}
-.fx .fx-btn-ghost[aria-disabled="true"]:hover {
-  background: none;
-}
-.fx .fx-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Los overrides globales (.fx-btn deshabilitado, .fx-select:disabled,
+   .fx-menu-item[aria-disabled]) viven en suite-preview.css. */
+/* AreaPill es inline-flex: el espacio inicial de " · responsable" / " (inactiva)"
+   se colapsaba ("Jóvenes· responsable"). white-space: pre lo conserva. */
+.fx .sx-area-pill > .sx-area-pill-suffix,
+.fx .sx-area-pill > .sx-area-inactive {
+  white-space: pre;
 }
 .fx .sx-btn-danger-ghost {
   color: var(--fx-danger);
@@ -608,11 +602,15 @@
   color: #fff;
 }
 .fx .sx-week-allday-label {
-  padding: 8px 6px 0 0;
+  align-self: center;
+  padding: 4px 6px 4px 2px;
   color: var(--fx-muted);
   font-size: 11px;
   line-height: 13px;
   text-align: right;
+  white-space: normal;
+  overflow-wrap: normal;
+  hyphens: none;
 }
 .fx .sx-week-allday-grid {
   grid-column: 2 / span 7;
@@ -648,6 +646,57 @@
   background: var(--fx-surface-2);
   color: var(--fx-muted);
 }
+.fx .sx-week-viewport {
+  position: relative;
+}
+.fx .sx-week-edges {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: var(--sx-gutter) repeat(7, minmax(0, 1fr));
+  pointer-events: none;
+}
+.fx .sx-week-edge-col {
+  position: relative;
+  min-width: 0;
+}
+.fx .sx-week-edge {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--fx-line);
+  border-radius: 999px;
+  background: var(--fx-surface);
+  box-shadow: 0 1px 3px rgba(20, 35, 29, 0.12);
+  color: var(--fx-primary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.fx .sx-week-edge.is-top {
+  top: 4px;
+}
+.fx .sx-week-edge.is-bottom {
+  bottom: 6px;
+}
+.fx .sx-week-edge:hover {
+  background: var(--fx-primary-soft);
+}
+.fx .sx-week-edge svg {
+  flex: none;
+}
 .fx .sx-week-scroll {
   position: relative;
   max-height: calc(100dvh - 300px);
@@ -681,11 +730,10 @@
 .fx .sx-week-block {
   position: absolute;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: block;
+  container-type: inline-size;
   min-width: 0;
-  padding: 3px 6px 3px 8px;
+  padding: 0;
   border: 1px solid var(--fx-surface);
   border-radius: 6px;
   background: var(--sx-area-soft);
@@ -713,18 +761,50 @@
 .fx .sx-week-block.is-cancelled .sx-week-block-title {
   text-decoration: line-through;
 }
-.fx .sx-week-block-title {
+.fx .sx-week-block-inner {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  height: 100%;
+  padding: 3px 6px 3px 8px;
+}
+.fx .sx-week-block-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   max-width: 100%;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
-  overflow-wrap: break-word;
-  hyphens: auto;
+  hyphens: none;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 .fx .sx-week-block-title svg {
-  flex: 0 0 auto;
+  display: inline;
+  vertical-align: -1px;
   color: var(--fx-muted);
+}
+.fx .sx-week-block-time,
+.fx .sx-week-block-area {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Bloque angosto (< 96 px, p. ej. 2–3 superpuestos): solo título + hora de inicio. */
+@container (max-width: 95px) {
+  .fx .sx-week-block-inner {
+    padding: 2px 4px 2px 7px;
+  }
+  .fx .sx-week-block-end,
+  .fx .sx-week-block-area,
+  .fx .sx-week-block-cont {
+    display: none;
+  }
 }
 .fx .sx-week-block-time {
   color: var(--fx-muted);
@@ -1040,6 +1120,13 @@
   display: grid;
   gap: 16px;
 }
+.fx .sx-input-echo {
+  margin: 0;
+  color: var(--fx-muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
 .fx .sx-field {
   display: grid;
   gap: 6px;
@@ -1066,8 +1153,7 @@
 }
 .fx .sx-cal-fieldset:disabled .fx-input,
 .fx .sx-cal-fieldset:disabled .sx-switch,
-.fx .sx-cal-fieldset:disabled .sx-cal-check,
-.fx .fx-select:disabled {
+.fx .sx-cal-fieldset:disabled .sx-cal-check {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -1240,6 +1326,15 @@
 .fx .fx-dialog.is-center .sx-radio-cards {
   grid-template-columns: minmax(0, 1fr);
 }
+/* Diálogos de Cancelar / Eliminar: alto según contenido (sin estirarse a toda la ventana). */
+.fx .fx-dialog.is-center:has(#sx-cancel-form, #sx-archive-form) {
+  height: fit-content;
+  max-height: min(85dvh, 720px);
+}
+/* Crear/editar es un sheet lateral (desktop) o pantalla completa (móvil): sin grabber. */
+.fx .fx-dialog:has(#sx-event-form) .fx-sheet-handle {
+  display: none;
+}
 .fx .sx-radio-card {
   display: flex;
   align-items: flex-start;
@@ -1351,7 +1446,7 @@
     grid-template-columns: 1fr 1fr;
   }
   .fx .sx-view-switch button {
-    height: 38px;
+    height: 44px;
   }
   .fx .sx-cal-create {
     display: none;
@@ -1457,11 +1552,6 @@
 }
 .fx .sx-cal-row-menu .fx-menu-list {
   min-width: 180px;
-}
-.fx .fx-menu-item[aria-disabled="true"] {
-  color: var(--fx-muted);
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 .fx .sx-menu-danger {
   color: var(--fx-danger);
@@ -2175,7 +2265,17 @@
     display: inline-flex;
   }
   .fx .sx-rep-stepper {
+    height: auto;
     margin-top: 0;
+  }
+  .fx .sx-rep-stepper > button {
+    flex: none;
+    width: 44px;
+    height: 44px;
+  }
+  .fx .sx-rep-stepper .fx-stepper-label {
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .fx .sx-rep-summary {
     padding: 12px 16px;
@@ -2187,7 +2287,7 @@
   }
   .fx .sx-rep-sections a {
     justify-content: center;
-    height: 40px;
+    height: 44px;
   }
   .fx .sx-share-field {
     display: grid;
@@ -2201,7 +2301,7 @@
     width: 100%;
   }
   .fx .sx-my-tabs button {
-    height: 40px;
+    height: 44px;
   }
   .fx .sx-cal-row-menu-btn {
     width: 44px;

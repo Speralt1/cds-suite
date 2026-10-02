@@ -64,7 +64,7 @@ export interface CalendarReportFilters {
 }
 
 export function calendarReportRows(i: CalendarReportFilters): CalendarReportRow[] {
-  return occurrencesInRange(i.events, i.from, i.to, i.now)
+  return occurrencesInRange(i.events, i.from, i.to, i.now, i.areas)
     .filter((o) => i.statuses.includes(o.status))
     .filter((o) => i.visibility === "all" || o.event.visibility === i.visibility)
     .filter(

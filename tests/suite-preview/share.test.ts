@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AREAS, DEMO_NOW, DEMO_TODAY, EVENTS, LEAK_CANARIES, LEAK_STRINGS, SHARE_LINK, USERS } from "@/lib/suite-preview/fixtures";
-import { PUBLIC_AREA_KEYS, PUBLIC_CALENDAR_KEYS, PUBLIC_EVENT_KEYS, previewShareHref, resolvePublicCalendar } from "@/lib/suite-preview/share";
+import { PUBLIC_AREA_KEYS, PUBLIC_CALENDAR_KEYS, PUBLIC_EVENT_KEYS, previewShareHref, productionShareUrl, resolvePublicCalendar, sortPublicEvents } from "@/lib/suite-preview/share";
 import { applyAction, initialSuiteState } from "@/lib/suite-preview/store";
 import type { PublicArea } from "@/lib/suite-preview/types";
 
@@ -72,5 +72,31 @@ describe("calendario compartido sanitizado", () => {
 
   it("solo manage_all administra el enlace", () => {
     expect(applyAction(initialSuiteState(), { type: "share/regenerate", by: "lider" }).ok).toBe(false);
+  });
+});
+
+describe("proyección pública · correcciones ciclo 1", () => {
+  const cal = resolve("demo")!;
+
+  it("C6: recurrenceLabel público solo con día, frecuencia y fecha final", () => {
+    const culto = cal.events.find((e) => e.title === "Culto dominical")!;
+    expect(culto.recurrenceLabel).toBe("Se repite cada domingo hasta el 28 feb 2027");
+    const single = cal.events.find((e) => e.title === "Evangelismo en la plaza")!;
+    expect(single.recurrenceLabel).toBeNull();
+    for (const e of cal.events) {
+      if (e.recurrenceLabel !== null) expect(e.recurrenceLabel).toMatch(/^(Se repite cada|Cada 2 semanas|El (primer|segundo|tercer|cuarto|último)|Cada mes)/);
+    }
+  });
+
+  it("C5: dentro del día, mismo orden que el resto (hora, luego nombre del área)", () => {
+    const sunday = cal.events.filter((e) => e.startDate === "2026-10-04").map((e) => e.title);
+    expect(sunday.indexOf("Escuela dominical")).toBeLessThan(sunday.indexOf("Culto dominical"));
+    const sorted = sortPublicEvents([...cal.events].reverse());
+    expect(sorted.map((e) => e.id)).toEqual(cal.events.map((e) => e.id));
+  });
+
+  it("C9: la URL con formato de producción usa un dominio neutro reservado", () => {
+    expect(productionShareUrl("demo")).toBe("https://suite.casadesalvacion.example/calendario/compartir/demo");
+    expect(productionShareUrl("demo")).not.toMatch(/web\.app|firebaseapp|cds-administracion/);
   });
 });

@@ -101,10 +101,10 @@ describe("Calendario › formulario", () => {
     const repeat = within(form).getByLabelText("Repetir") as HTMLSelectElement;
     expect([...repeat.options].map((o) => o.textContent)).toEqual([
       "No se repite",
-      "Cada sábado",
-      "Cada 2 sábados",
-      "El cuarto sábado de cada mes",
-      "El último sábado de cada mes",
+      "Cada semana, los sábados",
+      "Cada 2 semanas, los sábados",
+      "Cada mes, el cuarto sábado",
+      "Cada mes, el último sábado",
     ]);
     fireEvent.change(repeat, { target: { value: "weekly" } });
     expect(within(form).getByLabelText("Hasta *")).toBeInTheDocument();
@@ -290,5 +290,103 @@ describe("Mis actividades, Compartir y Reporte", () => {
     expect(screen.queryByRole("navigation", { name: "Secciones de Reportes" })).toBeNull();
     for (const c of Object.values(LEAK_CANARIES)) expect(container.innerHTML).not.toContain(c);
     expect(screen.getByText(/VISTA PREVIA · DATOS DE DEMOSTRACIÓN/)).toBeInTheDocument();
+  });
+});
+
+describe("Calendario › correcciones ciclo 1", () => {
+  it("C3: 'Cancelar actividad' queda aria-disabled hasta 3 caracteres; error role=alert al salir del campo", () => {
+    renderCal("perfil=lider&vista=agenda");
+    fireEvent.click(rowByLabel(/^Reunión de jóvenes, viernes 9 de octubre/));
+    fireEvent.click(within(openDialog()).getByRole("button", { name: /Cancelar actividad/ }));
+    const dlg = openDialog();
+    const confirm = within(dlg).getByRole("button", { name: "Cancelar actividad" });
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
+    const reason = within(dlg).getByLabelText("Motivo (obligatorio)");
+    fireEvent.change(reason, { target: { value: "ab" } });
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
+    fireEvent.blur(reason);
+    expect(within(dlg).getByRole("alert")).toHaveTextContent("Escribe un motivo");
+    fireEvent.change(reason, { target: { value: "  ab  " } });
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
+    fireEvent.change(reason, { target: { value: "Feriado" } });
+    expect(confirm).not.toHaveAttribute("aria-disabled");
+    expect(within(dlg).queryByRole("alert")).toBeNull();
+  });
+
+  it("C3: 'Eliminar' queda aria-disabled hasta elegir motivo (y nota si es «Otro»)", () => {
+    renderCal("perfil=lider&vista=agenda");
+    fireEvent.click(rowByLabel(/^Campamento de jóvenes/));
+    fireEvent.click(within(openDialog()).getByRole("button", { name: /Eliminar/ }));
+    const dlg = openDialog();
+    const confirm = within(dlg).getByRole("button", { name: "Eliminar" });
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
+    fireEvent.change(within(dlg).getByLabelText("Motivo (obligatorio)"), { target: { value: "Otro" } });
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
+    fireEvent.change(within(dlg).getByLabelText(/^Nota/), { target: { value: "Se movió a otra fecha" } });
+    expect(confirm).not.toHaveAttribute("aria-disabled");
+    fireEvent.change(within(dlg).getByLabelText("Motivo (obligatorio)"), { target: { value: "Duplicada" } });
+    expect(confirm).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("C4: fechas y horas con lang es-CL y eco legible", () => {
+    renderCal("perfil=lider&vista=agenda");
+    fireEvent.click(screen.getByRole("button", { name: "Crear actividad" }));
+    const form = document.getElementById("sx-event-form")!;
+    const date = within(form).getByLabelText("Fecha *");
+    expect(date).toHaveAttribute("lang", "es-CL");
+    expect(within(form).getByLabelText("Hora de inicio")).toHaveAttribute("lang", "es-CL");
+    expect(within(form).getByLabelText("Hora de término")).toHaveAttribute("lang", "es-CL");
+    expect(date).toHaveAccessibleDescription("domingo 4 de octubre de 2026");
+    expect(within(form).getByText("19:00 – 21:00")).toBeInTheDocument();
+    fireEvent.change(date, { target: { value: "2026-11-28" } });
+    expect(within(form).getByText("sábado 28 de noviembre de 2026")).toBeInTheDocument();
+    fireEvent.change(within(form).getByLabelText("Repetir"), { target: { value: "weekly" } });
+    const until = within(form).getByLabelText("Hasta *");
+    expect(until).toHaveAttribute("lang", "es-CL");
+    expect(until).toHaveAccessibleDescription(/de 2027$/);
+  });
+
+  it("C5: mismo orden dentro del día en Agenda y Mes (hora, luego nombre del área)", () => {
+    renderCal("perfil=lider&vista=agenda");
+    const sunday = rows()
+      .map((b) => b.getAttribute("aria-label") ?? "")
+      .filter((l) => /domingo 4 de octubre, 11:00/.test(l))
+      .map((l) => l.split(",")[0]);
+    // 11:00 Escuela dominical (Niños) antes que 11:00 Culto dominical (Pastoral).
+    expect(sunday).toEqual(["Escuela dominical", "Culto dominical"]);
+  });
+
+  it("C2: el scroll de la semana no vuelve a las 07:00 en cada render", () => {
+    renderCal("perfil=lider&vista=semana");
+    const scroller = document.querySelector<HTMLElement>(".sx-week-scroll")!;
+    expect(scroller.scrollTop).toBe(7 * 44 - 8);
+    scroller.scrollTop = 900;
+    // Re-render sin cambiar de semana (ocultar la leyenda).
+    fireEvent.click(screen.getByRole("button", { name: /Ocultar leyenda/ }));
+    expect(scroller.scrollTop).toBe(900);
+  });
+
+  it("C1: bloques de la semana sin guiones forzados; bloque corto sin línea de área", () => {
+    renderCal("perfil=lider&vista=semana&fecha=2026-10-30");
+    const blocks = [...document.querySelectorAll<HTMLElement>(".sx-week-block")];
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const b of blocks) {
+      expect(b.style.width).toMatch(/calc\(/);
+      const h = parseFloat(b.style.height);
+      if (h < 52) expect(b.querySelector(".sx-week-block-area")).toBeNull();
+    }
+    const culto = blocks.find((b) => b.getAttribute("aria-label")?.startsWith("Culto dominical"))!;
+    expect(culto.querySelector(".sx-week-block-end")).toHaveTextContent("–13:00");
+  });
+
+  it("C9: Compartir muestra un dominio neutro reservado, nunca el proyecto real", () => {
+    at("/preview/calendario/compartir?perfil=admin");
+    const { container } = render(
+      <SuiteProvider>
+        <ShareScreen />
+      </SuiteProvider>,
+    );
+    expect((screen.getByLabelText("Enlace público") as HTMLInputElement).value).toBe("https://suite.casadesalvacion.example/calendario/compartir/demo");
+    expect(container.innerHTML).not.toMatch(/web\.app|firebaseapp/);
   });
 });

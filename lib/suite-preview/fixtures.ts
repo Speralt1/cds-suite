@@ -22,11 +22,13 @@ export { DEMO_NOW, DEMO_TODAY, DEFAULT_CONSOLIDATION_SETTINGS };
 // ---------- Canarios de fuga (16c §E) ----------
 // Nunca deben aparecer en la proyección pública, el reporte ni el PDF.
 // R9: las notas internas usan un canario, NUNCA el nombre de una persona.
+// Son frases naturales (se ven en la demo) pero únicas: no aparecen en ningún
+// otro texto, así que los tests de fuga las buscan por esta constante.
 export const LEAK_CANARIES = {
-  internalNote: "CANARIO_NOTA_INTERNA_7Q",
-  cancelReason: "CANARIO_MOTIVO_CANCELACION_3K",
-  exceptionReason: "CANARIO_EXCEPCION_9P",
-  archivedTitle: "CANARIO_ARCHIVADA_2M",
+  internalNote: "Pedir la llave del portón lateral en portería.",
+  cancelReason: "Se suspende por lluvia según aviso del encargado de plaza",
+  exceptionReason: "El grupo viaja al campamento de primavera",
+  archivedTitle: "Culto dominical (duplicado por error)",
 } as const;
 
 // ---------- Áreas ----------
@@ -200,7 +202,7 @@ export const EVENTS: readonly CalendarEvent[] = [
     endTime: "13:00",
     location: "Templo",
     publicDescription: "Culto de adoración y predicación. El primer domingo de cada mes celebramos la Santa Cena.",
-    internalNotes: `${LEAK_CANARIES.internalNote} · Coordinar ujieres y recepción.`,
+    internalNotes: `Coordinar ujieres y recepción. ${LEAK_CANARIES.internalNote}`,
     visibility: "public",
     status: "programada",
     recurrence: { freq: "weekly", until: "2027-02-28" },
@@ -259,7 +261,7 @@ export const EVENTS: readonly CalendarEvent[] = [
       {
         date: "2026-10-16",
         type: "cancelled",
-        reason: `${LEAK_CANARIES.exceptionReason} · Se une al campamento.`,
+        reason: `${LEAK_CANARIES.exceptionReason}.`,
         by: "lider",
         at: "2026-09-28T18:00",
       },
@@ -277,7 +279,7 @@ export const EVENTS: readonly CalendarEvent[] = [
     startTime: "17:00",
     endTime: "19:00",
     location: "Templo",
-    internalNotes: `${LEAK_CANARIES.internalNote} · Repertorio en la carpeta del equipo.`,
+    internalNotes: `Repertorio en la carpeta del equipo. ${LEAK_CANARIES.internalNote}`,
     visibility: "team",
     status: "programada",
     recurrence: { freq: "weekly", until: "2027-02-27" },
@@ -365,7 +367,7 @@ export const EVENTS: readonly CalendarEvent[] = [
     startTime: "20:00",
     endTime: "21:30",
     location: "Oficina pastoral",
-    internalNotes: `${LEAK_CANARIES.internalNote} · Revisar el calendario de noviembre.`,
+    internalNotes: `Revisar el calendario de noviembre. ${LEAK_CANARIES.internalNote}`,
     visibility: "team",
     status: "programada",
     recurrence: { freq: "monthly", until: "2027-03-01", monthly: { mode: "nth_weekday", weekday: 1, ordinal: 1 } },
@@ -382,7 +384,7 @@ export const EVENTS: readonly CalendarEvent[] = [
     startTime: "19:30",
     endTime: "21:00",
     location: "Oficina pastoral",
-    internalNotes: `${LEAK_CANARIES.internalNote} · Revisar la cola de atención.`,
+    internalNotes: `Revisar la cola de atención. ${LEAK_CANARIES.internalNote}`,
     visibility: "team",
     status: "programada",
     recurrence: { freq: "none" },
@@ -437,12 +439,12 @@ export const EVENTS: readonly CalendarEvent[] = [
     recurrence: { freq: "none" },
     cancelledBy: "pastor",
     cancelledAt: "2026-10-02T09:00",
-    cancelReason: `${LEAK_CANARIES.cancelReason} · Pronóstico de lluvia.`,
+    cancelReason: `${LEAK_CANARIES.cancelReason}.`,
   },
   {
     ...created,
     id: "ev-archivada",
-    title: `${LEAK_CANARIES.archivedTitle} Culto dominical (duplicado)`,
+    title: LEAK_CANARIES.archivedTitle,
     responsibleAreaId: "pastoral",
     participantAreaIds: [],
     startDate: "2026-10-11",

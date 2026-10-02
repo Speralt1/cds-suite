@@ -6,13 +6,13 @@
 // finance-preview/format, react y lucide-react.
 
 import { useEffect, useRef, useState } from "react";
-import { Ban, CalendarDays, CalendarX2, ChevronDown, ChevronLeft, ChevronRight, CloudOff, FlaskConical, MapPin, X } from "lucide-react";
+import { Ban, CalendarDays, CalendarX2, ChevronDown, ChevronLeft, ChevronRight, CloudOff, FlaskConical, MapPin, Repeat, X } from "lucide-react";
 import { SX_PREVIEW_SENTINEL } from "@/lib/suite-preview/sentinel";
 import type { AreaColor, PublicArea, Ymd } from "@/lib/suite-preview/types";
 import type { PublicCalendarModel, PublicEventView, PublicStatus } from "./model";
 
 export const PUBLIC_UNAVAILABLE_TITLE = "Este calendario no está disponible";
-export const PUBLIC_TZ_NOTE = "Horarios de Chile continental (America/Santiago).";
+export const PUBLIC_TZ_NOTE = "Horarios en hora de Chile continental.";
 const WEEKDAYS = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
 const WEEKDAYS_FULL = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
@@ -463,6 +463,12 @@ export function PublicCalendarPage({ status, model, onRetry }: { status: PublicS
                 <CalendarDays size={16} aria-hidden="true" />
                 <span>{detail.when}</span>
               </p>
+              {detail.event.recurrenceLabel && (
+                <p className="sx-detail-line sx-detail-recurrence">
+                  <Repeat size={14} aria-hidden="true" />
+                  <span>{detail.event.recurrenceLabel}</span>
+                </p>
+              )}
               {detail.event.location && (
                 <p className="sx-detail-line">
                   <MapPin size={14} aria-hidden="true" />

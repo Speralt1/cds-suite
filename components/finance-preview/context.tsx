@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_PERIOD, parsePeriod, periodKey, type Period } from "@/lib/finance-preview/selectors";
 import { SuiteToastContext } from "@/components/suite-preview/toast-context";
+import { QUERY_EVENT, notifyQueryChange } from "@/components/suite-preview/use-query";
 
 /** Estado forzado de demostración (?estado=cargando|vacio|error) para revisar los estados de §10. */
 export type DemoState = "ok" | "loading" | "empty" | "error";
@@ -52,14 +53,20 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     };
     sync();
     window.addEventListener("popstate", sync);
-    return () => window.removeEventListener("popstate", sync);
+    window.addEventListener(QUERY_EVENT, sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener(QUERY_EVENT, sync);
+    };
   }, []);
 
   const setPeriod = useCallback((p: Period) => {
     setPeriodState(p);
     const url = new URL(window.location.href);
     url.searchParams.set("periodo", periodKey(p));
-    window.history.replaceState(window.history.state, "", url);
+    // state null: Next copia sus internos y sincroniza su URL canónica.
+    window.history.replaceState(null, "", url);
+    notifyQueryChange();
   }, []);
 
   const toast = useCallback(

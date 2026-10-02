@@ -48,13 +48,54 @@
   }
 }
 
-/* Host de la región de toasts (fuera del shell): sin lienzo propio. */
+/* Host de la región de toasts (fuera del shell): conserva los tokens de .fx pero
+   no ocupa lugar en el flujo (sin él, heredaba min-height 100dvh y dejaba un
+   viewport en blanco al final de cada página). */
 .fx.sx-toast-host {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 80;
+  height: auto;
   min-height: 0;
   background: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.fx.sx-toast-host .fx-toast {
+  pointer-events: auto;
 }
 .fx .sx-toast-error {
   background: var(--fx-danger);
+}
+
+/* ---------- Overrides globales de la suite (todos los módulos) ---------- */
+/* Foco programático en títulos/contenedores (sheets, main): sin anillo. El foco
+   por teclado en controles sigue visible (.fx :focus-visible). */
+.fx [tabindex="-1"]:focus {
+  outline: none;
+}
+.fx .fx-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fx .fx-btn-secondary[aria-disabled="true"]:hover {
+  background: var(--fx-surface);
+}
+.fx .fx-btn-ghost[aria-disabled="true"]:hover {
+  background: none;
+}
+.fx .fx-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fx .fx-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.fx .fx-menu-item[aria-disabled="true"] {
+  color: var(--fx-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ---------- Banner + simulador ---------- */
@@ -163,6 +204,24 @@
   color: var(--fx-muted);
   font-size: 12px;
 }
+.fx .sx-sim-who-short {
+  display: none;
+}
+@media (max-width: 399px) {
+  .fx .sx-banner-mobile .sx-sim-who {
+    display: none;
+  }
+  .fx .sx-banner-mobile .sx-sim-who-short {
+    display: inline;
+  }
+}
+.fx .sx-sim-note {
+  margin-top: 8px;
+  padding: 0 6px;
+  color: var(--fx-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
 .fx .sx-sim-foot {
   margin-top: 8px;
   padding: 8px 6px 2px;
@@ -224,14 +283,63 @@
   height: 16px;
 }
 .fx .sx-shortcut-icon {
+  flex: none;
   color: var(--fx-side-muted);
+}
+/* Etiquetas largas ("Configuración financiera ↗"): el texto se corta con
+   ellipsis y la flecha queda siempre visible (la columna no crece al contenido). */
+.fx .sx-sections .fx-nav-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fx .sx-section-link {
+  min-width: 0;
+}
+.fx .sx-section-link .fx-nav-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Rail 768–1279: módulos, divisor y secciones del módulo activo (mismo DOM). */
 @media (min-width: 768px) and (max-width: 1279px) {
+  /* La lista de módulos+secciones se desplaza sola si no cabe (1024×768 con
+     Finanzas activo); marca y pie quedan fijos. */
+  .fx .sx-sidebar {
+    overflow: hidden;
+  }
+  .fx .sx-sidebar > .fx-brand,
+  .fx .sx-sidebar > .fx-side-footer {
+    flex: none;
+  }
   .fx .sx-modules {
+    flex: 1 1 auto;
     width: 100%;
-    overflow: visible;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  /* Los tooltips del rail escapan del recorte del scroll: position fixed sin
+     top/left = posición estática (centrada en el link); se corren a la derecha.
+     La posición estática no sigue el scroll de la lista, así que en pantallas
+     bajas (donde la lista sí se desplaza) se ocultan: el nombre accesible sigue
+     en cada link. */
+  .fx .sx-sidebar .fx-nav-tip {
+    position: fixed;
+    top: auto;
+    left: auto;
+    transform: translateX(calc(50% + 32px));
+  }
+  @media (max-height: 767px) {
+    .fx .sx-sidebar .fx-nav-tip {
+      display: none;
+    }
+  }
+  /* Atajos a otros módulos (↗ Reportes financieros, Configuración financiera):
+     solo en la sidebar completa y en "Más" del móvil; siguen en el DOM. */
+  .fx .sx-section-group.is-shortcuts:not(:has([aria-current="page"])) {
+    display: none;
   }
   .fx .sx-module-list {
     align-items: center;
@@ -245,8 +353,8 @@
     justify-items: center;
     gap: 2px;
     width: 100%;
-    margin: 4px 0 0;
-    padding-top: 8px;
+    margin: 2px 0 0;
+    padding-top: 6px;
     border-top: 1px solid var(--fx-side-line);
   }
   .fx .sx-module-link {
@@ -290,15 +398,27 @@
     height: 44px;
     padding: 0 8px 0 16px;
   }
+  /* Área táctil real de 44 px (medida en el botón); la píldora visual de 28 px
+     la dibuja ::before. */
   .fx .sx-banner-mobile .sx-sim-trigger {
-    height: 28px;
-    max-width: 52vw;
     position: relative;
+    z-index: 0;
+    height: 44px;
+    max-width: 52vw;
+    border: 0;
+    background: none;
   }
-  .fx .sx-banner-mobile .sx-sim-trigger::after {
+  .fx .sx-banner-mobile .sx-sim-trigger::before {
     content: "";
     position: absolute;
-    inset: -8px 0;
+    inset: 8px 0;
+    z-index: -1;
+    border: 1px dashed var(--fx-sim-border);
+    border-radius: 8px;
+    background: var(--fx-sim-bg);
+  }
+  .fx .sx-banner-mobile .sx-sim-trigger:focus-visible {
+    outline-offset: -4px;
   }
   .fx .sx-module-switch {
     display: inline-flex;
@@ -470,6 +590,20 @@
 .fx .sx-login-row {
   min-height: 64px;
 }
+.fx .sx-login-row > svg {
+  flex: 0 0 auto;
+  color: var(--fx-muted);
+}
+.fx .sx-login-row:focus-visible {
+  outline-offset: -2px;
+}
+.fx .sx-login-text {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
 .fx .sx-login-name {
   flex: 1;
   min-width: 0;
@@ -490,12 +624,17 @@
   .fx .sx-login-card {
     padding: 16px;
   }
-  .fx .sx-login-row {
-    flex-wrap: wrap;
+  .fx .sx-login-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .fx .sx-login-name {
+    flex: 0 1 auto;
+    font-size: 15px;
   }
   .fx .sx-login-enters {
-    flex-basis: 100%;
-    padding-left: 42px;
+    font-size: 13px;
     text-align: left;
   }
 }

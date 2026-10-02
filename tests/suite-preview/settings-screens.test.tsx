@@ -195,3 +195,31 @@ describe("ingreso /preview", () => {
     expect(enters(/Líder con módulo inicial/)).toBe("Entra a Calendario*");
   });
 });
+
+describe("Configuración › accesibilidad (ciclo 1, M1)", () => {
+  /** Nombre accesible aproximado: aria-label o texto no oculto con aria-hidden. */
+  const accessibleText = (el: Element): string => {
+    const label = el.getAttribute("aria-label");
+    if (label) return label.trim();
+    const walk = (n: Node): string => {
+      if (n.nodeType === Node.TEXT_NODE) return n.textContent ?? "";
+      if (n instanceof Element && n.getAttribute("aria-hidden") === "true") return "";
+      return [...n.childNodes].map(walk).join("");
+    };
+    return walk(el).trim();
+  };
+
+  it("Áreas y Usuarios: ningún botón ni link queda sin nombre accesible", () => {
+    const screens: [string, React.ReactNode][] = [
+      ["/preview/configuracion/areas?perfil=admin", <AreasScreen key="a" />],
+      ["/preview/configuracion/usuarios?perfil=admin", <UsersScreen key="u" />],
+    ];
+    for (const [path, ui] of screens) {
+      at(path);
+      const { container, unmount } = mount(ui);
+      const unnamed = [...container.querySelectorAll("button, a[href]")].filter((el) => !accessibleText(el));
+      expect(unnamed.map((el) => el.outerHTML.slice(0, 120)), path).toEqual([]);
+      unmount();
+    }
+  });
+});

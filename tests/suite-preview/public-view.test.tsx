@@ -94,7 +94,8 @@ describe("calendario público (render)", () => {
     const { container } = renderPublic("/preview/calendario/compartir/demo");
     expect(container.querySelector('[data-suite-preview="SX_PREVIEW_SENTINEL_V1_c41e"]')).not.toBeNull();
     expect(screen.getByText("Casa de Salvación")).toBeInTheDocument();
-    expect(screen.getByText(/Horarios de Chile continental \(America\/Santiago\)/)).toBeInTheDocument();
+    expect(screen.getByText("Horarios en hora de Chile continental.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/America\/Santiago/);
     // Sin shell de la app.
     expect(screen.queryByRole("navigation", { name: "Módulos" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Ver como/ })).toBeNull();
@@ -174,5 +175,17 @@ describe("calendario público (no disponible)", () => {
     });
     expect(r.container.textContent).toContain("Este calendario no está disponible");
     r.unmount();
+  });
+});
+
+describe("calendario público · correcciones ciclo 1", () => {
+  it("C6: el detalle de una actividad repetida muestra la línea de recurrencia, sin fugas", () => {
+    const { container } = renderPublic("/preview/calendario/compartir/demo");
+    const culto = rowButtons().find((b) => /^Culto dominical/.test(b.getAttribute("aria-label") ?? ""))!;
+    fireEvent.click(culto);
+    const dlg = document.querySelector("dialog.sx-pub-dialog")!;
+    expect(dlg.querySelector(".sx-detail-recurrence")).toHaveTextContent("Se repite cada domingo hasta el 28 feb 2027");
+    expect(dlg.textContent).toContain("Horarios en hora de Chile continental.");
+    assertClean(container.innerHTML);
   });
 });

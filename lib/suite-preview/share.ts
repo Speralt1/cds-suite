@@ -1,8 +1,9 @@
 // Proyección pública del calendario (16c §E). Se arma por LISTA BLANCA con
 // literales explícitos: nunca spread de la actividad interna.
 
-import { addMonthsClamped, compareLocal, firstOfMonth, lastOfMonth } from "./dates";
-import { occurrencesInRange } from "./calendar";
+import { addMonthsClamped, firstOfMonth, lastOfMonth } from "./dates";
+import { compareDayOrder, occurrencesInRange } from "./calendar";
+import { recurrenceDetailText } from "./recurrence";
 import type { Area, CalendarEvent, LocalDateTime, Occurrence, PublicArea, PublicCalendar, PublicEvent, ShareLink, Ymd } from "./types";
 
 export const PUBLIC_EVENT_KEYS = [
@@ -18,6 +19,7 @@ export const PUBLIC_EVENT_KEYS = [
   "responsibleArea",
   "participantAreas",
   "status",
+  "recurrenceLabel",
 ] as const;
 
 export const PUBLIC_AREA_KEYS = ["slug", "name", "color"] as const;
@@ -70,6 +72,7 @@ export function toPublicEvent(o: Occurrence, e: CalendarEvent, areas: ReadonlyMa
       .filter((a): a is Area => !!a)
       .map(toPublicArea),
     status: o.status === "cancelada" ? "cancelada" : "programada",
+    recurrenceLabel: recurrenceDetailText({ startDate: e.startDate, recurrence: e.recurrence }),
   };
 }
 
@@ -94,7 +97,7 @@ export function resolvePublicCalendar(i: {
   const range = publicRange(i.today);
   const map = new Map(i.areas.map((a) => [a.id, a] as const));
   const publicEvents = i.events.filter((e) => e.visibility === "public" && e.status !== "archivada");
-  const events = occurrencesInRange(publicEvents, range.from, range.to, i.now).map((o) => toPublicEvent(o, o.event, map));
+  const events = occurrencesInRange(publicEvents, range.from, range.to, i.now, i.areas).map((o) => toPublicEvent(o, o.event, map));
   const used = new Set(events.flatMap((e) => [e.responsibleArea.slug, ...e.participantAreas.map((a) => a.slug)]));
   const areas = i.areas
     .filter((a) => a.active && used.has(a.id))
@@ -108,17 +111,16 @@ export function previewShareHref(token: string): string {
   return token === DEFAULT_PRESENTED_TOKEN ? "/preview/calendario/compartir/demo" : `/preview/calendario/compartir/demo?t=${encodeURIComponent(token)}`;
 }
 
+/** Dominio neutro reservado (.example) para mostrar el formato del enlace en la preview. */
+export const PRODUCTION_SHARE_ORIGIN = "https://suite.casadesalvacion.example";
+
 /** URL con formato de producción, SOLO como texto (no navegable en la preview). */
 export function productionShareUrl(token: string): string {
-  return `https://cds-administracion.web.app/calendario/compartir/${token}`;
+  return `${PRODUCTION_SHARE_ORIGIN}/calendario/compartir/${token}`;
 }
 
-/** Ordena eventos públicos por fecha y hora (helper para la página pública). */
+/** Ordena eventos públicos con el mismo comparador que el resto de las vistas (compareDayOrder). */
 export function sortPublicEvents(list: readonly PublicEvent[]): PublicEvent[] {
-  return [...list].sort(
-    (a, b) =>
-      compareLocal(a.startDate, b.startDate) ||
-      Number(b.allDay) - Number(a.allDay) ||
-      compareLocal(a.startTime ?? "", b.startTime ?? ""),
-  );
+  const key = (e: PublicEvent) => ({ date: e.startDate, allDay: e.allDay, startTime: e.startTime, areaName: e.responsibleArea.name, title: e.title });
+  return [...list].sort((a, b) => compareDayOrder(key(a), key(b)));
 }

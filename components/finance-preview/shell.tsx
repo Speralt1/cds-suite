@@ -15,6 +15,7 @@ import {
   type Period,
 } from "@/lib/finance-preview/selectors";
 import { SuiteShell } from "@/components/suite-preview/shell";
+import { notifyQueryChange } from "@/components/suite-preview/use-query";
 import { PreviewProvider, usePreview } from "./context";
 import { BASE, REGISTER_ACTIONS } from "./nav";
 import { ProposalPill } from "./ui";
@@ -43,7 +44,8 @@ function KeepPeriodInUrl({ pathname }: { pathname: string }) {
     }
     if (raw === current) return;
     url.searchParams.set("periodo", current);
-    window.history.replaceState(window.history.state, "", url);
+    window.history.replaceState(null, "", url);
+    notifyQueryChange();
   }, [pathname, setPeriod]);
   return null;
 }

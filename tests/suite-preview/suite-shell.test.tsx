@@ -190,3 +190,46 @@ describe("provider, guardia e ingreso", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Ahora ves CDS como Consolidación · Carolina Vidal. Entraste a Consolidación.");
   });
 });
+
+describe("shell: correcciones ciclo 1 (S)", () => {
+  it("el host de toasts no usa una clase raíz que lo meta al flujo (sx-toast-host)", () => {
+    at("/preview/calendario?perfil=admin");
+    shell();
+    const host = screen.getByRole("status").parentElement!;
+    expect(host).toHaveClass("fx", "sx-toast-host");
+    expect(host).not.toHaveClass("fx-toast-host");
+  });
+
+  it("pie de la sidebar: si el cargo es el nombre de su única área, muestra solo el cargo", () => {
+    at("/preview/integrantes/consolidacion?perfil=consolidacion");
+    shell();
+    const org = document.querySelector(".sx-sidebar .fx-side-org")!;
+    expect(org.textContent).toBe("Consolidación");
+  });
+
+  it("Finanzas en el rail: los atajos ↗ siguen en el DOM, marcados para ocultarse solo por CSS", () => {
+    at("/preview/finanzas-2026?perfil=admin");
+    shell();
+    const fin = screen.getByRole("navigation", { name: "Finanzas" });
+    for (const label of ["Reportes financieros", "Configuración financiera"]) {
+      const link = within(fin).getByRole("link", { name: label });
+      expect(link.closest("li")).toHaveClass("sx-section-shortcut");
+      expect(link.closest(".sx-section-group")).toHaveClass("is-shortcuts");
+      expect(link).toHaveAttribute("title");
+    }
+    expect(within(fin).getByRole("link", { name: /^Movimientos/ }).closest(".sx-section-group")).not.toHaveClass("is-shortcuts");
+  });
+
+  it("Ver como: nombre accesible completo (aunque el móvil muestre solo el cargo) y nota del asterisco", () => {
+    at("/preview/calendario?perfil=lider");
+    shell();
+    const triggers = screen.getAllByRole("button", { name: "Ver como: Líder · Matías Contreras" });
+    expect(triggers).toHaveLength(2);
+    expect(document.querySelector(".sx-banner-mobile .sx-sim-who-short")?.textContent).toBe("Líder");
+    const desktop = triggers.find((b) => b.closest(".sx-banner"))!;
+    fireEvent.click(desktop);
+    const pop = screen.getByRole("dialog", { name: "Ver como (vista previa)" });
+    expect(within(pop).getAllByText(/\*$/).length).toBeGreaterThan(0);
+    expect(within(pop).getByText("* Su módulo inicial (Finanzas) ya no está permitido.")).toBeInTheDocument();
+  });
+});

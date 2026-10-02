@@ -3,9 +3,11 @@
 // Vista Semana (16b §5.4): fila de todo el día / varios días, grilla 00–24 con
 // scroll inicial a las 07:00, superposiciones lado a lado (máx. 3 columnas) y
 // actividades que cruzan medianoche en dos segmentos ("continúa").
+// Si una columna tiene actividades fuera del área visible, aparece un
+// indicador "↑ 1 más temprano" / "↓ 1 más tarde" que hace scroll hasta ella.
 
-import { useEffect, useRef } from "react";
-import { ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { areaById } from "@/lib/suite-preview/areas";
 import { compareLocal, daysBetween, parseYmd, WEEKDAY_NAMES, weekdayOf } from "@/lib/suite-preview/dates";
 import type { Area, Occurrence, Ymd } from "@/lib/suite-preview/types";
@@ -14,6 +16,23 @@ import { occurrenceAria, WEEKDAYS_SHORT } from "./labels";
 
 const HOUR_PX = 44;
 const MAX_COLS = 3;
+/** Separación (px) entre bloques lado a lado y con el borde de la columna. */
+const GAP = 2;
+/** Bajo este alto el bloque no muestra la línea del área. */
+const AREA_MIN_HEIGHT = 52;
+/** Margen superior al hacer scroll a una hora (la etiqueta de la hora queda visible). */
+const SCROLL_PAD = 8;
+
+/** Ancho y posición de la columna `col` de `n` dentro del día (con GAP entre bloques). */
+function blockBox(col: number, n: number): { left: string; width: string } {
+  const width = `((100% - ${GAP * 2}px - ${GAP * (n - 1)}px) / ${n})`;
+  return { left: `calc(${GAP}px + ${col} * (${width} + ${GAP}px))`, width: `calc(${width})` };
+}
+
+interface Viewport {
+  top: number;
+  height: number;
+}
 
 function minutes(t: string | undefined): number {
   if (!t) return 0;
@@ -115,9 +134,33 @@ export function WeekGrid({
   onOpenDay: (date: Ymd) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !el.clientHeight) return;
+    setViewport((v) => (v && v.top === el.scrollTop && v.height === el.clientHeight ? v : { top: el.scrollTop, height: el.clientHeight }));
+  }, []);
+  // Scroll inicial a las 07:00 SOLO al cambiar de semana (la clave es un string
+  // estable; `days` es un array nuevo en cada render).
+  const weekKey = days[0];
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 7 * HOUR_PX;
-  }, [days]);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = 7 * HOUR_PX - SCROLL_PAD;
+    measure();
+  }, [weekKey, measure]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+  const scrollToMinutes = (min: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = Math.max(0, (min / 60) * HOUR_PX - SCROLL_PAD);
+    if (typeof el.scrollTo === "function") el.scrollTo({ top, behavior: "smooth" });
+    else el.scrollTop = top;
+  };
 
   const segs = segmentsFor(occurrences, days);
   const bars = allDayBars(occurrences, days[0]);
@@ -164,7 +207,8 @@ export function WeekGrid({
           )}
         </div>
       </div>
-      <div className="sx-week-scroll" ref={scrollRef} tabIndex={0} aria-label="Horario de la semana (desplazable)">
+      <div className="sx-week-viewport">
+      <div className="sx-week-scroll" ref={scrollRef} tabIndex={0} aria-label="Horario de la semana (desplazable)" onScroll={measure}>
         <div className="sx-week-body" style={{ height: 24 * HOUR_PX }}>
           <div className="sx-week-hours" aria-hidden="true">
             {Array.from({ length: 24 }, (_, h) => (
@@ -183,8 +227,8 @@ export function WeekGrid({
                   .map((s) => {
                     const cols = Math.min(s.cols, MAX_COLS);
                     const height = Math.max(22, ((s.end - s.start) / 60) * HOUR_PX);
-                    const color = areaById(areas, s.o.event.responsibleAreaId)?.color ?? "pizarra";
                     const area = areaById(areas, s.o.event.responsibleAreaId);
+                    const color = area?.color ?? "pizarra";
                     return (
                       <button
                         key={`${s.o.key}-${s.day}`}
@@ -194,25 +238,39 @@ export function WeekGrid({
                           ...areaStyle(color),
                           top: (s.start / 60) * HOUR_PX,
                           height,
-                          left: `calc(${(s.col / cols) * 100}% + 2px)`,
-                          width: `calc(${100 / cols}% - 4px)`,
+                          ...blockBox(s.col, cols),
                         }}
                         aria-label={`${occurrenceAria(s.o, areas)}${s.continues ? ", continúa al día siguiente" : ""}${s.continued ? ", continuación desde el día anterior" : ""}`}
+                        title={s.o.event.title}
                         onClick={() => onOpen(s.o)}
                       >
-                        <span className="sx-week-block-title">
-                          {s.o.event.title}
-                          {s.o.event.visibility === "team" && <Lock size={10} aria-hidden="true" />}
-                        </span>
-                        <span className="sx-week-block-time fx-num">
-                          {s.continued ? `hasta ${s.o.endTime}` : `${s.o.startTime}${s.o.endTime ? `–${s.o.endTime}` : ""}`}
-                        </span>
-                        {height >= 64 && area && <span className="sx-week-block-area">{area.name}</span>}
-                        {s.continues && (
-                          <span className="sx-week-block-cont">
-                            continúa <ChevronDown size={10} aria-hidden="true" />
+                        <span className="sx-week-block-inner">
+                          <span className="sx-week-block-title">
+                            {s.o.event.title}
+                            {s.o.event.visibility === "team" && (
+                              <>
+                                {" "}
+                                <Lock size={10} aria-hidden="true" />
+                              </>
+                            )}
                           </span>
-                        )}
+                          <span className="sx-week-block-time fx-num">
+                            {s.continued ? (
+                              `hasta ${s.o.endTime}`
+                            ) : (
+                              <>
+                                {s.o.startTime}
+                                {s.o.endTime && <span className="sx-week-block-end">–{s.o.endTime}</span>}
+                              </>
+                            )}
+                          </span>
+                          {height >= AREA_MIN_HEIGHT && area && <span className="sx-week-block-area">{area.name}</span>}
+                          {s.continues && (
+                            <span className="sx-week-block-cont">
+                              continúa <ChevronDown size={10} aria-hidden="true" />
+                            </span>
+                          )}
+                        </span>
                       </button>
                     );
                   })}
@@ -220,7 +278,7 @@ export function WeekGrid({
                   <button
                     type="button"
                     className="sx-week-more"
-                    style={{ top: (Math.min(...overflow.map((s) => s.start)) / 60) * HOUR_PX, left: `${((MAX_COLS - 1) / MAX_COLS) * 100}%`, width: `${100 / MAX_COLS}%` }}
+                    style={{ top: (Math.min(...overflow.map((s) => s.start)) / 60) * HOUR_PX, ...blockBox(MAX_COLS - 1, MAX_COLS) }}
                     onClick={() => onOpenDay(d)}
                   >
                     +{overflow.length}
@@ -231,6 +289,44 @@ export function WeekGrid({
             );
           })}
         </div>
+      </div>
+      {viewport && (
+        <div className="sx-week-edges">
+          <span className="sx-week-gutter" />
+          {days.map((d) => {
+            const daySegs = segs.filter((s) => s.day === d);
+            const topPx = viewport.top + SCROLL_PAD;
+            const bottomPx = viewport.top + viewport.height;
+            const earlier = daySegs.filter((s) => (s.end / 60) * HOUR_PX <= topPx);
+            const later = daySegs.filter((s) => (s.start / 60) * HOUR_PX >= bottomPx - 4);
+            const dayName = `${WEEKDAY_NAMES[weekdayOf(d)]} ${parseYmd(d).d}`;
+            return (
+              <div key={d} className="sx-week-edge-col">
+                {earlier.length > 0 && (
+                  <button
+                    type="button"
+                    className="sx-week-edge is-top"
+                    aria-label={`${dayName}: ${earlier.length} ${earlier.length === 1 ? "actividad" : "actividades"} más temprano`}
+                    onClick={() => scrollToMinutes(Math.max(...earlier.map((s) => s.start)))}
+                  >
+                    <ArrowUp size={12} aria-hidden="true" /> {earlier.length} más temprano
+                  </button>
+                )}
+                {later.length > 0 && (
+                  <button
+                    type="button"
+                    className="sx-week-edge is-bottom"
+                    aria-label={`${dayName}: ${later.length} ${later.length === 1 ? "actividad" : "actividades"} más tarde`}
+                    onClick={() => scrollToMinutes(Math.min(...later.map((s) => s.start)))}
+                  >
+                    <ArrowDown size={12} aria-hidden="true" /> {later.length} más tarde
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       </div>
     </div>
   );

@@ -14,7 +14,8 @@ import { PeopleScreen } from "@/components/suite-preview/members/people";
 import { PersonScreen } from "@/components/suite-preview/members/person";
 import { NewPersonScreen } from "@/components/suite-preview/members/person-form";
 import { MembersSettingsScreen } from "@/components/suite-preview/members/settings";
-import { SuiteProvider } from "@/components/suite-preview/provider";
+import { arrivalOccurrences } from "@/components/suite-preview/members/model";
+import { SuiteProvider, useSuite } from "@/components/suite-preview/provider";
 import { SuiteShell } from "@/components/suite-preview/shell";
 import { visibleModules } from "@/lib/suite-preview/access";
 import { DEMO_NOW } from "@/lib/suite-preview/clock";
@@ -290,5 +291,152 @@ describe("privacidad: solo calendar.read no ve Integrantes", () => {
     expect(screen.queryByText("Javier Rojas")).toBeNull();
     expect(nav.replace).toHaveBeenCalledTimes(1);
     expect(nav.replace.mock.calls[0][0]).not.toMatch(/integrantes/);
+  });
+});
+
+// ---------- Ciclo 1 de correcciones (M1–M7) ----------
+
+/** Nombre accesible aproximado: aria-label o texto visible para lectores (sin aria-hidden). */
+function accessibleText(el: Element): string {
+  const label = el.getAttribute("aria-label");
+  if (label) return label.trim();
+  const walk = (n: Node): string => {
+    if (n.nodeType === Node.TEXT_NODE) return n.textContent ?? "";
+    if (n instanceof Element && n.getAttribute("aria-hidden") === "true") return "";
+    return [...n.childNodes].map(walk).join("");
+  };
+  return walk(el).trim();
+}
+
+describe("accesibilidad: botones con nombre aunque el texto largo se oculte en móvil (M1)", () => {
+  it("Visita/Seguimiento de la ficha y filtros del historial tienen nombre completo", () => {
+    at(`${C}/persona?id=p-04&perfil=consolidacion`);
+    inSuite(<PersonScreen />);
+    const header = document.querySelector(".sx-ph") as HTMLElement;
+    expect(within(header).getByRole("button", { name: "Registrar visita a Javier Rojas" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Registrar seguimiento de Javier Rojas" })).toBeInTheDocument();
+    const filters = screen.getByRole("group", { name: "Filtrar historial" });
+    expect(within(filters).getAllByRole("button").map((b) => accessibleText(b))).toEqual(["Todo", "Visitas", "Seguimientos", "Cambios"]);
+    expect(within(filters).getByRole("button", { name: "Seguimientos" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Cambiar responsable de Javier Rojas" })).toBeInTheDocument();
+  });
+
+  it("ningún botón ni link de Consolidación queda sin nombre accesible", () => {
+    const screens: [string, React.ReactNode][] = [
+      [C, <ConsolidationDashboardScreen key="d" />],
+      [`${C}/atencion`, <AttentionScreen key="a" />],
+      [`${C}/personas`, <PeopleScreen key="p" />],
+      [`${C}/persona?id=p-04`, <PersonScreen key="f" />],
+      [`${C}/nueva`, <NewPersonScreen key="n" />],
+      [`${C}/ajustes`, <MembersSettingsScreen key="s" />],
+    ];
+    for (const [path, ui] of screens) {
+      at(`${path}${path.includes("?") ? "&" : "?"}perfil=consolidacion`);
+      const { container, unmount } = inSuite(ui);
+      const unnamed = [...container.querySelectorAll("button, a[href]")].filter((el) => !accessibleText(el));
+      expect(unnamed.map((el) => el.outerHTML.slice(0, 120)), path).toEqual([]);
+      unmount();
+    }
+  });
+});
+
+describe("Personas: alertas con texto y responsable sin acceso explícito (M2)", () => {
+  it("la línea 2 muestra la alerta principal con texto y +n; la columna dice «Responsable sin acceso»", () => {
+    at(`${C}/personas?perfil=consolidacion`);
+    inSuite(<PeopleScreen />);
+    const sofia = row("p-01");
+    expect(within(sofia).getByText("Sin responsable", { selector: ".sx-alert-sum-text" })).toBeInTheDocument();
+    const fernanda = row("p-07");
+    expect(fernanda.querySelector(".sx-alert-sum")).toHaveTextContent(/Sin responsable\s*\+1/);
+    expect(within(fernanda).getByText(/Además:/)).toBeInTheDocument();
+    expect(fernanda.querySelector(".c-owner")).toHaveTextContent("Responsable sin acceso");
+    const valentina = row("p-05");
+    expect(valentina.querySelector(".sx-alert-sum-text")?.textContent).toMatch(/^\d+ días sin volver$/);
+  });
+});
+
+describe("fechas legibles en formularios de Consolidación (M4)", () => {
+  it("visita y seguimiento: input con lang es-CL y eco legible debajo", () => {
+    at(`${C}/persona?id=p-04&perfil=consolidacion`);
+    inSuite(<PersonScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar visita a Javier Rojas" }));
+    const visitDate = screen.getByLabelText("Fecha", { selector: "#sx-visit-date" });
+    expect(visitDate).toHaveAttribute("lang", "es-CL");
+    expect(visitDate).toHaveAccessibleDescription("domingo 4 de octubre de 2026");
+    fireEvent.change(visitDate, { target: { value: "2026-10-03" } });
+    expect(visitDate).toHaveAccessibleDescription("sábado 3 de octubre de 2026");
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Registrar seguimiento de Javier Rojas" }));
+    const fuDate = screen.getByLabelText("Fecha", { selector: "#sx-fu-date" });
+    expect(fuDate).toHaveAttribute("lang", "es-CL");
+    expect(fuDate).toHaveAccessibleDescription("domingo 4 de octubre de 2026");
+    const next = screen.getByLabelText("Fecha de la próxima acción");
+    expect(next).toHaveAttribute("lang", "es-CL");
+    fireEvent.change(next, { target: { value: "2026-10-11" } });
+    expect(next).toHaveAccessibleDescription("domingo 11 de octubre de 2026");
+  });
+
+  it("nueva persona: el nacimiento muestra la fecha legible junto a la edad", () => {
+    at(`${C}/nueva?perfil=consolidacion`);
+    inSuite(<NewPersonScreen />);
+    const birth = screen.getByLabelText("Fecha de nacimiento");
+    expect(birth).toHaveAttribute("lang", "es-CL");
+    fireEvent.change(birth, { target: { value: "1992-01-15" } });
+    expect(birth).toHaveAccessibleDescription("15 de enero de 1992 · tiene 34 años");
+  });
+});
+
+describe("privacidad: «Llegó a» sin calendar.read solo ofrece actividades públicas (M7)", () => {
+  it("helper: las actividades solo para el equipo se omiten sin calendar.read", () => {
+    const s = initialSuiteState();
+    const all = arrivalOccurrences(s.events, "2026-10-03", DEMO_NOW, true).map((o) => o.event.title);
+    const pub = arrivalOccurrences(s.events, "2026-10-03", DEMO_NOW, false).map((o) => o.event.title);
+    expect(all).toContain("Ensayo de alabanza");
+    expect(pub).not.toContain("Ensayo de alabanza");
+    expect(pub).toContain("Ayuno congregacional");
+    for (const o of arrivalOccurrences(s.events, "2026-10-04", DEMO_NOW, false)) expect(o.event.visibility).toBe("public");
+  });
+
+  function RevokeCalendar() {
+    const suite = useSuite();
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          const u = suite.state.users.find((x) => x.uid === "consolidacion")!;
+          suite.dispatch({ type: "user/update", profile: { ...u, permissions: ["members.consolidation.manage"] } });
+          suite.switchProfile("consolidacion");
+        }}
+      >
+        Quitar calendario a Consolidación
+      </button>
+    );
+  }
+
+  const visitOptions = () =>
+    [...(screen.getByLabelText("Actividad o servicio") as HTMLSelectElement).options].map((o) => o.textContent ?? "");
+
+  it("pantalla: con calendar.read se ve la actividad de equipo; sin él, no", () => {
+    at(`${C}/persona?id=p-04&perfil=consolidacion`);
+    const { unmount } = inSuite(<PersonScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar visita a Javier Rojas" }));
+    fireEvent.change(screen.getByLabelText("Fecha", { selector: "#sx-visit-date" }), { target: { value: "2026-10-03" } });
+    expect(visitOptions().some((t) => t.startsWith("Ensayo de alabanza"))).toBe(true);
+    unmount();
+
+    at(`${C}/persona?id=p-04&perfil=admin`);
+    inSuite(
+      <>
+        <RevokeCalendar />
+        <PersonScreen />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Quitar calendario a Consolidación" }));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar visita a Javier Rojas" }));
+    fireEvent.change(screen.getByLabelText("Fecha", { selector: "#sx-visit-date" }), { target: { value: "2026-10-03" } });
+    const opts = visitOptions();
+    expect(opts.some((t) => t.startsWith("Ayuno congregacional"))).toBe(true);
+    expect(opts.some((t) => t.startsWith("Ensayo de alabanza"))).toBe(false);
   });
 });

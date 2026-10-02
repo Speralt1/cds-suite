@@ -30,7 +30,7 @@ export function AgendaList({
   scrollToToday?: boolean;
   ariaLabel?: string;
 }) {
-  const groups = agendaGroups(occurrences, today, from);
+  const groups = agendaGroups(occurrences, today, from, areas);
   const todayInRange = compareLocal(today, from) >= 0 && compareLocal(today, to) <= 0;
   if (todayInRange && !groups.some((g) => g.isToday)) {
     const idx = groups.findIndex((g) => compareLocal(g.date, today) > 0);

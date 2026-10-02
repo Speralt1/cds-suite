@@ -9,7 +9,6 @@
 import Link from "next/link";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { CalendarPlus, Info, MessageCircle, MessageSquarePlus, RotateCcw, TriangleAlert, UserRound } from "lucide-react";
-import { occurrencesInRange } from "@/lib/suite-preview/calendar";
 import {
   CLOSED_REASON_LABEL,
   FOLLOWUP_RESULT_LABEL,
@@ -23,7 +22,7 @@ import { compareLocal } from "@/lib/suite-preview/dates";
 import type { ClosedReason, ConsolidationStatus, FollowUpResult, FollowUpType, Person } from "@/lib/suite-preview/types";
 import { shortDate } from "@/lib/finance-preview/format";
 import { Callout, Sheet } from "@/components/finance-preview/ui";
-import { firstName, personHref, relDay } from "./model";
+import { arrivalOccurrences, dateEcho, firstName, personHref, relDay } from "./model";
 import { useMembers } from "./use-members";
 import { PersonStatusBadge, STATUS_VIS } from "./vocab";
 
@@ -110,6 +109,17 @@ function FieldError({ id, children }: { id: string; children: React.ReactNode })
   );
 }
 
+/** Eco legible de una fecha bajo su input ("domingo 4 de octubre de 2026"). */
+function DateEcho({ id, value }: { id: string; value: string }) {
+  const text = dateEcho(value);
+  if (!text) return null;
+  return (
+    <p className="sx-date-echo" id={id}>
+      {text}
+    </p>
+  );
+}
+
 function Foot({ onCancel, submitLabel, form, cancelLabel = "Cancelar" }: { onCancel: () => void; submitLabel: string; form: string; cancelLabel?: string }) {
   return (
     <>
@@ -134,12 +144,11 @@ function VisitSheet({ open, onClose, person }: SheetProps) {
   const [reopen, setReopen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Sin calendar.read solo se ofrecen las actividades públicas del día.
+  const canReadCalendar = m.eff.has("calendar.read");
   const occurrences = useMemo(
-    () =>
-      occurrencesInRange(m.state.events, date, date, m.now)
-        .filter((o) => o.status !== "cancelada")
-        .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? "")),
-    [m.state.events, date, m.now],
+    () => arrivalOccurrences(m.state.events, date, m.now, canReadCalendar),
+    [m.state.events, date, m.now, canReadCalendar],
   );
   const selected = choice ?? occurrences[0]?.eventId ?? "otra";
   const occ = occurrences.find((o) => o.eventId === selected);
@@ -207,18 +216,19 @@ function VisitSheet({ open, onClose, person }: SheetProps) {
           <input
             id="sx-visit-date"
             type="date"
+            lang="es-CL"
             className="fx-input"
             value={date}
             max={m.today}
             aria-invalid={!!error}
-            aria-describedby={error ? "sx-visit-date-error" : undefined}
+            aria-describedby={error ? "sx-visit-date-error" : "sx-visit-date-echo"}
             onChange={(e) => {
               setDate(e.target.value);
               setChoice(null);
               setError(null);
             }}
           />
-          {error && <FieldError id="sx-visit-date-error">{error}</FieldError>}
+          {error ? <FieldError id="sx-visit-date-error">{error}</FieldError> : <DateEcho id="sx-visit-date-echo" value={date} />}
         </div>
         <div className="fx-field">
           <label htmlFor="sx-visit-activity">Actividad o servicio</label>
@@ -346,13 +356,15 @@ function FollowUpSheet({ open, onClose, person, intent }: SheetProps & { intent?
           <input
             id="sx-fu-date"
             type="date"
+            lang="es-CL"
             className="fx-input"
             value={date}
             max={m.today}
             aria-invalid={!!errors.date}
+            aria-describedby={errors.date ? "sx-fu-date-error" : "sx-fu-date-echo"}
             onChange={(e) => setDate(e.target.value)}
           />
-          {errors.date && <FieldError id="sx-fu-date-error">{errors.date}</FieldError>}
+          {errors.date ? <FieldError id="sx-fu-date-error">{errors.date}</FieldError> : <DateEcho id="sx-fu-date-echo" value={date} />}
         </div>
         <fieldset className="sx-fieldset">
           <legend>Tipo</legend>
@@ -457,13 +469,19 @@ function FollowUpSheet({ open, onClose, person, intent }: SheetProps & { intent?
             <input
               id="sx-fu-next-date"
               type="date"
+              lang="es-CL"
               className="fx-input"
               value={nextDate}
               min={date}
               aria-invalid={!!errors.nextDate}
+              aria-describedby={errors.nextDate ? "sx-fu-next-date-error" : nextDate ? "sx-fu-next-date-echo" : undefined}
               onChange={(e) => setNextDate(e.target.value)}
             />
-            {errors.nextDate && <FieldError id="sx-fu-next-date-error">{errors.nextDate}</FieldError>}
+            {errors.nextDate ? (
+              <FieldError id="sx-fu-next-date-error">{errors.nextDate}</FieldError>
+            ) : (
+              <DateEcho id="sx-fu-next-date-echo" value={nextDate} />
+            )}
           </div>
           <div className="fx-field">
             <label htmlFor="sx-fu-owner">Responsable</label>

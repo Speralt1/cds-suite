@@ -363,7 +363,7 @@
 .fx .sx-people-table .c-entry { width: 96px; }
 .fx .sx-people-table .c-last { width: 104px; }
 .fx .sx-people-table .c-visits { width: 64px; }
-.fx .sx-people-table .c-owner { width: 112px; }
+.fx .sx-people-table .c-owner { width: 120px; }
 .fx .sx-people-table .c-status { width: 140px; }
 .fx .sx-people-table .c-next { width: 160px; }
 .fx .sx-people-table .c-actions {
@@ -393,18 +393,45 @@
   min-height: 16px;
   margin-top: 2px;
 }
-.fx .sx-alert-icons {
+.fx .sx-name-sub > * {
+  flex: none;
+}
+.fx .sx-name-sub > .sx-alert-sum {
+  flex: 0 1 auto;
+}
+.fx .sx-alert-sum {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
 }
-.fx .sx-alert-mini {
-  display: inline-flex;
+.fx .sx-alert-sum > svg {
+  flex: none;
+}
+.fx .sx-alert-sum-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .fx .sx-alert-more {
+  flex: none;
   color: var(--fx-muted);
   font-size: 11px;
   font-weight: 600;
+}
+.fx .sx-people-table .c-owner .sx-owner-missing {
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: normal;
+}
+.fx .sx-people-table .c-owner .sx-owner-missing > svg {
+  flex: none;
+  margin-top: 2px;
 }
 .fx .sx-cell-text {
   display: block;
@@ -436,6 +463,11 @@
   }
   .fx .sx-people-table .c-inline-phone {
     display: inline;
+  }
+  /* La alerta principal no se recorta: el teléfono baja de línea si no cabe. */
+  .fx .sx-name-sub {
+    flex-wrap: wrap;
+    row-gap: 2px;
   }
 }
 @container sx-people (max-width: 807px) {
@@ -483,6 +515,36 @@
 }
 
 /* ---------- Formularios y sheets ---------- */
+.fx .sx-form {
+  container: sx-form / inline-size;
+}
+/* Tipo de seguimiento: 2×2; 4 en una fila cuando el formulario es ancho. */
+.fx .sx-choices.is-4,
+.fx .sx-choices.is-wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container sx-form (min-width: 560px) {
+  .fx .sx-choices.is-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/* Resultado: 2 columnas; si queda uno solo en la última fila, ocupa la fila completa. */
+.fx .sx-choices.is-wrap > .sx-choice:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.fx .sx-choices.is-4 > .sx-choice,
+.fx .sx-choices.is-wrap > .sx-choice {
+  min-width: 0;
+  padding: 6px 12px;
+}
+/* Eco legible bajo inputs de fecha ("domingo 4 de octubre de 2026"). */
+.fx .sx-date-echo {
+  margin-top: 4px;
+  color: var(--fx-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
 .fx .sx-form .fx-field:first-child {
   margin-top: 0;
 }
@@ -1433,6 +1495,41 @@
   .fx .sx-tl-filter-short {
     display: inline;
   }
+  .fx .sx-tl-filter button {
+    height: 44px;
+  }
+  .fx .sx-dd-btn {
+    height: 44px;
+    margin: -10px 0;
+    padding: 0 10px;
+  }
+  /* Nombres-link de Inicio/Atención: área táctil de 44 px. */
+  .fx .sx-att-row {
+    padding-top: 0;
+  }
+  .fx .sx-att-row > .sx-alert-icon {
+    margin-top: 6px;
+  }
+  .fx .sx-att-name .sx-person-link,
+  .fx .sx-mini-main .sx-person-link,
+  .fx .sx-leap-row .sx-person-link {
+    display: block;
+    min-height: 44px;
+    padding: 11px 0;
+    line-height: 22px;
+  }
+  /* Con línea secundaria debajo: el texto se apoya abajo para no separarse de ella. */
+  .fx .sx-mini-main .sx-person-link:not(:only-child),
+  .fx .sx-leap-row .sx-person-link {
+    padding: 16px 0 6px;
+  }
+  .fx .sx-mini-row {
+    padding: 0 0 6px;
+  }
+  .fx .sx-att-name .sx-person-link {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
   .fx .sx-tl-item {
     grid-template-columns: 56px 28px minmax(0, 1fr);
     gap: 10px;
@@ -1456,6 +1553,38 @@
   }
   .fx .sx-param {
     padding: 12px 16px;
+  }
+}
+
+/* Ficha bajo 600 px: la fecha del historial va como línea superior del ítem
+   (no compite con los marcadores). */
+@media (max-width: 599px) {
+  .fx .sx-tl-item {
+    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-areas: "icon date" "icon body";
+    column-gap: 10px;
+    row-gap: 0;
+  }
+  .fx .sx-tl-item::before {
+    top: 38px;
+    left: calc(6px + 13.5px);
+  }
+  .fx .sx-tl-date {
+    grid-area: date;
+    padding-top: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+  }
+  .fx .sx-tl-icon {
+    grid-area: icon;
+    align-self: start;
+  }
+  .fx .sx-tl-body {
+    grid-area: body;
+  }
+  .fx .sx-tl-title {
+    padding-top: 2px;
   }
 }
 

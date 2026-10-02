@@ -35,35 +35,72 @@ export function CancelEventDialog({
   canThisDate: boolean;
   canSeries: boolean;
 }) {
+  // El botón destructivo queda deshabilitado (aria-disabled) hasta que el motivo
+  // sea válido; la clave evita arrastrar el estado a otra ocurrencia.
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const ready = !!occurrence && readyKey === occurrence.key;
+  const close = () => {
+    setReadyKey(null);
+    onClose();
+  };
   return (
     <Sheet
       open={open && !!occurrence}
-      onClose={onClose}
+      onClose={close}
       variant="center"
       labelId="sx-cancel-title"
       title={occurrence ? `Cancelar «${occurrence.event.title}»` : ""}
       footer={
         <div className="sx-dialog-foot">
-          <button type="button" className="fx-btn fx-btn-secondary" onClick={onClose}>
+          <button type="button" className="fx-btn fx-btn-secondary" onClick={close}>
             Volver
           </button>
-          <button type="submit" form="sx-cancel-form" className="fx-btn fx-btn-danger">
+          <button
+            type="submit"
+            form="sx-cancel-form"
+            className="fx-btn fx-btn-danger"
+            aria-disabled={!ready || undefined}
+            aria-describedby={!ready ? "sx-cancel-reason-help" : undefined}
+          >
             Cancelar actividad
           </button>
         </div>
       }
     >
       {open && occurrence && (
-        <CancelForm key={occurrence.key} o={occurrence} onDone={onDone} canThisDate={canThisDate} canSeries={canSeries} />
+        <CancelForm
+          key={occurrence.key}
+          o={occurrence}
+          onDone={() => {
+            setReadyKey(null);
+            onDone();
+          }}
+          onReadyChange={(v) => setReadyKey(v ? occurrence.key : null)}
+          canThisDate={canThisDate}
+          canSeries={canSeries}
+        />
       )}
     </Sheet>
   );
 }
 
-function CancelForm({ o, onDone, canThisDate, canSeries }: { o: Occurrence; onDone: () => void; canThisDate: boolean; canSeries: boolean }) {
+function CancelForm({
+  o,
+  onDone,
+  onReadyChange,
+  canThisDate,
+  canSeries,
+}: {
+  o: Occurrence;
+  onDone: () => void;
+  onReadyChange: (ready: boolean) => void;
+  canThisDate: boolean;
+  canSeries: boolean;
+}) {
   const { dispatch } = useSuite();
   const [scope, setScope] = useState<"date" | "series">(canThisDate ? "date" : "series");
   const [reason, setReason] = useState("");
+  const [touched, setTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = (ev: React.FormEvent) => {
@@ -119,11 +156,16 @@ function CancelForm({ o, onDone, canThisDate, canSeries }: { o: Occurrence; onDo
           value={reason}
           onChange={(e) => {
             setReason(e.target.value);
+            setTouched(true);
+            onReadyChange(validReason(e.target.value));
             if (error && validReason(e.target.value)) setError(null);
+          }}
+          onBlur={() => {
+            if (touched && !validReason(reason)) setError(REASON_REQUIRED);
           }}
         />
         <p className="fx-help" id="sx-cancel-reason-help">
-          Solo lo ve el equipo.
+          Solo lo ve el equipo. Mínimo 3 caracteres.
         </p>
         {error && (
           <p className="sx-field-error" id="sx-cancel-reason-err" role="alert">
@@ -152,30 +194,50 @@ export function ArchiveEventDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const ready = !!occurrence && readyKey === occurrence.key;
+  const close = () => {
+    setReadyKey(null);
+    onClose();
+  };
   return (
     <Sheet
       open={open && !!occurrence}
-      onClose={onClose}
+      onClose={close}
       variant="center"
       labelId="sx-archive-title"
       title={occurrence ? `Eliminar «${occurrence.event.title}»` : ""}
       footer={
         <div className="sx-dialog-foot">
-          <button type="button" className="fx-btn fx-btn-secondary" onClick={onClose}>
+          <button type="button" className="fx-btn fx-btn-secondary" onClick={close}>
             Volver
           </button>
-          <button type="submit" form="sx-archive-form" className="fx-btn fx-btn-danger">
+          <button type="submit" form="sx-archive-form" className="fx-btn fx-btn-danger" aria-disabled={!ready || undefined}>
             Eliminar
           </button>
         </div>
       }
     >
-      {open && occurrence && <ArchiveForm key={occurrence.key} o={occurrence} onDone={onDone} />}
+      {open && occurrence && (
+        <ArchiveForm
+          key={occurrence.key}
+          o={occurrence}
+          onDone={() => {
+            setReadyKey(null);
+            onDone();
+          }}
+          onReadyChange={(v) => setReadyKey(v ? occurrence.key : null)}
+        />
+      )}
     </Sheet>
   );
 }
 
-function ArchiveForm({ o, onDone }: { o: Occurrence; onDone: () => void }) {
+function archiveReady(kind: string, note: string): boolean {
+  return !!kind && (kind !== "Otro" || note.trim().length >= REASON_MIN);
+}
+
+function ArchiveForm({ o, onDone, onReadyChange }: { o: Occurrence; onDone: () => void; onReadyChange: (ready: boolean) => void }) {
   const { dispatch } = useSuite();
   const [kind, setKind] = useState("");
   const [note, setNote] = useState("");
@@ -216,6 +278,7 @@ function ArchiveForm({ o, onDone }: { o: Occurrence; onDone: () => void }) {
           aria-describedby={error ? "sx-archive-err" : undefined}
           onChange={(e) => {
             setKind(e.target.value);
+            onReadyChange(archiveReady(e.target.value, note));
             setError(null);
           }}
         >
@@ -238,7 +301,11 @@ function ArchiveForm({ o, onDone }: { o: Occurrence; onDone: () => void }) {
           aria-invalid={error && kind === "Otro" ? true : undefined}
           onChange={(e) => {
             setNote(e.target.value);
+            onReadyChange(archiveReady(kind, e.target.value));
             setError(null);
+          }}
+          onBlur={() => {
+            if (kind === "Otro" && note.trim().length < REASON_MIN) setError("Cuéntanos el motivo en la nota (mínimo 3 caracteres).");
           }}
         />
         <p className="fx-help">Solo lo ve el equipo.</p>

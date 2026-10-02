@@ -105,6 +105,8 @@ function Brand() {
 function cargoLine(p: AccessProfile, areas: readonly Area[], simulated: boolean): string {
   if (!simulated) return "Casa de Salvación";
   const names = p.areaIds.map((id) => areas.find((a) => a.id === id)?.name).filter(Boolean);
+  // "Consolidación · Consolidación" → solo el cargo.
+  if (names.length === 1 && names[0]!.trim().toLocaleLowerCase("es") === p.cargo.trim().toLocaleLowerCase("es")) return p.cargo;
   return names.length ? `${p.cargo} · ${names.join(", ")}` : p.cargo;
 }
 
@@ -112,12 +114,13 @@ function SectionLink({ s, model, active }: { s: NavSection; model: ShellModel; a
   const Icon = ICONS[s.icon];
   const count = model.badge(s);
   return (
-    <li>
+    <li className={s.shortcut ? "sx-section-shortcut" : undefined}>
       <Link
         href={model.hrefFor(s.href)}
         className="fx-nav-link sx-section-link"
         aria-current={active ? "page" : undefined}
         aria-label={count ? `${s.label}, ${count} pendientes` : s.label}
+        title={s.shortcut ? `${s.label} (abre otro módulo)` : undefined}
       >
         <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
         <span className="fx-nav-text">{s.label}</span>
@@ -165,7 +168,7 @@ function SuiteSidebar({ model }: { model: ShellModel }) {
                 {active && !leaf && (
                   <nav aria-label={MODULE_LABEL[m]} className="sx-sections">
                     {groups.map((g, gi) => (
-                      <div className="sx-section-group" key={gi}>
+                      <div className={`sx-section-group${g.items.every((s) => s.shortcut) ? " is-shortcuts" : ""}`} key={gi}>
                         {g.label && (
                           <span className="sx-section-label" id={`sx-${m}-group-${gi}`}>
                             {g.label}
