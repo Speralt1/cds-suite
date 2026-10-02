@@ -110,7 +110,7 @@ export const STATUS = {
   notComparable: { icon: CircleDashed, text: "No comparable", tone: "neutral" },
   campaignDone: { icon: CircleCheck, text: "Cerrada · meta cumplida", tone: "success" },
   cashPending: { icon: Clock, text: "Sin depositar", tone: "warning" },
-  cashToday: { icon: Clock, text: "Por registrar · en curso", tone: "info" },
+  cashToday: { icon: Clock, text: "Por registrar", tone: "info", title: "Culto en curso: el efectivo se registra al terminar." },
 } satisfies Record<string, StatusDef>;
 
 export type StatusKey = keyof typeof STATUS;

@@ -453,29 +453,29 @@ export function TransactionsTable({
   return (
     <>
       <div className="fx-table-wrap fx-desktop-table">
-        <table className="fx-table">
+        <table className="fx-table fx-table-fixed">
           <caption className="fx-sr">{caption}</caption>
           <thead>
             <tr>
-              <th scope="col" aria-sort={sortAsc ? "ascending" : "descending"} style={{ width: 96 }}>
+              <th scope="col" aria-sort={sortAsc ? "ascending" : "descending"} style={{ width: 100 }}>
                 <button type="button" onClick={() => setSortAsc((v) => !v)} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 600, cursor: "pointer" }}>
                   Fecha <ChevronDown size={12} aria-hidden="true" style={{ transform: sortAsc ? "rotate(180deg)" : undefined }} />
                 </button>
               </th>
               <th scope="col">Descripción</th>
-              <th scope="col" className="fx-hide-sm" style={{ width: 150 }}>
+              <th scope="col" className="fx-hide-sm" style={{ width: 128 }}>
                 Fuente
               </th>
-              <th scope="col" style={{ width: 112 }}>
+              <th scope="col" style={{ width: 108 }}>
                 Método
               </th>
-              <th scope="col" className="fx-hide-md" style={{ width: 96 }}>
+              <th scope="col" className="fx-hide-md" style={{ width: 92 }}>
                 Origen
               </th>
-              <th scope="col" style={{ width: 150 }}>
+              <th scope="col" style={{ width: 144 }}>
                 Estado
               </th>
-              <th scope="col" className="is-num" style={{ width: 132 }}>
+              <th scope="col" className="is-num" style={{ width: 128 }}>
                 Monto
               </th>
             </tr>

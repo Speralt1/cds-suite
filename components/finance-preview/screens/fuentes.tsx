@@ -96,7 +96,9 @@ function AreaScreen({ area }: { area: AreaKey }) {
             <div className="fx-row-between" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
               <div>
                 <p className="fx-help-13">
-                  {isOfr ? "Ofrendas" : "Ventas"} de {periodTitle(period).toLocaleLowerCase("es")}
+                  {isYear
+                    ? `${isOfr ? "Ofrendas" : "Ventas"} ${period.year} · ene–${dayMonth(DEMO_TODAY).split(" ")[1]}`
+                    : `${isOfr ? "Ofrendas" : "Ventas"} de ${periodTitle(period).toLocaleLowerCase("es")}`}
                 </p>
                 <p className="fx-metric-value" style={{ marginTop: 2 }}>
                   <MoneyAmount value={historyTotal ?? yearTotal ?? sumUp + cash} />
@@ -170,23 +172,25 @@ function AreaScreen({ area }: { area: AreaKey }) {
             height={{ desktop: 240, mobile: 200 }}
           />
 
-          <Panel flush title={`Cultos de ${periodTitle(period).toLocaleLowerCase("es")}`} labelledBy={`cultos-${area}`}>
+          <Panel flush title={isYear ? `Cultos de ${period.year}` : `Cultos de ${periodTitle(period).toLocaleLowerCase("es")}`} labelledBy={`cultos-${area}`}>
             {days.length === 0 ? (
               <EmptyState icon={Info} title="Sin detalle por culto en este período" body="En la vista previa el detalle por culto existe desde septiembre 2026." />
             ) : (
               <div className="fx-table-wrap">
-                <table className="fx-table fx-table-simple">
+                <table className="fx-table fx-table-simple fx-table-fixed">
                   <caption className="fx-sr">Ingresos de {AREA_LABEL[area]} por día</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Fecha</th>
+                      <th scope="col" style={{ width: "34%" }}>Fecha</th>
                       <th scope="col" className="is-num">
                         SumUp (bruto)
                       </th>
                       <th scope="col" className="is-num">
                         Efectivo
                       </th>
-                      <th scope="col">Estado</th>
+                      <th scope="col" className="fx-hide-mobile" style={{ width: 172 }}>
+                        Estado
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -196,13 +200,18 @@ function AreaScreen({ area }: { area: AreaKey }) {
                       const preSplit = r.date < SPLIT_DATE;
                       return (
                         <tr key={r.date}>
-                          <td style={{ whiteSpace: "nowrap" }}>
-                            {shortDate(r.date)}
-                            {r.worship && <span className="fx-help"> · culto</span>}
+                          <td>
+                            <span className="fx-nowrap">
+                              {shortDate(r.date)}
+                              {r.worship && <span className="fx-help fx-hide-mobile"> · culto</span>}
+                            </span>
+                            <span className="fx-show-mobile-inline" style={{ marginTop: 4 }}>
+                              <CashStatusCell status={areaCashStatus(r.date, area, r.status)} compact />
+                            </span>
                           </td>
                           <td className="is-num">{preSplit ? <span className="fx-help">No comparable</span> : su ? <MoneyAmount value={su} /> : "—"}</td>
                           <td className="is-num">{ca ? <MoneyAmount value={ca} /> : "—"}</td>
-                          <td>
+                          <td className="fx-hide-mobile">
                             <CashStatusCell status={areaCashStatus(r.date, area, r.status)} />
                           </td>
                         </tr>

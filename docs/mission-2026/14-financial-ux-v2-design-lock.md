@@ -705,3 +705,15 @@ Las duraciones son **HIPÓTESIS** heredadas del doc 08: no hay evidencia medida.
 | 8 | Learning: variación en tono neutro | Queda como candidato; no se guarda en el Brain hasta que Salvador lo valide |
 
 **Fuente de datos del preview.** Fixtures sintéticos y deterministas en `lib/finance-preview/fixtures.ts`. Las magnitudes son plausibles pero **no son datos reales** (Atlas §2.5). Todas las cifras visibles salen de `lib/finance-preview/selectors.ts`.
+
+### 16.1 Cambios al Lock aceptados durante la revisión (ciclos 1–3)
+
+| Cambio | Origen | Estado |
+|---|---|---|
+| §8.7 / §8.9: Ofrendas y Cafetería muestran una cifra protagonista ("Ofrendas de septiembre 2026") con su composición (SumUp bruto / efectivo), en lugar de la franja de texto | Designer, ciclo 1 | Aceptado |
+| §8.5: Caja desktop se organiza por pestaña de área (conteo a la izquierda; efectivo por culto y cierres de esa área a la derecha), en lugar de 2 columnas | Designer, ciclo 1 (variante b) | Aceptado |
+| §7 FinancialChart: el segmented es [6 M \| n M], con n = meses con datos (10 M), en lugar de 12 M fijo | Designer, ciclo 1 | Aceptado |
+| §7 FinancialChart: la anotación "Diezmos y gastos en CDS desde sep" va en la leyenda, con una muestra del área sombreada, en lugar de un label sobre el gráfico | Designer, ciclo 2 | Aceptado |
+| §7 StatusBadge: nuevo estado **"Por registrar"** (info, `Clock`) para el culto en curso; "Falta efectivo" (warning) queda solo para cultos ya pasados. Una única regla (`areaCashStatus`) para todas las pantallas | Designer y Atlas, ciclo 2 | Aceptado |
+| §7 Tabs: las pestañas de Caja y Conciliación se implementan como segmented con `aria-pressed` (no hay patrón ARIA de tabs completo) | Atlas, ciclo 2 | Aceptado |
+| Conteo ciego (Propuesta): al terminar el conteo 2 se revela el 1 y el 2 queda fijo; si no cuadran, se pide un tercer conteo | Atlas, ciclo 2 | Aceptado (pendiente de validar con Navigator/Salvador) |

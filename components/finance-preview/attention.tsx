@@ -59,7 +59,12 @@ function Item({ item, compact, onResolve }: { item: AttentionItem; compact?: boo
         <p className="fx-att-meta">
           {compact ? `${ATTENTION_GROUP_LABEL[item.group]} · ` : ""}
           {item.detail}
-          {age ? ` · ${age}` : ""}
+          {age && (
+            <>
+              {" · "}
+              <span className="fx-nowrap">{age}</span>
+            </>
+          )}
           {compact && item.proposal ? " · Propuesta" : ""}
         </p>
       </div>

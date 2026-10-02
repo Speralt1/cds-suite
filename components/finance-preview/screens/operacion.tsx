@@ -161,10 +161,10 @@ export function MovimientosScreen() {
 // ---------- Caja ----------
 
 /** Estado del efectivo de un área por día: una sola regla para todas las pantallas. */
-export function CashStatusCell({ status }: { status: ReturnType<typeof areaCashStatus> }) {
+export function CashStatusCell({ status, compact }: { status: ReturnType<typeof areaCashStatus>; compact?: boolean }) {
   switch (status) {
     case "today":
-      return <StatusBadge status="cashToday" />;
+      return <StatusBadge status="cashToday" detail={compact ? undefined : "en curso"} />;
     case "missing":
       return <StatusBadge status="missingCash" />;
     case "noRecords":
@@ -389,18 +389,18 @@ function AreaCash({ area }: { area: AreaKey }) {
         <p className="fx-help" style={{ marginTop: -8, marginBottom: 8 }}>
           Lo que existe hoy en CDS: un monto de efectivo por área y día.
         </p>
-        <table className="fx-table fx-table-simple">
+        <table className="fx-table fx-table-simple fx-table-fixed">
           <caption className="fx-sr">Efectivo de {AREA_LABEL[area]} por culto</caption>
           <thead>
             <tr>
               <th scope="col">Culto</th>
-              <th scope="col" className="is-num fx-hide-mobile">
-                SumUp (bruto)
+              <th scope="col" className="is-num fx-hide-mobile" style={{ width: 92 }}>
+                SumUp bruto
               </th>
-              <th scope="col" className="is-num">
+              <th scope="col" className="is-num" style={{ width: 92 }}>
                 Efectivo
               </th>
-              <th scope="col">Estado</th>
+              <th scope="col" style={{ width: 132 }}>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -414,7 +414,7 @@ function AreaCash({ area }: { area: AreaKey }) {
                   <td className="is-num fx-hide-mobile">{sumUp ? <MoneyAmount value={sumUp} /> : "—"}</td>
                   <td className="is-num">{cash ? <MoneyAmount value={cash} /> : "—"}</td>
                   <td>
-                    <CashStatusCell status={st} />
+                    <CashStatusCell status={st} compact />
                   </td>
                 </tr>
               );

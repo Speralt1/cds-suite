@@ -132,13 +132,13 @@ describe("Caja", () => {
 });
 
 describe("estado del culto en curso (una sola regla)", () => {
-  it("ninguna pantalla muestra 'Falta efectivo' para hoy: es 'Por registrar · en curso'", () => {
+  it("ninguna pantalla muestra 'Falta efectivo' para hoy: es 'Por registrar'", () => {
     for (const Screen of [OfrendasScreen, CafeteriaScreen, CajaScreen]) {
       const { container, unmount } = withProvider(<Screen />);
       const todayRow = [...container.querySelectorAll("tr")].find((tr) => /dom 4 oct/.test(tr.textContent ?? ""));
       expect(todayRow, Screen.name).toBeDefined();
       expect(todayRow!.textContent).not.toMatch(/Falta efectivo/);
-      expect(todayRow!.textContent).toMatch(/Por registrar · en curso/);
+      expect(todayRow!.textContent).toMatch(/Por registrar/);
       unmount();
     }
   });

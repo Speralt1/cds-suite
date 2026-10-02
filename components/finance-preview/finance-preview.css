@@ -798,6 +798,9 @@
   font-weight: 500;
   line-height: 19px;
 }
+.fx-nowrap {
+  white-space: nowrap;
+}
 .fx-att-meta {
   margin-top: 2px;
   color: var(--fx-muted);
@@ -1070,6 +1073,37 @@
 }
 .fx-table tbody tr:last-child td {
   border-bottom: 0;
+}
+.fx-table th:last-child,
+.fx-table td:last-child {
+  padding-right: 20px;
+}
+.fx-table th:first-child,
+.fx-table td:first-child {
+  padding-left: 16px;
+}
+/* Tablas con columnas fijas: nunca más anchas que su panel. */
+.fx-table-fixed {
+  table-layout: fixed;
+}
+.fx-table-fixed td,
+.fx-table-fixed th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Un monto nunca se trunca. */
+.fx-table-fixed .is-num {
+  overflow: visible;
+  text-overflow: clip;
+}
+.fx-table-fixed th {
+  white-space: normal;
+  line-height: 15px;
+}
+.fx-table-fixed .fx-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .fx-table .is-num {
   text-align: right;
@@ -2007,6 +2041,9 @@
   }
   .fx-panel {
     padding: 16px;
+  }
+  .fx-panel.fx-panel-flush {
+    padding: 0;
   }
   .fx-panel-flush > .fx-panel-head {
     padding: 14px 16px 0;
