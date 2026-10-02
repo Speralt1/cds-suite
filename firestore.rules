@@ -2,12 +2,81 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function member() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true; }
-    function role() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role; }
-    function details() { return member() && role() in ['admin','pastor','finance']; }
-    function pastoral() { return member() && role() in ['admin','pastor']; }
-    function admin() { return member() && role() == 'admin'; }
-    function approved() { return member() && role() in ['admin','pastor','finance','leader']; }
+
+    // ── Acceso central (Platform Core V1, 18a §B/§D.1) ─────────────────────
+    // users/{uid} v1 (accessSchemaVersion == 1) manda; si no, fallback legacy
+    // por `role`, idéntico a LEGACY_ROLE_ACCESS (lib/shared/access.ts).
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function userDoc() { return get(userPath()).data; }
+    function isActive() { return signedIn() && exists(userPath()) && userDoc().active == true; }
+    function legacyRole() { return userDoc().get('role', ''); }
+    function isAccessV1() { return userDoc().get('accessSchemaVersion', 0) == 1; }
+    function isAdminUser() { return adminProfile(userDoc()); }
+    function legacyPermissions(r) {
+      return r == 'pastor' ? ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_all']
+        : r == 'finance' ? ['finance.summary.read','finance.details.read','finance.records.manage','calendar.read']
+        : r == 'leader' ? ['finance.summary.read','calendar.read','calendar.events.manage_assigned']
+        : [];
+    }
+    function permissions() { return isAccessV1() ? userDoc().get('permissions', []) : legacyPermissions(legacyRole()); }
+    // Cierre en reglas: para cada permiso, los permisos que lo implican (incluido él mismo).
+    // Tabla canónica (paridad con IMPLIES de lib/shared/access.ts). Los helpers de abajo usan
+    // la misma lista en literal para no reconstruir el mapa en cada evaluación (límite de
+    // 1000 expresiones por request en los lotes financieros); un test verifica que coinciden.
+    function implicants() {
+      return {
+        'finance.summary.read': ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage'],
+        'finance.details.read': ['finance.details.read','finance.records.manage','finance.pastoral.manage'],
+        'finance.records.manage': ['finance.records.manage'],
+        'finance.pastoral.manage': ['finance.pastoral.manage'],
+        'calendar.read': ['calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned'],
+        'calendar.events.manage_assigned': ['calendar.events.manage_assigned','calendar.events.manage_all'],
+        'calendar.events.manage_all': ['calendar.events.manage_all'],
+        'calendar.events.publish_assigned': ['calendar.events.publish_assigned'],
+        'settings.manage': []
+      };
+    }
+    // Genérico (tabla canónica): permiso efectivo p para el usuario autenticado.
+    function can(p) { return isActive() && (isAdminUser() || permissions().hasAny(implicants()[p])); }
+    // Evaluación rápida para los helpers de abajo (los lotes financieros están cerca del límite de
+    // 1000 expresiones por request): v1 → admin o permissions ∩ ps; legacy → role ∈ legacyRoles.
+    // ps = implicants()[p] y legacyRoles = admin + roles cuyo legacyPermissions() corta ps; un test
+    // de tests/rules/platform-access.test.ts verifica ambas listas contra las tablas canónicas.
+    function adminProfile(u) { return u.get('accessSchemaVersion', 0) == 1 ? u.get('baseRole', '') == 'admin' : u.get('role', '') == 'admin'; }
+    function gateProfile(u, ps, legacyRoles) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin' || u.get('permissions', []).hasAny(ps))
+        : u.get('role', '') in legacyRoles);
+    }
+    function gate(ps, legacyRoles) { return signedIn() && exists(userPath()) && gateProfile(userDoc(), ps, legacyRoles); }
+    function profileAreaIds(u) { return u.get('accessSchemaVersion', 0) == 1 ? u.get('areaIds', []) : []; }
+    function hasArea(u, areaId) { return profileAreaIds(u).hasAny([areaId]); }
+    function calendarRead() { return gate(['calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned'], ['admin','pastor','finance','leader']); }
+    function calendarManageAll() { return gate(['calendar.events.manage_all'], ['admin','pastor']); }
+    function calendarManageAssigned(areaId) { return calendarManageAll() || (signedIn() && exists(userPath()) && manageAreaOf(userDoc(), areaId)); }
+    // Variantes sobre un perfil ya leído (u), para las escrituras de calendario (un solo get).
+    function manageAllOf(u) { return gateProfile(u, ['calendar.events.manage_all'], ['admin','pastor']); }
+    // Por área: solo perfiles v1 tienen áreas (legacy → []), y admin/pastor ya pasan por manageAllOf.
+    // managedAreasOf(u) = áreas donde u tiene manage_assigned (o [] si no aplica); el área debe estar activa.
+    function managedAreasOf(u) {
+      return (u.active == true && u.get('accessSchemaVersion', 0) == 1
+        && u.permissions.hasAny(['calendar.events.manage_assigned','calendar.events.manage_all'])) ? u.areaIds : [];
+    }
+    function inActiveArea(areas, areaId) { return areas.hasAny([areaId]) && get(/databases/$(database)/documents/areas/$(areaId)).data.active == true; }
+    function manageAreaOf(u, areaId) { return inActiveArea(managedAreasOf(u), areaId); }
+    // calendarPublish sobre un perfil ya leído: publish_assigned ∧ hasArea (manage_all se evalúa aparte).
+    function publishAreaOf(u, areaId) {
+      return u.active == true && u.get('accessSchemaVersion', 0) == 1
+        && u.permissions.hasAny(['calendar.events.publish_assigned'])
+        && hasArea(u, areaId);
+    }
+    // settings.manage solo existe vía admin (baseRole v1 o role legacy): nunca por `permissions`.
+    function settingsManage() { return gate([], ['admin']); }
+    function financeSummaryRead() { return gate(['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage'], ['admin','pastor','finance','leader']); }
+    function financeDetailsRead() { return gate(['finance.details.read','finance.records.manage','finance.pastoral.manage'], ['admin','pastor','finance']); }
+    function financeRecordsManage() { return gate(['finance.records.manage'], ['admin','pastor','finance']); }
+    function financePastoralManage() { return gate(['finance.pastoral.manage'], ['admin','pastor']); }
+    function admin() { return settingsManage(); }                  // alias histórico (appSettings)
     // Movimientos importados desde proveedores son propiedad del backend.
     // Cloud Functions/Admin SDK no está sujeto a estas reglas; clientes sí.
     function providerOwnedFinanceTransaction(id) { return id.matches('^sumup_.*'); }
@@ -36,20 +105,58 @@ service cloud.firestore {
     function auditCreate(d) { return d.createdBy == request.auth.uid && d.createdAt == request.time && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
     function auditUpdate(d, old) { return d.createdAt == old.createdAt && d.createdBy == old.createdBy && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
 
-    function validUser(d) {
+    // Id de área (= slug): ^[a-z0-9]+(-[a-z0-9]+)*$, ≤40.
+    function isAreaId(v) { return v.matches('^[a-z0-9]+(-[a-z0-9]+)*$') && v.size() <= 40; }   // matches() falla si no es string
+    // Lista de ids de área: ≤max, sin duplicados, todos strings con forma de slug. Se valida
+    // uniendo con ',' (un slug no contiene comas) y comprobando que el split devuelve la misma
+    // lista (descarta no-strings) — evita 20 evaluaciones por elemento (límite de expresiones).
+    function areaIdList(l, max) {
+      return l is list && l.size() <= max && l.toSet().size() == l.size()
+        && (l.size() == 0 || (l.join(',').size() <= max * 41
+          && l.join(',').matches('^[a-z0-9]+(-[a-z0-9]+)*(,[a-z0-9]+(-[a-z0-9]+)*)*$')
+          && l.join(',').split(',') == l));
+    }
+
+    // ── users/{uid} (18a §C.1/§D.2) ──────────────────────────────────────────
+    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned']; }
+    function v1UserKeys() { return ['displayName','email','role','active','createdAt','baseRole','position','permissions','areaIds','homeModule','accessSchemaVersion','updatedAt','updatedBy']; }
+    function validLegacyUser(d) {
       return d.keys().hasOnly(['displayName','email','role','active','createdAt'])
         && text(d.displayName,1,120) && text(d.email,3,160)
         && d.role in ['admin','pastor','finance','leader']
         && d.active is bool && d.createdAt is timestamp;
     }
+    // Espejo de deriveLegacyRole (lib/shared/access.ts): el `role` legacy siempre queda coherente.
+    function derivedLegacyRole(d) {
+      return d.baseRole == 'admin' ? 'admin'
+        : d.permissions.hasAll(['finance.records.manage','finance.pastoral.manage']) ? 'pastor'
+        : d.permissions.hasAny(['finance.records.manage']) ? 'finance'
+        : 'leader';
+    }
+    function validUserV1(d) {
+      return d.keys().hasAll(v1UserKeys()) && d.keys().hasOnly(v1UserKeys())
+        && text(d.displayName,1,120) && text(d.email,3,160)
+        && d.role in ['admin','pastor','finance','leader'] && d.active is bool && d.createdAt is timestamp
+        && d.baseRole in ['admin','standard'] && text(d.position,0,60)
+        && d.permissions is list && d.permissions.size() <= 8 && d.permissions.hasOnly(permissionCatalogNoSettings())
+        && d.permissions.toSet().size() == d.permissions.size()
+        && ((d.baseRole == 'admin') == (d.role == 'admin')) && d.role == derivedLegacyRole(d)
+        && areaIdList(d.areaIds, 20)
+        && d.homeModule in ['finance','calendar'] && d.accessSchemaVersion == 1
+        && d.updatedAt == request.time && d.updatedBy == request.auth.uid;
+    }
+    function validUser(d) { return d.get('accessSchemaVersion', 0) == 1 ? validUserV1(d) : validLegacyUser(d); }
+    function isAdminDoc(d) { return d.get('accessSchemaVersion', 0) == 1 ? d.baseRole == 'admin' : d.role == 'admin'; }
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || admin());
-      allow list: if admin();
-      allow create: if admin() && validUser(request.resource.data);
-      allow update: if admin() && validUser(request.resource.data)
+      allow get: if signedIn() && (request.auth.uid == uid || settingsManage());
+      allow list: if settingsManage();
+      allow create: if settingsManage() && validUser(request.resource.data);
+      allow update: if settingsManage() && validUser(request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.email == resource.data.email
-        && (uid != request.auth.uid || (request.resource.data.role == 'admin' && request.resource.data.active == true));
+        && request.resource.data.get('accessSchemaVersion', 0) >= resource.data.get('accessSchemaVersion', 0)
+        // Auto-protección: un admin no puede quitarse admin ni desactivarse.
+        && (uid != request.auth.uid || (isAdminDoc(request.resource.data) && request.resource.data.active == true));
       allow delete: if false;
     }
 
@@ -75,7 +182,7 @@ service cloud.firestore {
         && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
     }
     match /appSettings/{setting} {
-      allow read: if setting == 'finance' && details();
+      allow read: if setting == 'finance' && financeDetailsRead();
       allow create: if setting == 'finance' && admin() && validFinanceSettings(request.resource.data);
       allow update: if setting == 'finance' && admin() && validFinanceSettings(request.resource.data)
         && request.resource.data.incomeCategoriesAll.hasAll(resource.data.incomeCategoriesAll)
@@ -107,14 +214,14 @@ service cloud.firestore {
       return a.transactionId == id && a.amount == d.amount && a.date == d.date && a.period == d.period && a.status == d.status && a.updatedAt == request.time;
     }
     match /financeTransactions/{id} {
-      allow read: if details();
-      allow create: if details() && !providerOwnedFinanceTransaction(id)
+      allow read: if financeDetailsRead();
+      allow create: if financeRecordsManage() && !providerOwnedFinanceTransaction(id)
         && validTransaction(request.resource.data) && activeTransactionCategory(request.resource.data)
         && auditCreate(request.resource.data) && request.resource.data.revision == 1 && request.resource.data.status == 'active'
         && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason'])
         && summaryLinked(request.resource.data.period,id)
         && (request.resource.data.source != 'tithe' || attributionLinked(request.resource.data,id));
-      allow update: if details() && !providerOwnedFinanceTransaction(id)
+      allow update: if financeRecordsManage() && !providerOwnedFinanceTransaction(id)
         && validTransaction(request.resource.data) && resource.data.status == 'active'
         && (request.resource.data.category == resource.data.category || activeTransactionCategory(request.resource.data))
         && request.resource.data.source == resource.data.source && request.resource.data.revision == resource.data.revision + 1
@@ -166,8 +273,8 @@ service cloud.firestore {
         && mapValid(prior.get('dailyExpense',{}),n.dailyExpense,change,'expense','day',days());
     }
     match /financeMonthlySummaries/{p} {
-      allow read: if approved();
-      allow create, update: if details() && validSummary(p);
+      allow read: if financeSummaryRead();
+      allow create, update: if financeRecordsManage() && validSummary(p);
       allow delete: if false;
     }
 
@@ -175,9 +282,9 @@ service cloud.firestore {
       && d.searchName == d.displayName.lower() && d.type in ['person','family'] && text(d.displayName,1,120) && text(d.phone,0,40) && text(d.email,0,160) && text(d.members,0,600)
       && (d.type == 'family' || d.members == '') && d.active is bool && d.pastoralContactAuthorized is bool; }
     match /titheProfiles/{id} {
-      allow read: if details();
-      allow create: if details() && validProfile(request.resource.data) && auditCreate(request.resource.data);
-      allow update: if details() && validProfile(request.resource.data) && auditUpdate(request.resource.data,resource.data);
+      allow read: if financeDetailsRead();
+      allow create: if financeRecordsManage() && validProfile(request.resource.data) && auditCreate(request.resource.data);
+      allow update: if financeRecordsManage() && validProfile(request.resource.data) && auditUpdate(request.resource.data,resource.data);
       allow delete: if false;
     }
     function validAttribution(d,id) {
@@ -188,11 +295,11 @@ service cloud.firestore {
         && t.updatedAt == request.time && d.updatedAt == request.time;
     }
     match /titheAttributions/{id} {
-      allow read: if details();
-      allow create: if details() && validAttribution(request.resource.data,id) && auditCreate(request.resource.data)
+      allow read: if financeDetailsRead();
+      allow create: if financeRecordsManage() && validAttribution(request.resource.data,id) && auditCreate(request.resource.data)
         && get(/databases/$(database)/documents/titheProfiles/$(request.resource.data.profileId)).data.active == true
         && !exists(/databases/$(database)/documents/financeTransactions/$(id));
-      allow update: if details() && validAttribution(request.resource.data,id) && auditUpdate(request.resource.data,resource.data)
+      allow update: if financeRecordsManage() && validAttribution(request.resource.data,id) && auditUpdate(request.resource.data,resource.data)
         && request.resource.data.profileId == resource.data.profileId && request.resource.data.note == resource.data.note
         && getAfter(/databases/$(database)/documents/financeTransactions/$(id)).data.revision == get(/databases/$(database)/documents/financeTransactions/$(id)).data.revision + 1;
       allow delete: if false;
@@ -201,9 +308,9 @@ service cloud.firestore {
     function validFollowup(d) { return d.keys().hasOnly(['profileId','date','note','status','nextFollowUpDate','createdBy','createdAt','updatedBy','updatedAt'])
       && text(d.profileId,1,128) && validDate(d.date) && text(d.note,1,3000) && d.status in ['pending','completed'] && text(d.nextFollowUpDate,0,10); }
     match /pastoralFollowups/{id} {
-      allow read: if pastoral();
-      allow create: if pastoral() && validFollowup(request.resource.data) && consent(request.resource.data.profileId) && auditCreate(request.resource.data);
-      allow update: if pastoral() && validFollowup(request.resource.data) && request.resource.data.profileId == resource.data.profileId && consent(request.resource.data.profileId) && auditUpdate(request.resource.data,resource.data);
+      allow read: if financePastoralManage();
+      allow create: if financePastoralManage() && validFollowup(request.resource.data) && consent(request.resource.data.profileId) && auditCreate(request.resource.data);
+      allow update: if financePastoralManage() && validFollowup(request.resource.data) && request.resource.data.profileId == resource.data.profileId && consent(request.resource.data.profileId) && auditUpdate(request.resource.data,resource.data);
       allow delete: if false;
     }
     match /{document=**} { allow read, write: if false; }
@@ -226,7 +333,7 @@ service cloud.firestore {
     match /publicGivingSettings/{settingId} {
       allow get: if settingId == 'current';
       allow list: if false;
-      allow create, update: if details()
+      allow create, update: if financeRecordsManage()
         && settingId == 'current'
         && validGivingSettings(request.resource.data)
         && request.resource.data.updatedAt == request.time;
@@ -234,19 +341,19 @@ service cloud.firestore {
     }
 
     match /sumupIntegrations/{account} {
-      allow get, list: if details();
+      allow get, list: if financeDetailsRead();
       allow create, update, delete: if false;
       match /transactions/{transactionId} {
-        allow get, list: if details();
+        allow get, list: if financeDetailsRead();
         allow create, update, delete: if false;
 
         match /versions/{versionId} {
-          allow get, list: if details();
+          allow get, list: if financeDetailsRead();
           allow create, update, delete: if false;
         }
       }
       match /adjustments/{adjustmentId} {
-        allow get, list: if details();
+        allow get, list: if financeDetailsRead();
         allow create, update, delete: if false;
       }
       match /_locks/{lockId} {
@@ -256,7 +363,7 @@ service cloud.firestore {
     }
 
     match /sumupSyncRuns/{runId} {
-      allow get, list: if details();
+      allow get, list: if financeDetailsRead();
       allow create, update, delete: if false;
     }
 
@@ -302,14 +409,14 @@ service cloud.firestore {
     }
 
     match /fundraisingCampaigns/{campaignId} {
-      allow get, list: if details();
+      allow get, list: if financeDetailsRead();
 
-      allow create: if details()
+      allow create: if financeRecordsManage()
         && validCampaign(request.resource.data)
         && request.resource.data.slug == campaignId
         && auditCreate(request.resource.data);
 
-      allow update: if details()
+      allow update: if financeRecordsManage()
         && validCampaign(request.resource.data)
         && request.resource.data.slug == resource.data.slug
         && auditUpdate(request.resource.data, resource.data);
@@ -464,9 +571,9 @@ service cloud.firestore {
     }
 
     match /campaignContributions/{contributionId} {
-      allow get, list: if details();
+      allow get, list: if financeDetailsRead();
 
-      allow create: if details()
+      allow create: if financeRecordsManage()
         && validCampaignContribution(request.resource.data)
         && request.resource.data.source in ['manual','public']
         && request.resource.data.status == 'approved'
@@ -475,7 +582,7 @@ service cloud.firestore {
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.reviewedAt == request.time;
 
-      allow update: if details()
+      allow update: if financeRecordsManage()
         && validCampaignContribution(request.resource.data)
         && resource.data.status == 'approved'
         && request.resource.data.status in ['approved','voided']
@@ -604,7 +711,7 @@ service cloud.firestore {
       allow get: if resource.data.isPublic == true;
       allow list: if false;
 
-      allow create, update: if details()
+      allow create, update: if financeRecordsManage()
         && validCampaignPublic(request.resource.data)
         && request.resource.data.slug == campaignId
         && request.resource.data.updatedAt == request.time;
@@ -681,9 +788,9 @@ service cloud.firestore {
           /databases/$(database)/documents/campaignPublicViews/$(request.resource.data.campaignId)
         ).data.status == 'active';
 
-      allow get, list: if details();
+      allow get, list: if financeDetailsRead();
 
-      allow update: if details()
+      allow update: if financeRecordsManage()
         && validCampaignSubmission(request.resource.data)
         && resource.data.status == 'pending'
         && request.resource.data.status in ['approved','rejected']
@@ -704,5 +811,261 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+
+    // ── Fechas locales (hora de pared America/Santiago, 18a §C.3/§D.1) ──────
+    // localToday() ≤ fecha local real: difiere como mucho 1 h/día en horario de verano (UTC-3).
+    // Es deliberadamente indulgente; la regla exacta de "pasado" la aplica la UI con Intl.
+    function pad2(n) { return n < 10 ? '0' + string(n) : string(n); }
+    function ymdOf(t) { return string(t.year()) + '-' + pad2(t.month()) + '-' + pad2(t.day()); }
+    function localToday() { return ymdOf(request.time - duration.value(4, 'h')); }
+    function isYmd(v) { return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'); }
+    function isHHmm(v) { return v is string && v.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'); }
+    function dateTs(s) { let p = s.split('-'); return timestamp.date(int(p[0]), int(p[1]), int(p[2])); }
+    function plusOneYear(s) { let p = s.split('-'); return string(int(p[0]) + 1) + '-' + p[1] + '-' + p[2]; }
+
+    // ── areas/{areaId} (18a §C.2/§D.3) ───────────────────────────────────────
+    function areaKeys() { return ['name','slug','color','description','active','createdAt','createdBy','updatedAt','updatedBy']; }
+    function validArea(d, areaId) {
+      return d.keys().hasAll(areaKeys()) && d.keys().hasOnly(areaKeys())
+        && text(d.name,1,40) && d.slug == areaId && isAreaId(d.slug)
+        && d.color in ['azul','indigo','naranjo','ambar','frambuesa','cafe','teal','pizarra','verde','carmin']
+        && text(d.description,0,200) && d.active is bool;
+    }
+    match /areas/{areaId} {
+      allow get, list: if can('calendar.read');          // incluye inactivas (Q2); admin incluido
+      allow create: if settingsManage() && validArea(request.resource.data, areaId) && auditCreate(request.resource.data);
+      allow update: if settingsManage() && validArea(request.resource.data, areaId) && auditUpdate(request.resource.data, resource.data);
+      allow delete: if false;
+    }
+
+    // ── calendarEvents/{eventId} (18a §C.3/§D.4) ────────────────────────────
+    // Presupuesto: Firestore evalúa como máximo 1000 expresiones por request. Por eso el perfil del
+    // usuario, "hoy", el diff y los permisos se calculan una sola vez (parámetros/let) y el
+    // contenido completo del evento solo se revalida cuando puede cambiar (crear y editar); en
+    // cancelar/archivar/excepciones solo cambian los campos que cada transición permite.
+    function eventKeys() { return ['title','responsibleAreaId','participantAreaIds','startDate','endDate','allDay','startTime','endTime','location','publicDescription','internalNotes','visibility','status','recurrence','exceptions','seriesCancellation','lastDate','cancelReason','archivedAt','archiveReason','revision','lastChangeId','createdBy','createdAt','updatedBy','updatedAt']; }
+    function publicFields() { return ['title','responsibleAreaId','participantAreaIds','startDate','endDate','allDay','startTime','endTime','location','publicDescription','recurrence']; }
+    function temporalFields() { return ['startDate','endDate','allDay','startTime','endTime']; }
+    function scheduleFields() { return ['startDate','endDate','allDay','startTime','endTime','recurrence','lastDate']; }
+    function editableFields() { return ['title','responsibleAreaId','participantAreaIds','startDate','endDate','allDay','startTime','endTime','location','publicDescription','internalNotes','visibility','recurrence','lastDate','revision','lastChangeId','updatedBy','updatedAt']; }
+    function metaFields() { return ['revision','lastChangeId','updatedBy','updatedAt']; }
+    function str(v, max) { return v is string && v.size() <= max; }
+    function validMonthly(m) {
+      return m.keys().hasOnly(['mode','weekday','ordinal'])
+        && m.mode == 'nth_weekday' && m.weekday in [0,1,2,3,4,5,6] && m.ordinal in [1,2,3,4,-1];
+    }
+    // Fechas + recurrencia + lastDate. Ruta corta para el caso común (sin repetición, un día).
+    //  none:       recurrence == {freq:'none'}, endDate ≤ startDate+31d, lastDate == endDate.
+    //  recurrente: until obligatorio (≥ startDate, ≤ +1 año), span ≤ 1 día, lastDate ∈ {until, until+1}.
+    function validDates(d) {
+      return isYmd(d.startDate) && isYmd(d.endDate) && d.endDate >= d.startDate
+        && (d.recurrence == {'freq': 'none'}
+          ? (d.lastDate == d.endDate
+            && (d.endDate == d.startDate || dateTs(d.endDate) <= dateTs(d.startDate) + duration.value(31, 'd')))
+          : validSeries(d, d.recurrence));
+    }
+    function validSeries(d, r) {
+      return r.keys().hasOnly(['freq','until','monthly']) && r.freq in ['weekly','biweekly','monthly']
+        && isYmd(r.until) && r.until >= d.startDate && r.until <= plusOneYear(d.startDate)
+        && (d.endDate == d.startDate || dateTs(d.endDate) <= dateTs(d.startDate) + duration.value(1, 'd'))
+        && (r.freq == 'monthly' ? validMonthly(r.monthly) : !r.keys().hasAny(['monthly']))
+        && (d.lastDate == r.until || (isYmd(d.lastDate) && d.lastDate > r.until && dateTs(d.lastDate) <= dateTs(r.until) + duration.value(1, 'd')));
+    }
+    function validTimes(d) {
+      return d.allDay == true ? (d.startTime == null && d.endTime == null)
+        : (d.allDay == false && isHHmm(d.startTime)
+          && (d.endTime == null || (isHHmm(d.endTime) && (d.endDate > d.startDate || d.endTime > d.startTime))));
+    }
+    function textsOk(d) { return text(d.title,1,120) && str(d.location,120) && str(d.publicDescription,1000) && str(d.internalNotes,1000); }
+    function areasOk(d) { return isAreaId(d.responsibleAreaId) && areaIdList(d.participantAreaIds, 8) && !d.participantAreaIds.hasAny([d.responsibleAreaId]); }
+    // Una actividad no recurrente no tiene excepciones ni cancelación de serie.
+    function seriesExtrasOk(d) { return d.recurrence.freq != 'none' || (d.exceptions.size() == 0 && !d.keys().hasAny(['seriesCancellation'])); }
+    // Fechas/horas/recurrencia/lastDate: por presupuesto se validan en la regla del change
+    // (changes/{changeId}, mismo lote, getAfter del evento); el evento no se puede escribir sin ese
+    // change, así que la validación es igual de obligatoria. Ver changeEventLinked().
+    function scheduleOk(d) { return validDates(d) && validTimes(d) && seriesExtrasOk(d); }
+    // Contenido completo (crear). Los campos requeridos se exigen por acceso: leer un campo
+    // inexistente es un error de evaluación y la regla deniega (cada uno se lee en esta cadena &&
+    // o en scheduleOk, que corre en la regla del change del mismo lote).
+    function validEventContent(d) {
+      return d.keys().hasOnly(eventKeys())
+        && textsOk(d) && areasOk(d)
+        && d.visibility in ['internal','public'] && d.allDay is bool;
+    }
+    // Contenido al editar: k ⊆ editableFields() (ninguna clave nueva) y se revalida cada grupo tocado
+    // (el grupo de fechas, en la regla del change).
+    function validEventEdit(n, k) {
+      return n.visibility in ['internal','public']
+        && (!k.hasAny(['title']) || text(n.title,1,120))
+        && (!k.hasAny(['location']) || str(n.location,120))
+        && (!k.hasAny(['publicDescription']) || str(n.publicDescription,1000))
+        && (!k.hasAny(['internalNotes']) || str(n.internalNotes,1000))
+        && (!k.hasAny(['responsibleAreaId','participantAreaIds']) || areasOk(n));
+    }
+    function eventPath(id) { return /databases/$(database)/documents/calendarEvents/$(id); }
+    function changePath(id, c) { return /databases/$(database)/documents/calendarEvents/$(id)/changes/$(c); }
+    // Enlace atómico evento → auditoría: changes/r{revision} no existe antes del lote (se comprueba
+    // con !exists) y sí después; su revision, actorUid (== auth.uid) y at (== request.time) deben
+    // coincidir. Devuelve la acción registrada ('' si no coincide); cada transición exige la suya.
+    // Tabla de acciones (espejo de buildChange en lib/calendar/audit.ts):
+    //   crear → created · archivar → archived · cancelar / excepción / cancelar serie → cancelled
+    //   editar: visibility cambió → visibility_changed; si no, recurrence → recurrence_updated; si no → updated
+    function linkedChangeAction(id, n) { return changeActionOf(getAfter(changePath(id, n.lastChangeId)).data, n); }
+    function changeActionOf(c, n) {
+      return (c.revision == n.revision && c.actorUid == request.auth.uid && c.at == request.time) ? c.action : '';
+    }
+    // Publicar ≠ gestionar: pasar a pública, o editar campos públicos de una actividad pública,
+    // exige calendarPublish(responsibleAreaId): publish_assigned sobre esa área, o manage_all.
+    // Quitar la publicación (public → internal) no lo exige.
+    function publishOk(n, o, k, u, all) {
+      return all || n.visibility != 'public'
+        || (o.visibility == 'public' && !k.hasAny(publicFields()))
+        || publishAreaOf(u, n.responsibleAreaId);
+    }
+    // Evento/serie ya iniciado (startDate < hoy): no cambia día, hora ni frecuencia (también admin);
+    // `until` solo puede moverse si queda ≥ hoy. `today` = localToday() (indulgente, ver arriba).
+    function startedLockOk(n, o, k, today) {
+      return o.startDate >= today
+        || (!k.hasAny(temporalFields())
+            && n.recurrence.freq == o.recurrence.freq && n.recurrence.get('monthly', null) == o.recurrence.get('monthly', null)
+            && (n.recurrence.get('until', '') == o.recurrence.get('until', '') || n.recurrence.until >= today));
+    }
+    function appendOneException(n, o, today) {
+      return n.exceptions.size() == o.exceptions.size() + 1 && n.exceptions.size() <= 60
+        && n.exceptions == o.exceptions.concat([n.exceptions[o.exceptions.size()]])
+        && validException(n.exceptions[o.exceptions.size()], n, today);
+    }
+    function validException(x, n, today) {
+      return x is map && x.keys().hasAll(['date','type','reason','by']) && x.keys().hasOnly(['date','type','reason','by'])
+        && isYmd(x.date) && x.type == 'cancelled' && text(x.reason,3,300) && x.by == request.auth.uid
+        && x.date >= today && x.date >= n.startDate && x.date <= n.recurrence.until;
+    }
+    function validSeriesCancellation(s, today) {
+      return s is map && s.keys().hasAll(['from','reason','by','at']) && s.keys().hasOnly(['from','reason','by','at'])
+        && isYmd(s.from) && s.from >= today && text(s.reason,3,300)
+        && s.by == request.auth.uid && s.at == request.time;
+    }
+    // Transiciones válidas. Devuelve la acción de auditoría que corresponde, o 'invalid'.
+    function transitionAction(n, o, k, today, all) {
+      return editOk(n, o, k, today, all)
+          ? (k.hasAny(['visibility']) ? 'visibility_changed' : (k.hasAny(['recurrence']) ? 'recurrence_updated' : 'updated'))
+        : (cancelOk(n, o, k) || occurrenceOk(n, o, k, today) || seriesCancelOk(n, o, k, today)) ? 'cancelled'
+        : archiveOk(n, o, k, today, all) ? 'archived'
+        : 'invalid';
+    }
+    // (a) editar: revalida los grupos de contenido tocados
+    function editOk(n, o, k, today, all) {
+      return o.status == 'scheduled' && n.status == 'scheduled' && k.hasOnly(editableFields())
+        && (all || !o.keys().hasAny(['seriesCancellation']))
+        && startedLockOk(n, o, k, today) && validEventEdit(n, k);
+    }
+    // (b) cancelar un evento simple (las series se cancelan con exceptions/seriesCancellation)
+    function cancelOk(n, o, k) {
+      return o.status == 'scheduled' && n.status == 'cancelled' && o.recurrence.freq == 'none'
+        && k.hasOnly(['status','cancelReason'].concat(metaFields())) && text(n.cancelReason,3,300);
+    }
+    // (c) cancelar una ocurrencia (append de una excepción)
+    function occurrenceOk(n, o, k, today) {
+      return o.status == 'scheduled' && n.status == 'scheduled' && o.recurrence.freq != 'none'
+        && k.hasOnly(['exceptions'].concat(metaFields())) && appendOneException(n, o, today);
+    }
+    // (d) cancelar la serie desde una fecha (una sola vez)
+    function seriesCancelOk(n, o, k, today) {
+      return o.status == 'scheduled' && n.status == 'scheduled' && o.recurrence.freq != 'none'
+        && !o.keys().hasAny(['seriesCancellation']) && k.hasOnly(['seriesCancellation'].concat(metaFields()))
+        && validSeriesCancellation(n.seriesCancellation, today);
+    }
+    // (e) archivar ("Eliminar"); conserva cancelReason si venía cancelada
+    function archiveOk(n, o, k, today, all) {
+      return o.status in ['scheduled','cancelled'] && n.status == 'archived'
+        && k.hasOnly(['status','archivedAt','archiveReason'].concat(metaFields()))
+        && n.archivedAt == request.time && text(n.archiveReason,3,300)
+        && (all || o.startDate >= today);
+    }
+    // u = users/{auth.uid} ya leído; today = localToday().
+    function eventCreateOk(id, n, u, today) {
+      return eventCreateWith(id, n, u, today, manageAllOf(u));
+    }
+    function eventCreateWith(id, n, u, today, all) {
+      return n.status == 'scheduled' && n.revision == 1 && n.lastChangeId == 'r1'
+        && n.exceptions == []
+        && !n.keys().hasAny(['seriesCancellation','cancelReason','archivedAt','archiveReason'])
+        && (all || manageAreaOf(u, n.responsibleAreaId))
+        && (all || n.startDate >= today)
+        && (all || n.visibility == 'internal' || publishAreaOf(u, n.responsibleAreaId))
+        && auditCreate(n)
+        && validEventContent(n)
+        && !exists(changePath(id, 'r1')) && linkedChangeAction(id, n) == 'created';
+    }
+    function eventUpdateOk(id, n, o, u, today) {
+      return eventUpdateLinked(id, n, eventUpdateAction(n, o, u, today, manageAllOf(u), n.diff(o).affectedKeys(), managedAreasOf(u)));
+    }
+    function eventUpdateLinked(id, n, act) {
+      return act != 'invalid' && !exists(changePath(id, n.lastChangeId)) && linkedChangeAction(id, n) == act;
+    }
+    // Acción de auditoría esperada para esta actualización, o 'invalid'.
+    function eventUpdateAction(n, o, u, today, all, k, mine) {
+      return (o.status != 'archived'
+        && n.revision == o.revision + 1 && n.lastChangeId == 'r' + string(n.revision)
+        // auditoría: createdBy/createdAt inmutables (además ninguna transición los admite en k)
+        && n.updatedBy == request.auth.uid && n.updatedAt == request.time && !k.hasAny(['createdBy','createdAt'])
+        // participante ≠ editar; no mover a/desde un área ajena
+        && (all || (inActiveArea(mine, o.responsibleAreaId)
+              && (n.responsibleAreaId == o.responsibleAreaId || inActiveArea(mine, n.responsibleAreaId))))
+        // pasado = solo lectura para manage_assigned
+        && (all || o.lastDate >= today)
+        && publishOk(n, o, k, u, all))
+        ? transitionAction(n, o, k, today, all) : 'invalid';
+    }
+    match /calendarEvents/{eventId} {
+      allow get, list: if calendarRead();
+      allow create: if signedIn() && exists(userPath())
+        && eventCreateOk(eventId, request.resource.data, userDoc(), localToday());
+      allow update: if signedIn() && exists(userPath())
+        && eventUpdateOk(eventId, request.resource.data, resource.data, userDoc(), localToday());
+      allow delete: if false;
+
+      // Auditoría: solo se crea junto con la escritura del evento (mismo lote); nunca se edita ni borra.
+      match /changes/{changeId} {
+        allow get, list: if calendarManageAll() || calendarManageAssigned(get(eventPath(eventId)).data.responsibleAreaId);
+        allow create: if signedIn() && validChange(request.resource.data)
+          && changeId == 'r' + string(request.resource.data.revision)
+          && request.resource.data.actorUid == request.auth.uid && request.resource.data.at == request.time
+          && changeEventLinked(eventId, changeId, request.resource.data, getAfter(eventPath(eventId)).data);
+        allow update, delete: if false;
+      }
+    }
+    // El change solo existe junto con la escritura de su evento: el evento después del lote debe
+    // apuntar a este change (lastChangeId, revision) y haber sido escrito ahora por el mismo actor.
+    // changedFields == claves cambiadas del evento (sin metadatos ni lastDate). Además valida aquí el
+    // grupo de fechas del evento (crear, o editar fechas/horas/recurrencia) — ver scheduleOk().
+    function changeEventLinked(id, changeId, d, after) {
+      return after.lastChangeId == changeId && after.revision == d.revision
+        && after.updatedAt == request.time && after.updatedBy == request.auth.uid
+        && (!exists(eventPath(id))
+          ? (d.action == 'created' && d.revision == 1 && d.changedFields.size() == 0 && d.before == null && d.after == null
+            && scheduleOk(after))
+          : changeDiffOk(d, after, after.diff(get(eventPath(id)).data).affectedKeys()));
+    }
+    function changeDiffOk(d, after, k) {
+      return d.changedFields.toSet() == k.difference(['revision','lastChangeId','updatedBy','updatedAt','lastDate'].toSet())
+        && (!k.hasAny(scheduleFields()) || scheduleOk(after));
+    }
+    function validChange(d) {
+      return d.keys().hasAll(['revision','action','actorUid','at','changedFields','before','after','reason'])
+        && d.keys().hasOnly(['revision','action','scope','occurrenceDate','actorUid','at','changedFields','before','after','reason'])
+        && d.revision is int && d.revision >= 1
+        && d.action in ['created','updated','cancelled','archived','recurrence_updated','visibility_changed']
+        && d.changedFields is list && d.changedFields.size() <= 30
+        // internalNotes solo aparece en changedFields, nunca con su valor.
+        && (d.before == null || (d.before is map && d.before.keys().hasOnly(d.changedFields) && !d.before.keys().hasAny(['internalNotes'])))
+        && (d.after == null || (d.after is map && d.after.keys().hasOnly(d.changedFields) && !d.after.keys().hasAny(['internalNotes'])))
+        && (d.reason == null || text(d.reason,3,300))
+        && (!d.keys().hasAny(['scope']) || d.scope in ['event','occurrence','series'])
+        && (!d.keys().hasAny(['occurrenceDate']) || isYmd(d.occurrenceDate));
+    }
+
+    // ── calendarShareLinks: solo Admin SDK / Functions (18a §C.5) ───────────
+    match /calendarShareLinks/{shareId} { allow read, write: if false; }
   }
 }
