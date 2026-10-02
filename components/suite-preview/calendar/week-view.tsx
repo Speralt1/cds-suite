@@ -1,0 +1,347 @@
+"use client";
+
+// Vista Semana (16b §5.4): fila de todo el día / varios días, grilla 00–24 con
+// scroll inicial a las 07:00, superposiciones lado a lado (máx. 3 columnas) y
+// actividades que cruzan medianoche en dos segmentos ("continúa").
+// Si una columna tiene actividades fuera del área visible, aparece un
+// indicador "↑ 1 más temprano" / "↓ 1 más tarde" que hace scroll hasta ella.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { areaById } from "@/lib/suite-preview/areas";
+import { compareDayOrder, occurrenceOrderKey } from "@/lib/suite-preview/calendar";
+import { compareLocal, daysBetween, parseYmd, WEEKDAY_NAMES, weekdayOf } from "@/lib/suite-preview/dates";
+import type { Area, Occurrence, Ymd } from "@/lib/suite-preview/types";
+import { areaStyle } from "../primitives";
+import { occurrenceAria, WEEKDAYS_SHORT } from "./labels";
+
+const HOUR_PX = 44;
+const MAX_COLS = 3;
+/** Separación (px) entre bloques lado a lado y con el borde de la columna. */
+const GAP = 2;
+/** Bajo este alto el bloque no muestra la línea del área. */
+const AREA_MIN_HEIGHT = 52;
+/** Margen superior al hacer scroll a una hora (la etiqueta de la hora queda visible). */
+const SCROLL_PAD = 8;
+
+/** Ancho y posición de la columna `col` de `n` dentro del día (con GAP entre bloques). */
+function blockBox(col: number, n: number): { left: string; width: string } {
+  const width = `((100% - ${GAP * 2}px - ${GAP * (n - 1)}px) / ${n})`;
+  return { left: `calc(${GAP}px + ${col} * (${width} + ${GAP}px))`, width: `calc(${width})` };
+}
+
+interface Viewport {
+  top: number;
+  height: number;
+}
+
+function minutes(t: string | undefined): number {
+  if (!t) return 0;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+export interface Segment {
+  o: Occurrence;
+  day: Ymd;
+  start: number;
+  end: number;
+  continues: boolean;
+  continued: boolean;
+  col: number;
+  cols: number;
+}
+
+/**
+ * Segmentos por día con su columna. A igual hora de inicio, el orden de las
+ * columnas usa el comparador único compareDayOrder (área responsable, título),
+ * igual que Mes, Agenda y el resto de las vistas.
+ */
+export function segmentsFor(list: readonly Occurrence[], days: readonly Ymd[], areas: readonly Area[]): Segment[] {
+  const set = new Set(days);
+  const out: Segment[] = [];
+  for (const o of list) {
+    if (o.allDay) continue;
+    const s = minutes(o.startTime);
+    const overnight = compareLocal(o.endDate, o.date) > 0;
+    const e = o.endTime ? minutes(o.endTime) : s + 60;
+    if (!overnight) {
+      if (set.has(o.date)) out.push({ o, day: o.date, start: s, end: Math.max(e, s + 30), continues: false, continued: false, col: 0, cols: 1 });
+    } else {
+      if (set.has(o.date)) out.push({ o, day: o.date, start: s, end: 1440, continues: true, continued: false, col: 0, cols: 1 });
+      if (set.has(o.endDate)) out.push({ o, day: o.endDate, start: 0, end: Math.max(e, 30), continues: false, continued: true, col: 0, cols: 1 });
+    }
+  }
+  // Columnas por grupo de superposición (por día).
+  for (const day of days) {
+    const order = (x: Segment) => ({ ...occurrenceOrderKey(x.o, areas), date: day, allDay: false, startTime: "" });
+    const segs = out.filter((x) => x.day === day).sort((a, b) => a.start - b.start || compareDayOrder(order(a), order(b)));
+    let cluster: Segment[] = [];
+    let clusterEnd = -1;
+    const flush = () => {
+      const cols = Math.max(1, ...cluster.map((c) => c.col + 1));
+      cluster.forEach((c) => (c.cols = cols));
+      cluster = [];
+    };
+    for (const seg of segs) {
+      if (seg.start >= clusterEnd && cluster.length) flush();
+      const used = new Set(cluster.filter((c) => c.end > seg.start).map((c) => c.col));
+      let col = 0;
+      while (used.has(col)) col++;
+      seg.col = col;
+      cluster.push(seg);
+      clusterEnd = Math.max(clusterEnd, seg.end);
+    }
+    if (cluster.length) flush();
+  }
+  return out;
+}
+
+interface AllDayBar {
+  o: Occurrence;
+  startIdx: number;
+  span: number;
+  lane: number;
+  first: boolean;
+  continuesNext: boolean;
+}
+
+function allDayBars(list: readonly Occurrence[], from: Ymd): AllDayBar[] {
+  const bars: AllDayBar[] = [];
+  const laneEnds: number[] = [];
+  for (const o of list.filter((x) => x.allDay)) {
+    const startIdx = Math.max(0, daysBetween(from, o.date));
+    const endIdx = Math.min(6, daysBetween(from, o.endDate));
+    if (endIdx < 0 || startIdx > 6) continue;
+    let lane = laneEnds.findIndex((end) => end < startIdx);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(endIdx);
+    } else laneEnds[lane] = endIdx;
+    bars.push({ o, startIdx, span: endIdx - startIdx + 1, lane, first: daysBetween(from, o.date) >= 0, continuesNext: daysBetween(from, o.endDate) > 6 });
+  }
+  return bars;
+}
+
+export function WeekGrid({
+  days,
+  occurrences,
+  areas,
+  today,
+  nowMinutes,
+  onOpen,
+  onOpenDay,
+}: {
+  days: Ymd[];
+  occurrences: Occurrence[];
+  areas: readonly Area[];
+  today: Ymd;
+  nowMinutes: number;
+  onOpen: (o: Occurrence) => void;
+  onOpenDay: (date: Ymd) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !el.clientHeight) return;
+    setViewport((v) => (v && v.top === el.scrollTop && v.height === el.clientHeight ? v : { top: el.scrollTop, height: el.clientHeight }));
+  }, []);
+  // Scroll inicial a las 07:00 SOLO al cambiar de semana (la clave es un string
+  // estable; `days` es un array nuevo en cada render).
+  const weekKey = days[0];
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = 7 * HOUR_PX - SCROLL_PAD;
+    measure();
+  }, [weekKey, measure]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+  const scrollToMinutes = (min: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = Math.max(0, (min / 60) * HOUR_PX - SCROLL_PAD);
+    if (typeof el.scrollTo === "function") el.scrollTo({ top, behavior: "smooth" });
+    else el.scrollTop = top;
+  };
+
+  const segs = segmentsFor(occurrences, days, areas);
+  const bars = allDayBars(occurrences, days[0]);
+  const visibleBars = bars.filter((b) => b.lane < 2);
+  const hiddenByDay = days.map((_, i) => bars.filter((b) => b.lane >= 2 && b.startIdx <= i && b.startIdx + b.span - 1 >= i).length);
+  const lanes = Math.max(1, Math.min(2, Math.max(0, ...bars.map((b) => b.lane + 1)))) + (hiddenByDay.some(Boolean) ? 1 : 0);
+
+  return (
+    <div className="sx-week" role="group" aria-label="Semana">
+      <div className="sx-week-head" aria-hidden="true">
+        <span className="sx-week-gutter" />
+        {days.map((d) => (
+          <span key={d} className={`sx-week-dayhead ${d === today ? "is-today" : ""}`}>
+            <span className="sx-week-wd">{WEEKDAYS_SHORT[weekdayOf(d)]}</span>
+            <span className="sx-week-dn">{parseYmd(d).d}</span>
+          </span>
+        ))}
+      </div>
+      <div className="sx-week-allday">
+        <span className="sx-week-gutter sx-week-allday-label">Todo el día</span>
+        <div className="sx-week-allday-grid" style={{ gridTemplateRows: `repeat(${lanes}, 24px)` }}>
+          {visibleBars.map((b) => {
+            const color = areaById(areas, b.o.event.responsibleAreaId)?.color ?? "pizarra";
+            return (
+              <button
+                key={b.o.key}
+                type="button"
+                className={`sx-allday-bar ${b.first ? "" : "is-cont"} ${b.o.status === "cancelada" ? "is-cancelled" : b.o.status === "realizada" ? "is-done" : ""}`}
+                style={{ ...areaStyle(color), gridColumn: `${b.startIdx + 1} / span ${b.span}`, gridRow: b.lane + 1 }}
+                aria-label={occurrenceAria(b.o, areas)}
+                onClick={() => onOpen(b.o)}
+              >
+                <span className="sx-ev-chip-title">{b.o.event.title}</span>
+                {b.continuesNext && <ChevronRight size={12} aria-hidden="true" />}
+              </button>
+            );
+          })}
+          {hiddenByDay.map((n, i) =>
+            n > 0 ? (
+              <button
+                key={days[i]}
+                type="button"
+                className="sx-more-link"
+                style={{ gridColumn: i + 1, gridRow: 3 }}
+                aria-label={`Ver ${n} ${n === 1 ? "actividad" : "actividades"} más del ${WEEKDAY_NAMES[weekdayOf(days[i])]} ${parseYmd(days[i]).d}`}
+                onClick={() => onOpenDay(days[i])}
+              >
+                +{n}
+              </button>
+            ) : null,
+          )}
+        </div>
+      </div>
+      <div className="sx-week-viewport">
+      <div className="sx-week-scroll" ref={scrollRef} tabIndex={0} aria-label="Horario de la semana (desplazable)" onScroll={measure}>
+        <div className="sx-week-body" style={{ height: 24 * HOUR_PX }}>
+          <div className="sx-week-hours" aria-hidden="true">
+            {Array.from({ length: 24 }, (_, h) => (
+              <span key={h} className="sx-week-hour" style={{ top: h * HOUR_PX }}>
+                {h === 0 ? "" : `${String(h).padStart(2, "0")}:00`}
+              </span>
+            ))}
+          </div>
+          {days.map((d) => {
+            const daySegs = segs.filter((s) => s.day === d);
+            const overflow = daySegs.filter((s) => s.cols > MAX_COLS && s.col >= MAX_COLS - 1);
+            return (
+              <div key={d} className={`sx-week-col ${d === today ? "is-today" : ""}`} aria-label={`${WEEKDAY_NAMES[weekdayOf(d)]} ${parseYmd(d).d}`} role="group">
+                {daySegs
+                  .filter((s) => !(s.cols > MAX_COLS && s.col >= MAX_COLS - 1))
+                  .map((s) => {
+                    const cols = Math.min(s.cols, MAX_COLS);
+                    const height = Math.max(22, ((s.end - s.start) / 60) * HOUR_PX);
+                    const area = areaById(areas, s.o.event.responsibleAreaId);
+                    const color = area?.color ?? "pizarra";
+                    return (
+                      <button
+                        key={`${s.o.key}-${s.day}`}
+                        type="button"
+                        className={`sx-week-block ${s.o.status === "cancelada" ? "is-cancelled" : s.o.status === "realizada" ? "is-done" : ""} ${s.continued ? "is-continued" : ""}`}
+                        style={{
+                          ...areaStyle(color),
+                          top: (s.start / 60) * HOUR_PX,
+                          height,
+                          ...blockBox(s.col, cols),
+                        }}
+                        aria-label={`${occurrenceAria(s.o, areas)}${s.continues ? ", continúa al día siguiente" : ""}${s.continued ? ", continuación desde el día anterior" : ""}`}
+                        title={s.o.event.title}
+                        onClick={() => onOpen(s.o)}
+                      >
+                        <span className="sx-week-block-inner">
+                          <span className="sx-week-block-title">
+                            {s.o.event.title}
+                            {s.o.event.visibility === "team" && (
+                              <>
+                                {" "}
+                                <Lock size={10} aria-hidden="true" />
+                              </>
+                            )}
+                          </span>
+                          <span className="sx-week-block-time fx-num">
+                            {s.continued ? (
+                              `hasta ${s.o.endTime}`
+                            ) : (
+                              <>
+                                {s.o.startTime}
+                                {s.o.endTime && <span className="sx-week-block-end">–{s.o.endTime}</span>}
+                              </>
+                            )}
+                          </span>
+                          {height >= AREA_MIN_HEIGHT && area && <span className="sx-week-block-area">{area.name}</span>}
+                          {s.continues && (
+                            <span className="sx-week-block-cont">
+                              continúa <ChevronDown size={10} aria-hidden="true" />
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                {overflow.length > 0 && (
+                  <button
+                    type="button"
+                    className="sx-week-more"
+                    style={{ top: (Math.min(...overflow.map((s) => s.start)) / 60) * HOUR_PX, ...blockBox(MAX_COLS - 1, MAX_COLS) }}
+                    onClick={() => onOpenDay(d)}
+                  >
+                    +{overflow.length}
+                  </button>
+                )}
+                {d === today && <span className="sx-now-line" style={{ top: (nowMinutes / 60) * HOUR_PX }} aria-hidden="true" />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {viewport && (
+        <div className="sx-week-edges">
+          <span className="sx-week-gutter" />
+          {days.map((d) => {
+            const daySegs = segs.filter((s) => s.day === d);
+            const topPx = viewport.top + SCROLL_PAD;
+            const bottomPx = viewport.top + viewport.height;
+            const earlier = daySegs.filter((s) => (s.end / 60) * HOUR_PX <= topPx);
+            const later = daySegs.filter((s) => (s.start / 60) * HOUR_PX >= bottomPx - 4);
+            const dayName = `${WEEKDAY_NAMES[weekdayOf(d)]} ${parseYmd(d).d}`;
+            return (
+              <div key={d} className="sx-week-edge-col">
+                {earlier.length > 0 && (
+                  <button
+                    type="button"
+                    className="sx-week-edge is-top"
+                    aria-label={`${dayName}: ${earlier.length} ${earlier.length === 1 ? "actividad" : "actividades"} más temprano`}
+                    onClick={() => scrollToMinutes(Math.max(...earlier.map((s) => s.start)))}
+                  >
+                    <ArrowUp size={12} aria-hidden="true" /> {earlier.length} más temprano
+                  </button>
+                )}
+                {later.length > 0 && (
+                  <button
+                    type="button"
+                    className="sx-week-edge is-bottom"
+                    aria-label={`${dayName}: ${later.length} ${later.length === 1 ? "actividad" : "actividades"} más tarde`}
+                    onClick={() => scrollToMinutes(Math.min(...later.map((s) => s.start)))}
+                  >
+                    <ArrowDown size={12} aria-hidden="true" /> {later.length} más tarde
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      </div>
+    </div>
+  );
+}

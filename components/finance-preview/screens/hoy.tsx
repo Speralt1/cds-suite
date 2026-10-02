@@ -42,7 +42,7 @@ const METRIC_HOW: Record<Metric["id"], string> = {
 const METRIC_LINK: Record<Metric["id"], string> = {
   income: `${BASE}/movimientos?tipo=income`,
   expense: `${BASE}/movimientos?tipo=expense`,
-  result: `${BASE}/reportes`,
+  result: "/preview/reportes/finanzas",
 };
 
 export function MetricCard({ m }: { m: Metric }) {

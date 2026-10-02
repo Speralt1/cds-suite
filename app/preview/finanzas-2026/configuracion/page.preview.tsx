@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { ConfiguracionScreen } from "@/components/finance-preview/screens/analisis";
+import { ClientRedirect } from "@/components/suite-preview/redirect";
 
-export const metadata: Metadata = { title: "Configuración · Vista previa Finanzas 2026" };
+// R5: la configuración financiera vive en el módulo global Configuración.
+export const metadata: Metadata = { title: "Configuración · Vista previa CDS Suite" };
 
 export default function Page() {
-  return <ConfiguracionScreen />;
+  return <ClientRedirect to="/preview/configuracion/finanzas" />;
 }

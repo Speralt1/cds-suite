@@ -1,6 +1,7 @@
 "use client";
 
-import { Clock, Download, Flag, Info, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Clock, Download, Flag, Info, RefreshCw } from "lucide-react";
 import { CAMPAIGNS, INTEGRATIONS, PEOPLE } from "@/lib/finance-preview/fixtures";
 import { timeOf } from "@/lib/finance-preview/format";
 import {
@@ -24,7 +25,12 @@ import { FinancialHeader } from "../shell";
 import { EmptyState, ErrorState, MoneyAmount, Panel, ProposalPill, Skeleton, StatusBadge } from "../ui";
 import { EvolutionChart } from "./hoy";
 
-export function ReportesScreen() {
+/**
+ * Props opcionales (suite): `pdfLabel` cambia la etiqueta del botón PDF y
+ * `belowHeader` se dibuja bajo el encabezado (p. ej. secciones de Reportes).
+ * Sin props = comportamiento de Financial UX V2.
+ */
+export function ReportesScreen({ pdfLabel = "Exportar PDF", belowHeader }: { pdfLabel?: string; belowHeader?: React.ReactNode } = {}) {
   const { period, demoState, simulate } = usePreview();
   const s = periodSummary(period);
   const methods = incomeByMethod(period);
@@ -53,11 +59,12 @@ export function ReportesScreen() {
         subtitle={`Análisis de ${periodTitle(period).toLocaleLowerCase("es")}. Mismas cifras que Hoy y Movimientos.`}
         primary="none"
         actions={
-          <button type="button" className="fx-btn fx-btn-secondary" onClick={() => simulate("Exportar PDF del período")}>
-            <Download size={16} aria-hidden="true" /> Exportar PDF
+          <button type="button" className="fx-btn fx-btn-secondary" onClick={() => simulate(`${pdfLabel} del período`)}>
+            <Download size={16} aria-hidden="true" /> {pdfLabel}
           </button>
         }
       />
+      {belowHeader}
       {demoState === "loading" ? (
         <div className="fx-stack" aria-busy="true">
           <Skeleton h={120} style={{ borderRadius: 12 }} />
@@ -239,8 +246,14 @@ export function ReportesScreen() {
   );
 }
 
-export function ConfiguracionScreen() {
+/**
+ * `variant="suite"`: dentro del módulo global Configuración (/preview/configuracion/finanzas)
+ * los usuarios se gestionan en «Usuarios y permisos»; aquí solo queda el enlace.
+ * Por defecto ("standalone") se comporta como siempre.
+ */
+export function ConfiguracionScreen({ variant = "standalone" }: { variant?: "standalone" | "suite" } = {}) {
   const { simulate } = usePreview();
+  const suite = variant === "suite";
   const users = [
     [PEOPLE.admin, "Administración"],
     [PEOPLE.treasurer, "Tesorería"],
@@ -249,7 +262,12 @@ export function ConfiguracionScreen() {
   ];
   return (
     <>
-      <FinancialHeader title="Configuración" subtitle="Integraciones, categorías, días de culto y usuarios." period={false} primary="none" />
+      <FinancialHeader
+        title={suite ? "Ajustes de finanzas" : "Configuración"}
+        subtitle={suite ? "Integraciones, categorías y días de culto." : "Integraciones, categorías, días de culto y usuarios."}
+        period={false}
+        primary="none"
+      />
       <div className="fx-grid">
         <div className="fx-span-6 fx-md-span-12">
           <Panel title="Integraciones" labelledBy="cfg-int">
@@ -283,31 +301,40 @@ export function ConfiguracionScreen() {
             </p>
           </Panel>
           <div style={{ height: 16 }} />
-          <Panel
-            title={
-              <>
-                Usuarios y roles <span className="fx-help">(ficticios)</span>
-              </>
-            }
-            labelledBy="cfg-users"
-          >
-            <ul>
-              {users.map(([n, r]) => (
-                <li key={n} className="fx-kv-row" style={{ borderTop: "1px solid var(--fx-line)" }}>
-                  <span>{n}</span>
-                  <span className="fx-help-13">
-                    {r}
-                    {r.startsWith("Cafetería") && (
-                      <>
-                        {" "}
-                        <ProposalPill />
-                      </>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
+          {suite ? (
+            <Panel title="Usuarios" labelledBy="cfg-users">
+              <p className="fx-help-13">Quién entra a Finanzas y con qué permisos se define para toda la suite.</p>
+              <Link className="fx-link" href="/preview/configuracion/usuarios" style={{ marginTop: 8, fontSize: 14 }}>
+                Usuarios y permisos <ArrowRight size={14} aria-hidden="true" />
+              </Link>
+            </Panel>
+          ) : (
+            <Panel
+              title={
+                <>
+                  Usuarios y roles <span className="fx-help">(ficticios)</span>
+                </>
+              }
+              labelledBy="cfg-users"
+            >
+              <ul>
+                {users.map(([n, r]) => (
+                  <li key={n} className="fx-kv-row" style={{ borderTop: "1px solid var(--fx-line)" }}>
+                    <span>{n}</span>
+                    <span className="fx-help-13">
+                      {r}
+                      {r.startsWith("Cafetería") && (
+                        <>
+                          {" "}
+                          <ProposalPill />
+                        </>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
         </div>
       </div>
     </>

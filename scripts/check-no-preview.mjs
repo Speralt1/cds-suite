@@ -1,21 +1,33 @@
-// Guardia previa al deploy de Hosting: el preview Financial UX 2026 (datos de
-// demostración) nunca debe publicarse. Falla si `out/` contiene la ruta del
-// preview o el marcador de sus fixtures. Se ejecuta automáticamente antes de
-// `npm run deploy:hosting` (script `predeploy:hosting`) y tras `npm run build`
-// puede correrse a mano: `node scripts/check-no-preview.mjs`.
+// Guardia previa al deploy de Hosting: la preview de CDS Suite (Financial UX
+// 2026 + Calendario + Integrantes, datos de demostración) nunca debe publicarse.
+// Falla si `out/` contiene la carpeta out/preview/, alguno de los marcadores de
+// sus fixtures o las rutas de la preview. Se ejecuta automáticamente antes de
+// `npm run deploy:hosting` (script `predeploy:hosting` y hosting.predeploy de
+// firebase.json) y tras `npm run build` puede correrse a mano:
+// `node scripts/check-no-preview.mjs`.
+// CDS_OUT_DIR existe solo para testear la guardia sobre carpetas temporales.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 
-const OUT = join(process.cwd(), "out");
-const SENTINEL = "FX_PREVIEW_SENTINEL_V2_7f3a";
+const outEnv = process.env.CDS_OUT_DIR ?? "out";
+const OUT = isAbsolute(outEnv) ? outEnv : join(process.cwd(), outEnv);
+const SENTINELS = ["FX_PREVIEW_SENTINEL_V2_7f3a", "SX_PREVIEW_SENTINEL_V1_c41e"];
+// No se busca el texto genérico "/preview/": falso positivo con internals de Next.
+const PATHS = [
+  "/preview/finanzas-2026",
+  "/preview/calendario",
+  "/preview/integrantes",
+  "/preview/configuracion",
+  "/preview/reportes",
+];
 
 if (!existsSync(OUT)) {
-  console.error("No existe out/. Ejecuta `npm run build` antes de desplegar.");
+  console.error(`No existe ${relative(process.cwd(), OUT) || OUT}/. Ejecuta \`npm run build\` antes de desplegar.`);
   process.exit(1);
 }
 
 const offenders = [];
-if (existsSync(join(OUT, "preview"))) offenders.push("out/preview/");
+if (existsSync(join(OUT, "preview"))) offenders.push(`${relative(process.cwd(), join(OUT, "preview"))}/`);
 
 function walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -23,8 +35,8 @@ function walk(dir) {
     if (statSync(full).isDirectory()) walk(full);
     else if (/\.(html|js|txt|json)$/.test(name)) {
       const content = readFileSync(full, "utf8");
-      if (content.includes(SENTINEL) || content.includes("/preview/finanzas-2026"))
-        offenders.push(full.slice(process.cwd().length + 1));
+      if (SENTINELS.some((s) => content.includes(s)) || PATHS.some((p) => content.includes(p)))
+        offenders.push(relative(process.cwd(), full));
     }
   }
 }
@@ -37,10 +49,10 @@ try {
 
 if (offenders.length) {
   console.error(
-    "✖ out/ contiene el preview Financial UX 2026 (datos de demostración). NO desplegar.\n" +
+    "✖ out/ contiene la preview de CDS Suite (datos de demostración). NO desplegar.\n" +
       offenders.map((o) => `  - ${o}`).join("\n") +
       "\nReconstruye sin la variable: `rm -rf out && npm run build`.",
   );
   process.exit(1);
 }
-console.log("✓ out/ no contiene el preview Financial UX 2026.");
+console.log("✓ out/ no contiene la preview de CDS Suite.");

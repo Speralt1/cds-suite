@@ -1,0 +1,705 @@
+/* Preview CDS Suite (doc 16). Todo bajo .fx; clases nuevas con prefijo sx-.
+   Reutiliza tokens y clases fx-* de finance-preview.css (que se carga antes).
+   Tokens nuevos: --fx-area-{color}-{swatch|ink|soft}, --fx-sim-*. */
+
+.fx {
+  /* Paleta cerrada de áreas (16b §4.1). Texto en color de área: SIEMPRE -ink. */
+  --fx-area-azul-swatch: #2f6fb0;
+  --fx-area-azul-ink: #245a8f;
+  --fx-area-azul-soft: #e6eef7;
+  --fx-area-indigo-swatch: #5b5fc7;
+  --fx-area-indigo-ink: #464aa6;
+  --fx-area-indigo-soft: #ebebf8;
+  --fx-area-naranjo-swatch: #c4561d;
+  --fx-area-naranjo-ink: #a3461a;
+  --fx-area-naranjo-soft: #f8ebe3;
+  --fx-area-ambar-swatch: #a06a00;
+  --fx-area-ambar-ink: #7d5300;
+  --fx-area-ambar-soft: #f5eedf;
+  --fx-area-frambuesa-swatch: #b03a8a;
+  --fx-area-frambuesa-ink: #8f2e70;
+  --fx-area-frambuesa-soft: #f5e7f1;
+  --fx-area-cafe-swatch: #8a5a3c;
+  --fx-area-cafe-ink: #6e4529;
+  --fx-area-cafe-soft: #f1ebe7;
+  --fx-area-teal-swatch: #1f7f86;
+  --fx-area-teal-ink: #17646a;
+  --fx-area-teal-soft: #e3f0f1;
+  --fx-area-pizarra-swatch: #5e6b78;
+  --fx-area-pizarra-ink: #4a5560;
+  --fx-area-pizarra-soft: #edeff1;
+  --fx-area-verde-swatch: #3d8a3f;
+  --fx-area-verde-ink: #2e6e30;
+  --fx-area-verde-soft: #e7f1e7;
+  --fx-area-carmin-swatch: #b83a4b;
+  --fx-area-carmin-ink: #962d3c;
+  --fx-area-carmin-soft: #f6e7e9;
+
+  /* Simulador "Ver como" (estilo Propuesta, dashed). */
+  --fx-sim-bg: #ffffff;
+  --fx-sim-border: var(--fx-proposal-border);
+  --fx-sim-text: var(--fx-proposal);
+}
+
+/* El banner de demostración pasa a 40 px en desktop/tablet (thead sticky usa la variable). */
+@media (min-width: 768px) {
+  .fx.sx {
+    --fx-banner-h: 40px;
+  }
+}
+
+/* Host de la región de toasts (fuera del shell): conserva los tokens de .fx pero
+   no ocupa lugar en el flujo (sin él, heredaba min-height 100dvh y dejaba un
+   viewport en blanco al final de cada página). */
+.fx.sx-toast-host {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 80;
+  height: auto;
+  min-height: 0;
+  background: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.fx.sx-toast-host .fx-toast {
+  pointer-events: auto;
+}
+.fx .sx-toast-error {
+  background: var(--fx-danger);
+}
+
+/* ---------- Overrides globales de la suite (todos los módulos) ---------- */
+/* Foco programático en títulos/contenedores (sheets, main): sin anillo. El foco
+   por teclado en controles sigue visible (.fx :focus-visible). */
+.fx [tabindex="-1"]:focus {
+  outline: none;
+}
+.fx .fx-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fx .fx-btn-secondary[aria-disabled="true"]:hover {
+  background: var(--fx-surface);
+}
+.fx .fx-btn-ghost[aria-disabled="true"]:hover {
+  background: none;
+}
+.fx .fx-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fx .fx-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.fx .fx-menu-item[aria-disabled="true"] {
+  color: var(--fx-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Banner + simulador ---------- */
+.fx .sx-banner {
+  justify-content: space-between;
+  overflow: visible;
+}
+.fx .sx-banner-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fx .sx-sim {
+  position: relative;
+  flex: 0 0 auto;
+}
+.fx .sx-sim-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  max-width: 360px;
+  padding: 0 10px;
+  border: 1px dashed var(--fx-sim-border);
+  border-radius: 8px;
+  background: var(--fx-sim-bg);
+  color: var(--fx-sim-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fx .sx-sim-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fx .sx-sim-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 70;
+  width: 360px;
+  padding: 12px;
+  border: 1px solid var(--fx-line);
+  border-radius: var(--fx-radius);
+  background: var(--fx-surface);
+  color: var(--fx-ink);
+  box-shadow: 0 12px 32px rgba(20, 35, 29, 0.18);
+  white-space: normal;
+}
+.fx .sx-sim-title {
+  padding: 4px 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fx-ink-strong);
+}
+.fx .sx-sim-list {
+  display: grid;
+}
+.fx .sx-sim-row,
+.fx .sx-login-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--fx-ink);
+}
+.fx .sx-sim-row:hover,
+.fx .sx-login-row:hover {
+  background: var(--fx-surface-2);
+}
+.fx .sx-sim-row[aria-current="true"] {
+  background: var(--fx-primary-soft);
+}
+.fx .sx-sim-avatar {
+  flex: 0 0 32px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--fx-neutral-bg);
+  color: var(--fx-neutral);
+  font-size: 12px;
+  font-weight: 600;
+}
+.fx .sx-sim-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.fx .sx-sim-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.fx .sx-sim-enters {
+  color: var(--fx-muted);
+  font-size: 12px;
+}
+.fx .sx-sim-who-short {
+  display: none;
+}
+@media (max-width: 399px) {
+  .fx .sx-banner-mobile .sx-sim-who {
+    display: none;
+  }
+  .fx .sx-banner-mobile .sx-sim-who-short {
+    display: inline;
+  }
+}
+.fx .sx-sim-note {
+  margin-top: 8px;
+  padding: 0 6px;
+  color: var(--fx-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+.fx .sx-sim-foot {
+  margin-top: 8px;
+  padding: 8px 6px 2px;
+  border-top: 1px solid var(--fx-line);
+  color: var(--fx-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+/* ---------- Sidebar: módulos + secciones del activo ---------- */
+.fx .sx-modules {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.fx .sx-module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fx .sx-module-link[aria-current="true"] {
+  color: #fff;
+}
+.fx .sx-module-link {
+  font-weight: 600;
+}
+.fx .sx-module-chevron {
+  color: var(--fx-side-muted);
+  transition: transform 120ms var(--fx-ease);
+}
+.fx .sx-module.is-active .sx-module-chevron {
+  transform: rotate(180deg);
+}
+.fx .sx-sections {
+  margin: 2px 0 8px;
+}
+.fx .sx-section-group + .sx-section-group {
+  margin-top: 8px;
+}
+.fx .sx-section-label {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-left: 28px;
+  color: var(--fx-side-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.fx .sx-section-link {
+  height: 32px;
+  padding-left: 28px;
+  font-size: 13px;
+}
+.fx .sx-section-link[aria-current="page"]::before {
+  top: 8px;
+  height: 16px;
+}
+.fx .sx-shortcut-icon {
+  flex: none;
+  color: var(--fx-side-muted);
+}
+/* Etiquetas largas ("Configuración financiera ↗"): el texto se corta con
+   ellipsis y la flecha queda siempre visible (la columna no crece al contenido). */
+.fx .sx-sections .fx-nav-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fx .sx-section-link {
+  min-width: 0;
+}
+.fx .sx-section-link .fx-nav-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Rail 768–1279: módulos, divisor y secciones del módulo activo (mismo DOM). */
+@media (min-width: 768px) and (max-width: 1279px) {
+  /* La lista de módulos+secciones se desplaza sola si no cabe (1024×768 con
+     Finanzas activo); marca y pie quedan fijos. */
+  .fx .sx-sidebar {
+    overflow: hidden;
+  }
+  .fx .sx-sidebar > .fx-brand,
+  .fx .sx-sidebar > .fx-side-footer {
+    flex: none;
+  }
+  .fx .sx-modules {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  /* Los tooltips del rail escapan del recorte del scroll: position fixed sin
+     top/left = posición estática (centrada en el link); se corren a la derecha.
+     La posición estática no sigue el scroll de la lista, así que en pantallas
+     bajas (donde la lista sí se desplaza) se ocultan: el nombre accesible sigue
+     en cada link. */
+  .fx .sx-sidebar .fx-nav-tip {
+    position: fixed;
+    top: auto;
+    left: auto;
+    transform: translateX(calc(50% + 32px));
+  }
+  @media (max-height: 767px) {
+    .fx .sx-sidebar .fx-nav-tip {
+      display: none;
+    }
+  }
+  /* Atajos a otros módulos (↗ Reportes financieros, Configuración financiera):
+     solo en la sidebar completa y en "Más" del móvil; siguen en el DOM. */
+  .fx .sx-section-group.is-shortcuts:not(:has([aria-current="page"])) {
+    display: none;
+  }
+  .fx .sx-module-list {
+    align-items: center;
+  }
+  .fx .sx-module.is-active {
+    display: contents;
+  }
+  .fx .sx-module.is-active > .sx-sections {
+    order: 1;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    width: 100%;
+    margin: 2px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid var(--fx-side-line);
+  }
+  .fx .sx-module-link {
+    width: 44px;
+    height: 44px;
+  }
+  .fx .sx-module-link[aria-current="true"] {
+    background: var(--fx-side-hover);
+  }
+  .fx .sx-module-chevron,
+  .fx .sx-shortcut-icon {
+    display: none;
+  }
+  .fx .sx-section-label {
+    height: 1px;
+    width: 24px;
+    margin: 6px auto;
+    padding: 0;
+    background: var(--fx-side-line);
+    color: transparent;
+    overflow: hidden;
+  }
+  .fx .sx-section-group + .sx-section-group {
+    margin-top: 0;
+  }
+  .fx .sx-section-link {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+  }
+  .fx .sx-section-link[aria-current="page"]::before {
+    top: 10px;
+    height: 20px;
+  }
+}
+
+/* ---------- Móvil ---------- */
+@media (max-width: 767px) {
+  .fx .sx-banner-mobile {
+    justify-content: space-between;
+    height: 44px;
+    padding: 0 8px 0 16px;
+  }
+  /* Área táctil real de 44 px (medida en el botón); la píldora visual de 28 px
+     la dibuja ::before. */
+  .fx .sx-banner-mobile .sx-sim-trigger {
+    position: relative;
+    z-index: 0;
+    height: 44px;
+    max-width: 52vw;
+    border: 0;
+    background: none;
+  }
+  .fx .sx-banner-mobile .sx-sim-trigger::before {
+    content: "";
+    position: absolute;
+    inset: 8px 0;
+    z-index: -1;
+    border: 1px dashed var(--fx-sim-border);
+    border-radius: 8px;
+    background: var(--fx-sim-bg);
+  }
+  .fx .sx-banner-mobile .sx-sim-trigger:focus-visible {
+    outline-offset: -4px;
+  }
+  .fx .sx-module-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .fx .sx-module-switch.is-static {
+    cursor: default;
+  }
+  .fx .sx-bottombar {
+    grid-template-columns: repeat(var(--sx-tabs, 5), minmax(0, 1fr));
+  }
+  .fx .sx-tab-shortcut {
+    position: absolute;
+    top: 0;
+    right: 14px;
+  }
+  .fx .fx-tab-icon {
+    position: relative;
+  }
+}
+.fx .sx-module-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 4px;
+  border-top: 1px solid var(--fx-line);
+}
+.fx .sx-module-row-text {
+  flex: 1;
+  display: grid;
+}
+.fx .sx-module-row-name {
+  font-size: 15px;
+  font-weight: 500;
+}
+.fx .sx-account {
+  display: grid;
+  gap: 4px;
+}
+.fx .sx-account-name {
+  font-weight: 600;
+}
+
+/* ---------- Aviso de acceso ---------- */
+.fx .sx-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 16px 32px 0;
+  padding: 8px 8px 8px 14px;
+  border-radius: 10px;
+  background: var(--fx-info-bg);
+  color: var(--fx-ink);
+  font-size: 14px;
+}
+.fx .sx-notice svg {
+  flex: 0 0 auto;
+  color: var(--fx-info);
+}
+.fx .sx-notice p {
+  flex: 1;
+}
+.fx .sx-notice-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: var(--fx-muted);
+  cursor: pointer;
+}
+@media (max-width: 1279px) {
+  .fx .sx-notice {
+    margin: 16px 24px 0;
+  }
+}
+@media (max-width: 767px) {
+  .fx .sx-notice {
+    margin: 12px 16px 0;
+  }
+}
+
+/* ---------- Pantallas completas (ingreso, sin módulos, skeleton) ---------- */
+.fx .sx-center {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 72px 16px;
+  text-align: center;
+}
+.fx .sx-center-body {
+  color: var(--fx-muted);
+}
+.fx .sx-brand-mark-lg {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--fx-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.fx .sx-skeleton-layout {
+  display: grid;
+  grid-template-columns: var(--fx-sidebar-w) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.fx .sx-skeleton-side {
+  background: var(--fx-side-bg);
+}
+.fx .sx-skeleton-main {
+  padding: 64px 32px;
+  max-width: 1200px;
+}
+@media (max-width: 767px) {
+  .fx .sx-skeleton-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fx .sx-skeleton-side {
+    display: none;
+  }
+  .fx .sx-skeleton-main {
+    padding: 24px 16px;
+  }
+}
+/* Tarea enfocada (FOCUSED_ROUTES en lib/suite-preview/modules): sin barra inferior;
+   el footer sticky del formulario baja al borde y el main no reserva sus 64 px. */
+@media (max-width: 767px) {
+  .fx .sx-focused .fx-main {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  .fx .sx-focused .sx-form-foot {
+    bottom: 0;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+.fx .sx-login-main {
+  padding: 32px 16px 64px;
+}
+.fx .sx-login-card {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid var(--fx-line);
+  border-radius: var(--fx-radius);
+  background: var(--fx-surface);
+}
+.fx .sx-login-main .sx-notice {
+  max-width: 480px;
+  margin: 0 auto 16px;
+}
+.fx .sx-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  color: var(--fx-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.fx .sx-login-list {
+  display: grid;
+  margin-top: 16px;
+  border-top: 1px solid var(--fx-line);
+}
+.fx .sx-login-list li + li {
+  border-top: 1px solid var(--fx-line);
+}
+.fx .sx-login-row {
+  min-height: 64px;
+}
+.fx .sx-login-row > svg {
+  flex: 0 0 auto;
+  color: var(--fx-muted);
+}
+.fx .sx-login-row:focus-visible {
+  outline-offset: -2px;
+}
+.fx .sx-login-text {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.fx .sx-login-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.fx .sx-login-enters {
+  color: var(--fx-muted);
+  font-size: 12px;
+  text-align: right;
+}
+.fx .sx-login-foot {
+  margin-top: 12px;
+  color: var(--fx-muted);
+  font-size: 12px;
+}
+@media (max-width: 480px) {
+  .fx .sx-login-card {
+    padding: 16px;
+  }
+  .fx .sx-login-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .fx .sx-login-name {
+    flex: 0 1 auto;
+    font-size: 15px;
+  }
+  .fx .sx-login-enters {
+    font-size: 13px;
+    text-align: left;
+  }
+}
+
+/* ---------- Áreas (16b §4.2) ---------- */
+.fx .sx-area-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--sx-area-swatch);
+}
+.fx .sx-area-swatch.is-square {
+  border-radius: 3px;
+}
+.fx .sx-area-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--fx-line);
+  border-radius: 999px;
+  background: var(--fx-surface);
+  color: var(--fx-ink);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.fx .sx-area-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border-left: 4px solid var(--sx-area-swatch);
+  border-radius: 6px;
+  background: var(--sx-area-soft);
+  color: var(--sx-area-ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fx .sx-area-pill-suffix {
+  font-size: 12px;
+  font-weight: 400;
+}
+.fx .sx-area-inactive {
+  color: var(--fx-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Sidebar ≥1280: evita la barra de scroll horizontal de 1 px en la lista de módulos. */
+@media (min-width: 1280px) {
+  .fx .sx-modules {
+    overflow-x: hidden;
+  }
+}
