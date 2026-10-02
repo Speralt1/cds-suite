@@ -7,7 +7,9 @@ import { CASH_SESSIONS, DEMO_TODAY, DEPOSITS, PAYOUTS } from "@/lib/finance-prev
 import { clp, dayMonth, numericDate, shortDate, timeOf } from "@/lib/finance-preview/format";
 import {
   AREA_LABEL,
+  areaCashStatus,
   attentionItems,
+  totalsStrip,
   canCloseWithDifference,
   depositsOf,
   filterMovements,
@@ -135,7 +137,17 @@ export function MovimientosScreen() {
             />
           ) : (
             <>
-              <FilterToolbar filters={filters} onChange={setFilters} resultCount={items.length} />
+              {period.view === "year" && (
+                <div style={{ padding: "12px 20px 0" }}>
+                  <Callout tone="info" icon={Inbox}>
+                    <p>
+                      Detalle por movimiento disponible desde septiembre 2026. Los totales del año en Hoy y Reportes incluyen enero–agosto
+                      como totales mensuales, por eso no coinciden con esta franja.
+                    </p>
+                  </Callout>
+                </div>
+              )}
+              <FilterToolbar filters={filters} onChange={setFilters} resultCount={totalsStrip(items).count} />
               <TotalsStrip items={items} />
               <TransactionsTable items={items} caption={`Movimientos de ${periodTitle(period)}`} />
             </>
@@ -147,6 +159,24 @@ export function MovimientosScreen() {
 }
 
 // ---------- Caja ----------
+
+/** Estado del efectivo de un área por día: una sola regla para todas las pantallas. */
+export function CashStatusCell({ status }: { status: ReturnType<typeof areaCashStatus> }) {
+  switch (status) {
+    case "today":
+      return <StatusBadge status="cashToday" />;
+    case "missing":
+      return <StatusBadge status="missingCash" />;
+    case "noRecords":
+      return <StatusBadge status="noRecords" />;
+    case "preSplit":
+      return <StatusBadge status="notComparable" />;
+    case "recorded":
+      return <StatusBadge status="recorded" />;
+    default:
+      return <span className="fx-help">Sin efectivo</span>;
+  }
+}
 
 const DENOMS = [20000, 10000, 5000, 2000, 1000, 500, 100, 50, 10];
 
@@ -227,11 +257,14 @@ function BlindCount({ session }: { session: CashSession }) {
           ))}
         </div>
       )}
-      <div className="fx-count-total" aria-live="polite">
+      <div className="fx-count-total">
         <div className="fx-row-between" style={{ fontWeight: 600 }}>
           <span>Conteo 2</span>
           <MoneyAmount value={total} />
         </div>
+        <span className="fx-sr" aria-live="polite">
+          Conteo 2: {clp(total)}
+        </span>
         {done && (
           <>
             <div className="fx-row-between">
@@ -261,10 +294,16 @@ function BlindCount({ session }: { session: CashSession }) {
           </>
         )}
         {done ? (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="fx-btn fx-btn-secondary" onClick={() => setDone(false)}>
-              Volver a contar
-            </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {diff !== 0 && (
+              <button
+                type="button"
+                className="fx-btn fx-btn-secondary"
+                onClick={() => simulate("Tercer conteo pedido a otra persona (el conteo 2 ya no puede corregirse)")}
+              >
+                Pedir tercer conteo
+              </button>
+            )}
             <button
               type="button"
               className="fx-btn fx-btn-primary"
@@ -279,9 +318,12 @@ function BlindCount({ session }: { session: CashSession }) {
             </button>
           </div>
         ) : (
-          <button type="button" className="fx-btn fx-btn-primary" disabled={total === 0} onClick={() => setDone(true)}>
-            Terminar conteo 2
-          </button>
+          <>
+            <button type="button" className="fx-btn fx-btn-primary" disabled={total === 0} onClick={() => setDone(true)}>
+              Terminar conteo 2
+            </button>
+            <p className="fx-help">Al terminar se revela el conteo 1 y el conteo 2 queda fijo; si no cuadran, cuenta una tercera persona.</p>
+          </>
         )}
       </div>
     </div>
@@ -353,7 +395,7 @@ function AreaCash({ area }: { area: AreaKey }) {
             <tr>
               <th scope="col">Culto</th>
               <th scope="col" className="is-num fx-hide-mobile">
-                SumUp
+                SumUp (bruto)
               </th>
               <th scope="col" className="is-num">
                 Efectivo
@@ -365,25 +407,14 @@ function AreaCash({ area }: { area: AreaKey }) {
             {rows.map((r) => {
               const sumUp = area === "ofrendas" ? r.ofrSumUp : r.cafSumUp;
               const cash = area === "ofrendas" ? r.ofrCash : r.cafCash;
-              const missing = r.status.missingCash.some((m) => m.area === area);
-              const isToday = r.date === DEMO_TODAY;
+              const st = areaCashStatus(r.date, area, r.status);
               return (
                 <tr key={r.date}>
                   <td style={{ whiteSpace: "nowrap" }}>{shortDate(r.date)}</td>
                   <td className="is-num fx-hide-mobile">{sumUp ? <MoneyAmount value={sumUp} /> : "—"}</td>
                   <td className="is-num">{cash ? <MoneyAmount value={cash} /> : "—"}</td>
                   <td>
-                    {missing ? (
-                      <StatusBadge status="missingCash" />
-                    ) : r.status.noRecords ? (
-                      <StatusBadge status="noRecords" />
-                    ) : isToday ? (
-                      <span className="fx-help">En curso</span>
-                    ) : cash ? (
-                      <StatusBadge status="recorded" />
-                    ) : (
-                      <span className="fx-help">Sin movimiento</span>
-                    )}
+                    <CashStatusCell status={st} />
                   </td>
                 </tr>
               );
@@ -443,24 +474,14 @@ export function CajaScreen() {
         primary="none"
       />
       <DemoStates empty={<EmptyState icon={Lock} title="No hubo culto en este período" />}>
-        <div className="fx-tabs" role="tablist" aria-label="Área">
+        <div className="fx-tabs" role="group" aria-label="Área">
           {(["ofrendas", "cafeteria"] as const).map((a) => (
-            <button
-              key={a}
-              type="button"
-              role="tab"
-              id={`caja-tab-${a}`}
-              aria-selected={area === a}
-              aria-controls="caja-panel"
-              onClick={() => setArea(a)}
-            >
+            <button key={a} type="button" aria-pressed={area === a} onClick={() => setArea(a)}>
               {AREA_LABEL[a]}
             </button>
           ))}
         </div>
-        <div role="tabpanel" id="caja-panel" aria-labelledby={`caja-tab-${area}`}>
-          <AreaCash key={area} area={area} />
-        </div>
+        <AreaCash key={area} area={area} />
       </DemoStates>
     </>
   );
@@ -520,7 +541,15 @@ function PayoutRow({ p }: { p: Payout }) {
         <td>
           <StatusBadge
             status={REC_BADGE[state]}
-            detail={state === "difference" && gap !== null ? clp(gap) : state === "partial" && gap !== null ? `falta ${clp(-gap)}` : undefined}
+            detail={
+              state === "difference" && gap !== null
+                ? clp(gap)
+                : state === "partial" && gap !== null
+                  ? `falta ${clp(-gap)}`
+                  : state === "reconciled"
+                    ? "con comisión de ejemplo"
+                    : undefined
+            }
           />
         </td>
       </tr>
@@ -652,11 +681,11 @@ export function ConciliacionScreen() {
       </Callout>
       <div style={{ height: 16 }} />
       <DemoStates empty={<EmptyState icon={CircleCheck} title="No hay payouts por revisar" />}>
-        <div className="fx-tabs" role="tablist" aria-label="Payouts">
-          <button type="button" role="tab" aria-selected={tab === "action"} onClick={() => setTab("action")}>
+        <div className="fx-tabs" role="group" aria-label="Mostrar payouts">
+          <button type="button" aria-pressed={tab === "action"} onClick={() => setTab("action")}>
             Necesita acción ({needs.length})
           </button>
-          <button type="button" role="tab" aria-selected={tab === "all"} onClick={() => setTab("all")}>
+          <button type="button" aria-pressed={tab === "all"} onClick={() => setTab("all")}>
             Todos ({PAYOUTS.length})
           </button>
         </div>

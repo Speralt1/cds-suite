@@ -437,9 +437,9 @@ export interface WorshipPoint {
 }
 
 /** Últimos N días de culto con ingresos de Ofrendas/Cafetería por área (nunca sumadas). */
-export function worshipSeries(n = 8): WorshipPoint[] {
+export function worshipSeries(n = 8, until: string = DEMO_TODAY): WorshipPoint[] {
   const dates = [...datesOfMonth("2026-09"), ...datesOfMonth("2026-10")].filter(
-    (d) => d <= DEMO_TODAY && isWorshipDay(d),
+    (d) => d <= DEMO_TODAY && d <= until && isWorshipDay(d),
   );
   return dates.slice(-n).map((date) => {
     const day = TRANSACTIONS.filter((t) => t.date === date && isActive(t) && t.type === "income");
@@ -490,6 +490,21 @@ export function dayStatus(date: string, items: readonly DemoTransaction[] = TRAN
     missingCash,
     noRecords: worship && date < DEMO_TODAY && day.length === 0,
   };
+}
+
+/** Estado del efectivo de un área en un día, para TODAS las pantallas:
+ *  el culto en curso (hoy) es "por registrar", nunca "falta efectivo". */
+export type AreaCashStatus = "missing" | "today" | "noRecords" | "recorded" | "preSplit" | "none";
+
+export function areaCashStatus(date: string, area: AreaKey, st: DayStatus = dayStatus(date)): AreaCashStatus {
+  const missing = st.missingCash.some((m) => m.area === area);
+  if (date === DEMO_TODAY) return "today";
+  if (missing) return "missing";
+  if (st.noRecords) return "noRecords";
+  if (date < SPLIT_DATE) return "preSplit";
+  const cat = AREA_CATEGORY[area];
+  const hasCash = TRANSACTIONS.some((t) => t.date === date && isActive(t) && t.category === cat && t.method === "cash");
+  return hasCash ? "recorded" : "none";
 }
 
 // ---------- Caja (Propuesta) ----------
@@ -917,7 +932,11 @@ export function reportAlerts(p: Period): ReportAlert[] {
     for (const date of datesOfMonth(periodKey(p)).filter((d) => d <= DEMO_TODAY)) {
       const st = dayStatus(date);
       for (const m of st.missingCash)
-        alerts.push({ tone: "review", text: `Falta efectivo · ${AREA_LABEL[m.area]} — ${dayMonth(date)}: SumUp ${clp(m.sumUp)} en bruto, sin efectivo registrado.` });
+        alerts.push(
+          date === DEMO_TODAY
+            ? { tone: "info", text: `Culto en curso (${dayMonth(date)}): efectivo de ${AREA_LABEL[m.area]} por registrar; SumUp ${clp(m.sumUp)} en bruto.` }
+            : { tone: "review", text: `Falta efectivo · ${AREA_LABEL[m.area]} — ${dayMonth(date)}: SumUp ${clp(m.sumUp)} en bruto, sin efectivo registrado.` },
+        );
       if (st.noRecords) alerts.push({ tone: "review", text: `Sin registros — ${dayMonth(date)} (día de culto).` });
     }
   }

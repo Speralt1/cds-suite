@@ -73,7 +73,9 @@ export function MoneyAmount({
 
 export type Tone = "success" | "warning" | "danger" | "info" | "review" | "neutral" | "proposal" | "example";
 
-export const STATUS: Record<string, { icon: LucideIcon; text: string; tone: Tone; title?: string }> = {
+type StatusDef = { icon: LucideIcon; text: string; tone: Tone; title?: string };
+
+export const STATUS = {
   proposal: {
     icon: Compass,
     text: "Propuesta",
@@ -108,12 +110,13 @@ export const STATUS: Record<string, { icon: LucideIcon; text: string; tone: Tone
   notComparable: { icon: CircleDashed, text: "No comparable", tone: "neutral" },
   campaignDone: { icon: CircleCheck, text: "Cerrada · meta cumplida", tone: "success" },
   cashPending: { icon: Clock, text: "Sin depositar", tone: "warning" },
-};
+  cashToday: { icon: Clock, text: "Por registrar · en curso", tone: "info" },
+} satisfies Record<string, StatusDef>;
 
 export type StatusKey = keyof typeof STATUS;
 
 export function StatusBadge({ status, detail, className = "" }: { status: StatusKey; detail?: string; className?: string }) {
-  const s = STATUS[status];
+  const s: StatusDef = STATUS[status];
   const Icon = s.icon;
   return (
     <span className={`fx-badge fx-tone-${s.tone} ${className}`} title={s.title}>

@@ -826,11 +826,16 @@
   gap: 8px;
 }
 .fx-att-amount-col {
-  min-width: 96px;
+  width: 104px;
   text-align: right;
 }
 .fx-att-age-col {
-  min-width: 92px;
+  width: 120px;
+  display: flex;
+  justify-content: flex-end;
+}
+.fx-att-cta-col {
+  width: 168px;
   display: flex;
   justify-content: flex-end;
 }
@@ -858,6 +863,10 @@
   width: 10px;
   height: 10px;
   border-radius: 2px;
+}
+.fx-swatch-shade {
+  background: rgba(40, 91, 69, 0.12);
+  border: 1px dashed #7f8c84;
 }
 .fx-chart-foot {
   margin-top: 8px;
@@ -1382,7 +1391,7 @@
 }
 .fx-dl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(45%, 1fr) auto;
   gap: 8px 16px;
   font-size: 13px;
 }
@@ -1591,16 +1600,14 @@
   font-variant-numeric: tabular-nums;
 }
 .fx-count-total {
-  box-sizing: border-box;
   position: sticky;
   bottom: 0;
   display: grid;
   gap: 6px;
-  margin: 12px -20px -20px;
-  padding: 12px 20px;
+  margin-top: 12px;
+  padding: 12px 0 4px;
   background: var(--fx-surface);
   border-top: 1px solid var(--fx-line);
-  border-radius: 0 0 var(--fx-radius) var(--fx-radius);
 }
 .fx-step-list li {
   display: flex;
@@ -1644,6 +1651,7 @@
   white-space: nowrap;
   cursor: pointer;
 }
+.fx-tabs button[aria-pressed="true"],
 .fx-tabs button[aria-selected="true"] {
   color: var(--fx-primary);
   border-bottom-color: var(--fx-primary);
@@ -2034,6 +2042,31 @@
   .fx-att-side .fx-btn {
     flex: 1 0 100%;
   }
+  .fx-att-amount-col,
+  .fx-att-age-col,
+  .fx-att-cta-col {
+    width: auto;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  .fx-att-cta-col {
+    flex: 1 0 100%;
+  }
+  .fx-att-age-col:empty {
+    display: none;
+  }
+  .fx-period,
+  .fx-stepper {
+    width: 100%;
+  }
+  .fx-ops-row {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 2px;
+  }
+  .fx-ops-row > span:last-child {
+    text-align: left !important;
+  }
   .fx-src-row {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "label amount" "track share";
@@ -2198,9 +2231,6 @@
   }
   .fx-count-total {
     bottom: calc(64px + env(safe-area-inset-bottom));
-    margin: 12px -16px -16px;
-    padding: 12px 16px;
-    width: calc(100% + 32px);
   }
   .fx-tabs button {
     height: 44px;

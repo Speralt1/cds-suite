@@ -7,6 +7,7 @@ import { CAMPAIGN_SUBMISSIONS, DEMO_TODAY, INTEGRATIONS, PAYOUTS, TITHE_PROFILES
 import { clp, dayMonth, monthLabel, shortDate, timeOf } from "@/lib/finance-preview/format";
 import {
   AREA_LABEL,
+  areaCashStatus,
   AVAILABLE_MONTHS,
   campaignTotals,
   hasDetail,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/finance-preview/selectors";
 import { SOURCE, SPLIT_DATE } from "@/lib/finance-preview/types";
 import { FinancialChart, SERIES_COLOR } from "../charts";
+import { CashStatusCell } from "./operacion";
 import { usePreview } from "../context";
 import { BASE, FinancialHeader } from "../shell";
 import { Callout, EmptyState, ErrorState, ExampleBadge, MoneyAmount, Panel, ProposalPill, SkeletonRows, StatusBadge } from "../ui";
@@ -63,7 +65,9 @@ function AreaScreen({ area }: { area: AreaKey }) {
   const s = periodSummary(period);
   const sumUp = monthItems.filter((t) => t.origin === "sumup").reduce((a, t) => a + t.amount, 0);
   const cash = monthItems.filter((t) => t.method === "cash").reduce((a, t) => a + t.amount, 0);
-  const historyTotal = !hasDetail(period) ? s.incomeByCategory[category] ?? 0 : null;
+  const isYear = period.view === "year";
+  const historyTotal = !isYear && !hasDetail(period) ? s.incomeByCategory[category] ?? 0 : null;
+  const yearTotal = isYear ? s.incomeByCategory[category] ?? 0 : null;
   const legacy = s.sumUpByAccount.legacy;
   const crossesSplit = period.view === "month" ? periodKey(period) === SPLIT_DATE.slice(0, 7) : period.year === 2026;
 
@@ -95,10 +99,26 @@ function AreaScreen({ area }: { area: AreaKey }) {
                   {isOfr ? "Ofrendas" : "Ventas"} de {periodTitle(period).toLocaleLowerCase("es")}
                 </p>
                 <p className="fx-metric-value" style={{ marginTop: 2 }}>
-                  <MoneyAmount value={historyTotal ?? sumUp + cash} />
+                  <MoneyAmount value={historyTotal ?? yearTotal ?? sumUp + cash} />
                 </p>
               </div>
-              {historyTotal === null && (
+              {yearTotal !== null && (
+                <dl className="fx-dl" style={{ minWidth: 300 }}>
+                  <dt>Ene–ago · solo efectivo</dt>
+                  <dd>
+                    <MoneyAmount value={yearTotal - sumUp - cash} />
+                  </dd>
+                  <dt>Sep–oct · SumUp (bruto)</dt>
+                  <dd>
+                    <MoneyAmount value={sumUp} />
+                  </dd>
+                  <dt>Sep–oct · efectivo</dt>
+                  <dd>
+                    <MoneyAmount value={cash} />
+                  </dd>
+                </dl>
+              )}
+              {historyTotal === null && yearTotal === null && (
                 <dl className="fx-dl" style={{ minWidth: 260 }}>
                   <dt>Tarjeta SumUp (bruto)</dt>
                   <dd>
@@ -173,7 +193,6 @@ function AreaScreen({ area }: { area: AreaKey }) {
                     {days.map((r) => {
                       const su = isOfr ? r.ofrSumUp : r.cafSumUp;
                       const ca = isOfr ? r.ofrCash : r.cafCash;
-                      const missing = r.status.missingCash.some((m) => m.area === area);
                       const preSplit = r.date < SPLIT_DATE;
                       return (
                         <tr key={r.date}>
@@ -184,19 +203,7 @@ function AreaScreen({ area }: { area: AreaKey }) {
                           <td className="is-num">{preSplit ? <span className="fx-help">No comparable</span> : su ? <MoneyAmount value={su} /> : "—"}</td>
                           <td className="is-num">{ca ? <MoneyAmount value={ca} /> : "—"}</td>
                           <td>
-                            {missing ? (
-                              <StatusBadge status="missingCash" />
-                            ) : r.status.noRecords ? (
-                              <StatusBadge status="noRecords" />
-                            ) : r.date === DEMO_TODAY ? (
-                              <span className="fx-help">En curso</span>
-                            ) : preSplit ? (
-                              <StatusBadge status="notComparable" />
-                            ) : su + ca > 0 ? (
-                              <StatusBadge status="recorded" />
-                            ) : (
-                              <span className="fx-help">Sin ingresos</span>
-                            )}
+                            <CashStatusCell status={areaCashStatus(r.date, area, r.status)} />
                           </td>
                         </tr>
                       );
@@ -272,17 +279,18 @@ export const CafeteriaScreen = () => <AreaScreen area="cafeteria" />;
 
 // ---------- Diezmos ----------
 
+const ACTIVE_TITHES = TRANSACTIONS.filter((t) => t.source === "tithe" && t.status === "active");
+
 export function DiezmosScreen() {
   const { simulate } = usePreview();
   const [q, setQ] = useState("");
-  const tithes = TRANSACTIONS.filter((t) => t.source === "tithe" && t.status === "active");
   const rows = useMemo(() => {
     const needle = q.trim().toLocaleLowerCase("es");
     return TITHE_PROFILES.filter((p) => !needle || p.name.toLocaleLowerCase("es").includes(needle)).map((p) => {
-      const mine = tithes.filter((t) => t.profileId === p.id).sort((a, b) => b.date.localeCompare(a.date));
+      const mine = ACTIVE_TITHES.filter((t) => t.profileId === p.id).sort((a, b) => b.date.localeCompare(a.date));
       return { ...p, last: mine[0]?.date, count: mine.length };
     });
-  }, [q, tithes]);
+  }, [q]);
   const months = AVAILABLE_MONTHS.map((m) => ({ m, s: monthSummary(m) })).filter((x) => x.s.tithes > 0);
 
   return (
@@ -342,7 +350,12 @@ export function DiezmosScreen() {
                           </td>
                           <td className="is-num">
                             {p.active && (
-                              <button type="button" className="fx-btn fx-btn-ghost fx-btn-sm" onClick={() => simulate(`Registrar diezmo · ${p.name}`)}>
+                              <button
+                                type="button"
+                                className="fx-btn fx-btn-ghost fx-btn-sm"
+                                aria-label={`Registrar diezmo de ${p.name}`}
+                                onClick={() => simulate(`Registrar diezmo · ${p.name}`)}
+                              >
                                 Registrar
                               </button>
                             )}
@@ -468,7 +481,12 @@ export function CampanasScreen() {
                           </span>
                           <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             <MoneyAmount value={s.amount} />
-                            <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => simulate(`Aprobar aporte de ${clp(s.amount)}`)}>
+                            <button
+                              type="button"
+                              className="fx-btn fx-btn-secondary fx-btn-sm"
+                              aria-label={`Aprobar aporte de ${s.donor} por ${clp(s.amount)}`}
+                              onClick={() => simulate(`Aprobar aporte de ${clp(s.amount)}`)}
+                            >
                               Aprobar
                             </button>
                           </span>
@@ -479,7 +497,11 @@ export function CampanasScreen() {
                 )}
                 {c.id === "camp-techo" && (
                   <p className="fx-help" style={{ marginTop: 10 }}>
-                    {CAMPAIGN_SUBMISSIONS.filter((s) => s.campaignId === c.id && s.status === "rejected").length} aporte rechazado este mes.
+                    Rechazados:{" "}
+                    {CAMPAIGN_SUBMISSIONS.filter((s) => s.campaignId === c.id && s.status === "rejected")
+                      .map((s) => `${clp(s.amount)} (${dayMonth(s.date)})`)
+                      .join(", ")}
+                    .
                   </p>
                 )}
               </Panel>

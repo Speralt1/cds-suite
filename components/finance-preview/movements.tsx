@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, Download, Lock, Search, SlidersHorizontal, SearchX } from "lucide-react";
-import { clp, numericDate, shortDate, timeOf } from "@/lib/finance-preview/format";
+import { clp, shortDate, timeOf } from "@/lib/finance-preview/format";
 import { auditFor, TITHE_PROFILES } from "@/lib/finance-preview/fixtures";
 import {
   categoryLabel,
@@ -109,9 +109,9 @@ function FilterRadios({ f, set }: { f: MovementFilters; set: (f: MovementFilters
   return (
     <div className="fx-filter-stack">
       <RadioGroup legend="Tipo" name="fx-f-type" value={f.type} options={TYPE_OPTIONS} onChange={(v) => set({ ...f, type: v as MovementFilters["type"] })} />
+      <RadioGroup legend="Fuente o categoría" name="fx-f-source" value={f.source} options={SOURCE_OPTIONS} onChange={(v) => set({ ...f, source: v })} />
       <RadioGroup legend="Método" name="fx-f-method" value={f.method} options={METHOD_OPTIONS} onChange={(v) => set({ ...f, method: v as MovementFilters["method"] })} />
       <RadioGroup legend="Estado" name="fx-f-status" value={f.status} options={STATUS_OPTIONS} onChange={(v) => set({ ...f, status: v as MovementFilters["status"] })} />
-      <RadioGroup legend="Fuente o categoría" name="fx-f-source" value={f.source} options={SOURCE_OPTIONS} onChange={(v) => set({ ...f, source: v })} />
     </div>
   );
 }
@@ -651,7 +651,9 @@ export function DetailSheet({ tx, onClose }: { tx: DemoTransaction | null; onClo
             <h3 className="fx-h3">Datos</h3>
             <dl className="fx-dl">
               <dt>Fecha</dt>
-              <dd>{numericDate(tx.date)}</dd>
+              <dd>
+                {shortDate(tx.date)} {tx.date.slice(0, 4)}
+              </dd>
               <dt>Tipo</dt>
               <dd>{tx.type === "income" ? "Entrada" : "Salida"}</dd>
               <dt>Fuente / categoría</dt>

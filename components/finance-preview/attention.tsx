@@ -13,6 +13,7 @@ import {
   TriangleAlert,
   Undo2,
   CircleDashed,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import { ageLabel } from "@/lib/finance-preview/format";
@@ -39,7 +40,11 @@ const GROUP_ICON: Record<AttentionGroup, LucideIcon> = {
 const PROPOSAL_GROUPS: AttentionGroup[] = ["duplicate", "link", "difference", "refund", "deposit"];
 
 function Item({ item, compact, onResolve }: { item: AttentionItem; compact?: boolean; onResolve: (i: AttentionItem) => void }) {
-  const Icon = item.title.startsWith("Culto sin registros") ? CircleDashed : GROUP_ICON[item.group];
+  const Icon = item.title.startsWith("Culto sin registros")
+    ? CircleDashed
+    : item.title.startsWith("Efectivo por registrar")
+      ? Clock
+      : GROUP_ICON[item.group];
   const age = item.overdue ? null : ageLabel(item.date, DEMO_TODAY);
   const amount = item.amount !== undefined && (
     <MoneyAmount value={item.amount} diff={item.group === "difference"} />
@@ -72,9 +77,11 @@ function Item({ item, compact, onResolve }: { item: AttentionItem; compact?: boo
           <span className="fx-att-age-col">
             {item.overdue && <StatusBadge status="overdue" detail={`${item.ageDays} d`} />}
           </span>
-          <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => onResolve(item)}>
-            {item.cta}
-          </button>
+          <span className="fx-att-cta-col">
+            <button type="button" className="fx-btn fx-btn-secondary fx-btn-sm" onClick={() => onResolve(item)}>
+              {item.cta}
+            </button>
+          </span>
         </div>
       )}
     </li>

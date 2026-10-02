@@ -37,7 +37,8 @@ export function ReportesScreen() {
   const activeCampaign = CAMPAIGNS.find((c) => c.status === "active");
   const prevNote = comparabilityNote(period);
 
-  const worship = worshipSeries(8).map((w) => ({
+  const periodEnd = period.view === "month" ? `${periodKey(period)}-31` : `${period.year}-12-31`;
+  const worship = worshipSeries(8, periodEnd).map((w) => ({
     x: w.label.split(" ").slice(1).join(" ") + (w.inProgress ? "*" : ""),
     xs: `${Number(w.date.slice(8, 10))}/${Number(w.date.slice(5, 7))}${w.inProgress ? "*" : ""}`,
     full: `${w.label}${w.inProgress ? " (en curso)" : ""}`,

@@ -166,6 +166,11 @@ export function FinancialChart({
               <span className="fx-swatch" style={{ background: s.color }} /> {s.label}
             </span>
           ))}
+          {annotation && annotationX !== undefined && (
+            <span style={{ marginLeft: "auto", color: "var(--fx-muted)" }}>
+              <span className="fx-swatch fx-swatch-shade" /> {annotation.label}
+            </span>
+          )}
         </div>
       )}
 
@@ -212,7 +217,7 @@ export function FinancialChart({
       ) : (
         <div className="fx-chart" role="img" aria-label={summary} style={{ height: h }}>
           <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 600, height: h }}>
-            <BarChart data={data} margin={{ top: annotation ? 24 : 12, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%" barGap={4}>
+            <BarChart data={data} margin={{ top: 12, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%" barGap={4}>
               <CartesianGrid vertical={false} stroke="#e3e7e0" />
               <XAxis
                 dataKey={xk}
@@ -244,7 +249,6 @@ export function FinancialChart({
                   fillOpacity={0.05}
                   stroke="none"
                   ifOverflow="extendDomain"
-                  label={{ value: annotation.label, position: "insideTop", fontSize: 11, fill: "#5f6e65", dy: -20 }}
                 />
               )}
               {series.map((s) => (
@@ -303,6 +307,7 @@ export function SourceBreakdown({
                 {label}
                 {r.key === SOURCE.diezmos && <small>Parte de los ingresos registrados</small>}
                 {legacy && <small>Antes del 09/09/2026 · sin área</small>}
+                {r.key === SOURCE.donaciones && r.hint && <small>{r.hint}</small>}
               </span>
               <span className="fx-src-track" aria-hidden="true">
                 <span

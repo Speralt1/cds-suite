@@ -25,7 +25,9 @@ import {
   payoutNet,
   periodSummary,
   reconciliationState,
+  reportAlerts,
   reportNarrative,
+  areaCashStatus,
   rowActions,
   sessionDifference,
   sessionToDeposit,
@@ -247,6 +249,14 @@ describe("invariantes financieros", () => {
     const [, expense, result] = headlineMetrics(OCT);
     expect(expense.previous).toBe(0);
     expect(result.comparabilityNote).toMatch(/gastos/);
+  });
+
+  it("Reportes trata el culto en curso como información, no como 'Falta efectivo'", () => {
+    const alerts = reportAlerts(OCT);
+    expect(alerts.some((a) => a.tone === "review" && /Falta efectivo/.test(a.text))).toBe(false);
+    expect(alerts.some((a) => a.tone === "info" && /Culto en curso/.test(a.text))).toBe(true);
+    expect(areaCashStatus(DEMO_TODAY, "cafeteria")).toBe("today");
+    expect(areaCashStatus("2026-09-30", "cafeteria")).toBe("missing");
   });
 
   it("el mes en curso se compara contra el mismo rango de días del mes anterior, nunca contra el mes completo", () => {

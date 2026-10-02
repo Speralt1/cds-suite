@@ -79,9 +79,11 @@ export function MetricCard({ m }: { m: Metric }) {
           <span className="fx-num">{v.label}</span> <span className="fx-help">{m.comparisonLabel}</span>
         </p>
       ) : (
-        <p className="fx-metric-delta is-muted">Sin base comparable</p>
+        <p className="fx-metric-delta is-muted">
+          {m.comparabilityNote ? m.comparabilityNote.replace(/^No homogénea:/, "Sin comparación:") : "Sin base comparable"}
+        </p>
       )}
-      {m.comparabilityNote && m.previous !== null && <p className="fx-help" style={{ marginTop: 2 }}>{m.comparabilityNote}</p>}
+      {m.comparabilityNote && v && <p className="fx-help" style={{ marginTop: 2 }}>{m.comparabilityNote}</p>}
       {how && (
         <p className="fx-popover" id={`${id}-how`}>
           {METRIC_HOW[m.id]}
@@ -166,11 +168,11 @@ function OpsStatus() {
             ["Cafetería", SOURCE.cafeteria, ` hasta ${timeOf(cafe.lastSuccessAt)}`],
           ] as const
         ).map(([label, cat, until]) => (
-          <div className="fx-kv-row" key={label} style={{ alignItems: "flex-start", padding: "4px 0" }}>
+          <div className="fx-kv-row fx-ops-row" key={label} style={{ alignItems: "flex-start", padding: "4px 0" }}>
             <span>
               {label}
               <span className="fx-help" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                Efectivo: <StatusBadge status="pending" detail="por registrar" />
+                Efectivo: <StatusBadge status="cashToday" />
               </span>
             </span>
             <span style={{ textAlign: "right" }}>

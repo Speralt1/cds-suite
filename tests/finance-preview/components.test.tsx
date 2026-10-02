@@ -51,6 +51,8 @@ describe("shell del preview", () => {
       expect(within(nav).getByRole("link", { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /^Atención, \d+ pendientes$/ })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Hoy" })).toHaveAttribute("aria-current", "page");
+    // marcador que usa la guardia de deploy para detectar el preview en out/
+    expect(document.querySelector('[data-preview="FX_PREVIEW_SENTINEL_V2_7f3a"]')).not.toBeNull();
   });
 });
 
@@ -84,7 +86,7 @@ describe("Hoy", () => {
 });
 
 describe("Movimientos", () => {
-  it("agrupa SumUp con un toggle accesible y nunca ofrece Editar en un pago SumUp", () => {
+  it("agrupa SumUp por día con un toggle accesible (aria-expanded)", () => {
     withProvider(<MovimientosScreen />);
     const toggle = screen.getAllByRole("button", { name: /^Ver \d+ pagos/ })[0];
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -121,11 +123,24 @@ describe("Caja", () => {
     fireEvent.click(within(ofrendas).getByRole("button", { name: "Cerrar con diferencia" }));
     expect(within(ofrendas).getByRole("alert")).toHaveTextContent(/Explica la diferencia/);
     // el esperado de Cafetería es texto calculado de ejemplo, nunca un input
-    fireEvent.click(screen.getByRole("tab", { name: "Cafetería" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cafetería" }));
     const cafe = container.querySelector('[aria-labelledby="caja-cafeteria"]') as HTMLElement;
     expect(within(cafe).getByText("Esperado en caja")).toBeInTheDocument();
     expect(within(cafe).getByText("Ejemplo")).toBeInTheDocument();
     expect(within(cafe).queryAllByRole("textbox")).toHaveLength(0);
+  });
+});
+
+describe("estado del culto en curso (una sola regla)", () => {
+  it("ninguna pantalla muestra 'Falta efectivo' para hoy: es 'Por registrar · en curso'", () => {
+    for (const Screen of [OfrendasScreen, CafeteriaScreen, CajaScreen]) {
+      const { container, unmount } = withProvider(<Screen />);
+      const todayRow = [...container.querySelectorAll("tr")].find((tr) => /dom 4 oct/.test(tr.textContent ?? ""));
+      expect(todayRow, Screen.name).toBeDefined();
+      expect(todayRow!.textContent).not.toMatch(/Falta efectivo/);
+      expect(todayRow!.textContent).toMatch(/Por registrar · en curso/);
+      unmount();
+    }
   });
 });
 
