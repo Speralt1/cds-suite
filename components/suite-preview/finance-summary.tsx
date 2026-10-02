@@ -4,7 +4,8 @@
 // Cifras AGREGADAS del período: sin drill-down, sin Atención, sin actividad, sin
 // nombres y sin "+ Registrar". Se mantiene el gráfico de evolución (agregado).
 
-import { ArrowDownLeft, ArrowUpRight, Equal, TrendingDown, TrendingUp } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, Equal, Info, TrendingDown, TrendingUp } from "lucide-react";
 import { variation } from "@/lib/finance-preview/format";
 import { headlineMetrics, type Metric } from "@/lib/finance-preview/selectors";
 import { usePreview } from "@/components/finance-preview/context";
@@ -21,7 +22,16 @@ const NOTE: Record<Metric["id"], string> = {
   result: "Ingresos − gastos. No representa el saldo bancario.",
 };
 
+/** "Cómo se calcula" (texto, sin enlaces al detalle). */
+const HOW: Record<Metric["id"], string> = {
+  income:
+    "Suma los ingresos activos del período: diezmos, efectivo, transferencias y tarjeta SumUp en bruto (menos devoluciones). No incluye anulados ni campañas.",
+  expense: "Suma los gastos activos registrados en el período.",
+  result: "Ingresos registrados menos gastos registrados. No representa el dinero disponible en el banco.",
+};
+
 function SummaryMetric({ m }: { m: Metric }) {
+  const [how, setHow] = useState(false);
   const Icon = ICON[m.id];
   const v = m.previous !== null ? variation(m.value, m.previous) : null;
   const id = `summary-${m.id}`;
@@ -34,6 +44,16 @@ function SummaryMetric({ m }: { m: Metric }) {
         <h2 id={id} style={{ font: "inherit" }}>
           {m.label}
         </h2>
+        <button
+          type="button"
+          className="fx-metric-info"
+          aria-expanded={how}
+          aria-controls={`${id}-how`}
+          aria-label={`Cómo se calcula ${m.label}`}
+          onClick={() => setHow((x) => !x)}
+        >
+          <Info size={16} aria-hidden="true" />
+        </button>
       </div>
       <p className="fx-metric-value">
         <MoneyAmount value={m.value} />
@@ -44,7 +64,19 @@ function SummaryMetric({ m }: { m: Metric }) {
           <span className="fx-num">{v.label}</span> <span className="fx-help">{m.comparisonLabel}</span>
         </p>
       ) : (
-        <p className="fx-metric-delta is-muted">Sin base comparable</p>
+        <p className="fx-metric-delta is-muted">
+          {m.comparabilityNote ? m.comparabilityNote.replace(/^No homogénea:/, "Sin comparación:") : "Sin base comparable"}
+        </p>
+      )}
+      {m.comparabilityNote && v && (
+        <p className="fx-help" style={{ marginTop: 2 }}>
+          {m.comparabilityNote}
+        </p>
+      )}
+      {how && (
+        <p className="fx-popover" id={`${id}-how`}>
+          {HOW[m.id]}
+        </p>
       )}
       <div className="fx-metric-comp">
         <p>{NOTE[m.id]}</p>

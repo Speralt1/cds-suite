@@ -51,8 +51,10 @@ export function PreviewLogin() {
                   <span className="sx-sim-avatar" aria-hidden="true">
                     {initialsOf(p)}
                   </span>
-                  <span className="sx-login-name">{profileTitle(p, suite.state.areas)}</span>
-                  <span className="sx-login-enters">{entersLabel(p)}</span>
+                  <span className="sx-login-text">
+                    <span className="sx-login-name">{profileTitle(p, suite.state.areas)}</span>
+                    <span className="sx-login-enters">{entersLabel(p)}</span>
+                  </span>
                   <ChevronRight size={16} aria-hidden="true" />
                 </>
               );

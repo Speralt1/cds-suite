@@ -303,7 +303,83 @@ export function validateProfileChange(
   const landing = resolveInitialModule(next);
   if (landing.kind === "module" && landing.invalidInitial)
     warnings.push(
-      `El módulo inicial ya no está permitido; se abrirá ${landing.module === "integrantes" ? "Consolidación" : MODULE_LABEL[landing.module]}.`,
+      `El módulo inicial (${INITIAL_MODULE_LABEL[landing.invalidInitial]}) ya no está permitido; se abrirá ${landing.module === "integrantes" ? "Consolidación" : MODULE_LABEL[landing.module]}.`,
     );
   return { errors, warnings };
+}
+
+// ---------- Usuarios y permisos (16b §10.2): textos y agrupación ----------
+
+/** Descripción en lenguaje simple de cada permiso (debajo de la etiqueta). */
+export const PERMISSION_DESCRIPTION: Record<Permission, string> = {
+  "finance.summary.read": "Cifras generales del período, sin detalle ni nombres.",
+  "finance.details.read": "Movimientos, ofrendas, diezmos, caja, campañas y reportes financieros.",
+  "finance.records.manage": "Registrar, editar y anular movimientos, diezmos y campañas.",
+  "finance.pastoral.manage": "Seguimiento pastoral en las fichas de diezmo.",
+  "calendar.read": "Calendario de toda la iglesia, incluidas las actividades solo para el equipo.",
+  "calendar.events.manage_assigned": "Crear, editar y cancelar las actividades de sus áreas asignadas.",
+  "calendar.events.manage_all": "Todas las actividades de la iglesia y el enlace público del calendario.",
+  "members.consolidation.read": "Personas nuevas, su ficha, su historial y las alertas.",
+  "members.consolidation.manage": "Registrar personas, visitas y seguimientos; cambiar estado y responsable.",
+  "settings.manage": "Áreas, usuarios y configuración de finanzas e integraciones.",
+};
+
+/** Grupos del checklist, en el orden de la navegación. */
+export const PERMISSION_GROUPS: readonly { id: ModuleId; label: string; permissions: readonly Permission[] }[] = [
+  {
+    id: "finanzas",
+    label: "Finanzas",
+    permissions: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
+  },
+  {
+    id: "calendario",
+    label: "Calendario",
+    permissions: ["calendar.read", "calendar.events.manage_assigned", "calendar.events.manage_all"],
+  },
+  { id: "integrantes", label: "Integrantes", permissions: ["members.consolidation.read", "members.consolidation.manage"] },
+  { id: "configuracion", label: "Configuración", permissions: ["settings.manage"] },
+];
+
+/**
+ * Permiso marcado que incluye a `perm` (para "Incluido en «…»"), o null si
+ * nadie lo implica. Se elige el más alto de la cadena (el que no está implicado
+ * por otro permiso marcado).
+ */
+export function implyingPermission(perm: Permission, stored: readonly Permission[]): Permission | null {
+  const sources = stored.filter((s) => s !== perm && closure(IMPLIES[s] ?? []).has(perm));
+  if (!sources.length) return null;
+  const top = sources.find((s) => !sources.some((o) => o !== s && closure(IMPLIES[o] ?? []).has(s)));
+  return top ?? sources[0];
+}
+
+/** Nombre del módulo de entrada ("Consolidación" para Integrantes). */
+export function landingModuleName(m: ModuleId): string {
+  return m === "integrantes" ? "Consolidación" : MODULE_LABEL[m];
+}
+
+/** "Finanzas (solo resumen)", "Calendario (gestiona sus áreas)"… en el orden de la navegación. */
+export function visibleModulesSummary(p: AccessProfile): string[] {
+  const eff = effectivePermissions(p);
+  return visibleModules(p).map((m) => {
+    switch (m) {
+      case "finanzas":
+        return eff.has("finance.details.read") ? "Finanzas" : "Finanzas (solo resumen)";
+      case "calendario":
+        return eff.has("calendar.events.manage_all")
+          ? "Calendario (gestiona todo)"
+          : eff.has("calendar.events.manage_assigned")
+            ? "Calendario (gestiona sus áreas)"
+            : "Calendario (lectura)";
+      case "integrantes":
+        return eff.has("members.consolidation.manage") ? "Consolidación" : "Consolidación (lectura)";
+      case "reportes":
+        return eff.has("finance.details.read") && eff.has("calendar.read")
+          ? "Reportes"
+          : eff.has("finance.details.read")
+            ? "Reportes (Finanzas)"
+            : "Reportes (Calendario)";
+      case "configuracion":
+        return "Configuración";
+    }
+  });
 }

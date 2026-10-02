@@ -97,3 +97,23 @@ export function validateArea(input: AreaInput, areas: readonly Area[]): Partial<
   if ((input.description ?? "").length > 200) errors.description = "Máximo 200 caracteres.";
   return errors;
 }
+
+/** Actividades (no archivadas) donde el área es responsable o participa. */
+export function areaUsage(
+  areaId: string,
+  events: readonly Pick<CalendarEvent, "responsibleAreaId" | "participantAreaIds" | "status">[],
+): { responsible: number; participant: number } {
+  let responsible = 0;
+  let participant = 0;
+  for (const e of events) {
+    if (e.status === "archivada") continue;
+    if (e.responsibleAreaId === areaId) responsible += 1;
+    else if (e.participantAreaIds.includes(areaId)) participant += 1;
+  }
+  return { responsible, participant };
+}
+
+/** Área inactiva que usaba un color libre ("Libre (lo usaba Matrimonios, inactiva)"). */
+export function inactiveOwnerOfColor(areas: readonly Area[], color: AreaColor, editingId?: string): Area | undefined {
+  return areas.find((a) => !a.active && a.color === color && a.id !== editingId);
+}
