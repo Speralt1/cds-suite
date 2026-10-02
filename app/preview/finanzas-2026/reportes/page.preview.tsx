@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { ReportesScreen } from "@/components/finance-preview/screens/analisis";
+import { ClientRedirect } from "@/components/suite-preview/redirect";
 
-export const metadata: Metadata = { title: "Reportes · Vista previa Finanzas 2026" };
+// R5: los reportes financieros viven en el módulo global Reportes.
+export const metadata: Metadata = { title: "Reportes · Vista previa CDS Suite" };
 
 export default function Page() {
-  return <ReportesScreen />;
+  return <ClientRedirect to="/preview/reportes/finanzas" />;
 }
