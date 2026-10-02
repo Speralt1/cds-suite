@@ -10,3 +10,6 @@ next-env.d.ts
 *.log
 .vercel/
 .firebase/
+
+# Secretos locales del emulador de Functions
+.secret.local
