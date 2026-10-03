@@ -44,6 +44,7 @@ const {
   isLegacyRole,
   effectivePermissions,
   modulesForPermissions,
+  deriveLegacyRole,
 } = requireFromFunctions("./shared/access.js");
 
 export const DEFAULT_EMULATOR_PROJECT = "demo-cds-suite";
@@ -225,6 +226,9 @@ function bump(map, key) {
  *   `manage_all` y sin áreas.
  * - `rollbackRisk`: v1 activos cuyo `role` legacy da en las reglas anteriores
  *   permisos financieros que su perfil v1 no tiene (caveat de rollback, doc 20 §14).
+ * - `incoherent`: v1 (activos o no) cuyo `role` no es el derivado de baseRole +
+ *   permisos. Las reglas lo impiden desde la app; solo aparece por una edición
+ *   manual en la consola o con Admin SDK, y rompe la equivalencia con Storage.
  * @param {{ row: object, doc: Record<string, unknown> }[]} entries
  */
 export function aggregateReport(entries) {
@@ -239,6 +243,7 @@ export function aggregateReport(entries) {
     withoutModules: 0,
     needsAreas: 0,
     rollbackRisk: 0,
+    incoherent: 0,
   };
   for (const { row, doc } of entries) {
     bump(report.byStatus, row.status);
@@ -250,6 +255,11 @@ export function aggregateReport(entries) {
     for (const w of row.warnings) bump(report.warnings, w.startsWith("Rol no válido") ? "Rol no válido" : w);
     if (row.status === "skip_invalid_role") continue;
 
+    if (row.status === "skip_already_v1") {
+      const perms = Array.isArray(doc.permissions) ? doc.permissions : [];
+      const baseRole = doc.baseRole === "admin" ? "admin" : "standard";
+      if (doc.role !== deriveLegacyRole(baseRole, perms)) report.incoherent++;
+    }
     const after = row.status === "migrate" ? { ...doc, ...row.changes } : doc;
     const eff = effectivePermissions(after);
     bump(report.byHomeModule, row.status === "migrate" ? row.homeModule : typeof doc.homeModule === "string" ? doc.homeModule : "(sin módulo inicial)");
@@ -283,6 +293,7 @@ export function formatAggregate(report) {
     `  activos sin ningún módulo     ${report.withoutModules}`,
     `  activos que requieren áreas   ${report.needsAreas}`,
     `  v1 con riesgo de rollback     ${report.rollbackRisk}`,
+    `  v1 con role incoherente       ${report.incoherent}`,
   ].join("\n");
 }
 

@@ -75,6 +75,14 @@ describe("aggregateReport", () => {
     expect(report.rollbackRisk).toBe(2); // u-v1-cal, u-v1-nada
   });
 
+  it("v1 con role incoherente (edición manual): se cuenta aparte", () => {
+    expect(report.incoherent).toBe(0);
+    const bad = v1("finance", ["finance.summary.read", "calendar.read"]); // finance sin records.manage
+    const r = aggregateReport([{ row: planAccessMigration("x", bad, { pastorHome: "finance" }), doc: bad }]);
+    expect(r.incoherent).toBe(1);
+    expect(r.rollbackRisk).toBe(1);
+  });
+
   it("un v1 inactivo no cuenta como riesgo (ni legacy ni v1 le dan acceso)", () => {
     const off = aggregateReport([{ row: planAccessMigration("x", v1("leader", [], { active: false }), { pastorHome: "finance" }), doc: v1("leader", [], { active: false }) }]);
     expect(off.rollbackRisk).toBe(0);
@@ -93,5 +101,6 @@ describe("formatAggregate", () => {
     expect(text).not.toContain("@");
     expect(text).not.toContain("superuser");
     expect(text).toContain("v1 con riesgo de rollback     2");
+    expect(text).toContain("v1 con role incoherente       0");
   });
 });

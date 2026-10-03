@@ -58,6 +58,7 @@ describe("migración --summary contra el emulador", () => {
     expect(out).toMatch(/activos sin ningún módulo\s+1/); // sinmodulos@cds.test
     expect(out).toMatch(/activos que requieren áreas\s+[1-9]/); // al menos el líder sin áreas
     expect(out).toMatch(/v1 con riesgo de rollback\s+[1-9]/); // al menos el v1 sin finanzas
+    expect(out).toMatch(/v1 con role incoherente\s+0/); // el seed escribe role derivado
     expect(out).not.toContain("── ");
     expectNoPersonalData(out);
 

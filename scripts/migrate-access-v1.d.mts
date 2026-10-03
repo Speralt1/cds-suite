@@ -58,6 +58,7 @@ export interface AggregateReport {
   withoutModules: number;
   needsAreas: number;
   rollbackRisk: number;
+  incoherent: number;
 }
 export declare function aggregateReport(entries: { row: MigrationRowLike; doc: Record<string, unknown> }[]): AggregateReport;
 export declare function formatAggregate(report: AggregateReport): string;
