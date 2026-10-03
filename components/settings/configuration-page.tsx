@@ -1,17 +1,12 @@
 "use client";
 
-import { useState } from "react";
+// Configuración › General y › Finanzas e integraciones. La subnav del módulo y
+// la guardia viven en app/(private)/configuracion/layout.tsx; aquí se repite
+// SettingsGuard como defensa por si el componente se monta en otra ruta.
+
 import { FinanceSettingsPanel } from "./finance-settings-panel";
 import { SettingsGuard } from "./settings-guard";
-import { UsersPermissionsPanel } from "./users-permissions-panel";
-
-type Section = "general" | "finance" | "users";
-
-const sections: [Section, string][] = [
-  ["general", "General"],
-  ["finance", "Finanzas"],
-  ["users", "Usuarios y permisos"],
-];
+import { PageHeading } from "./settings-ui";
 
 function GeneralSettings() {
   return (
@@ -33,7 +28,7 @@ function GeneralSettings() {
         </div>
         <div>
           <dt>Zona horaria</dt>
-          <dd>America/Santiago</dd>
+          <dd>Hora de Chile continental</dd>
         </div>
       </dl>
       <p className="mt-5 text-xs leading-6 text-muted">
@@ -44,34 +39,25 @@ function GeneralSettings() {
   );
 }
 
+/** /configuracion: General. */
 export function ConfigurationPage() {
-  const [section, setSection] = useState<Section>("finance");
   return (
     <SettingsGuard>
-      <div className="mb-7">
-        <p className="eyebrow">ADMINISTRACIÓN</p>
-        <h1 className="mt-2 text-3xl font-medium sm:text-4xl">Configuración</h1>
-        <p className="mt-3 text-sm text-muted">
-          Categorías financieras y permisos básicos de CDS Suite.
-        </p>
-      </div>
-      <nav className="settings-nav" aria-label="Secciones de Configuración">
-        {sections.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={section === value}
-            onClick={() => setSection(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      <div className="settings-content">
-        {section === "general" && <GeneralSettings />}
-        {section === "finance" && <FinanceSettingsPanel />}
-        {section === "users" && <UsersPermissionsPanel />}
-      </div>
+      <PageHeading title="Configuración" subtitle="Datos generales de la iglesia en CDS Suite." />
+      <GeneralSettings />
+    </SettingsGuard>
+  );
+}
+
+/** /configuracion/finanzas: categorías financieras e integraciones (panel actual, sin cambios). */
+export function FinanceConfigurationPage() {
+  return (
+    <SettingsGuard>
+      <PageHeading
+        title="Finanzas e integraciones"
+        subtitle="Categorías de ingresos y gastos, y métodos de pago."
+      />
+      <FinanceSettingsPanel />
     </SettingsGuard>
   );
 }
