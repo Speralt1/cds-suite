@@ -14,7 +14,13 @@
     "test": "vitest run",
     "build:shared": "node scripts/build-shared.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-cds-suite \"vitest run --config vitest.rules.config.mts\"",
+    "test:emulator": "firebase emulators:exec --only auth,firestore,functions --project demo-cds-suite \"vitest run --config vitest.emulator.config.mts\"",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-cds-suite",
+    "emulators:platform": "firebase emulators:start --only auth,firestore,functions --project demo-cds-suite",
+    "seed:platform": "CDS_SEED_LOCAL=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCLOUD_PROJECT=demo-cds-suite node scripts/seed-platform-calendar-emulator.mjs",
+    "dev:emulators": "node scripts/dev-platform.mjs --next-only",
+    "dev:platform": "node scripts/dev-platform.mjs",
+    "migrate:access:dry": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-cds-suite node scripts/migrate-access-v1.mjs --emulator",
     "preview": "firebase emulators:start --only hosting --project demo-cds-suite",
     "deploy:hosting": "firebase deploy --only hosting --project cds-administracion"
   },
