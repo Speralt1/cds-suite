@@ -2,8 +2,9 @@
 
 // Shell global de CDS Suite (18a §G, 18b §1, 18 §10 R1/R7). Mismo export y ruta.
 // - ≥1280: sidebar oscura de 240 px; 768–1279: rail de 72 px (mismo DOM,
-//   compactado por CSS, con tooltips); <768: top bar + barra inferior con los
-//   módulos permitidos (≤4) + "Más" (cuenta y "Cerrar sesión").
+//   compactado por CSS, con tooltips); <768: top bar + barra inferior solo con
+//   los módulos permitidos (≤4, sin "Más"). La cuenta y "Cerrar sesión" viven
+//   en el avatar de la top bar, que abre la hoja "Cuenta".
 // - La navegación lista MÓDULOS; las secciones viven en la subnav de cada
 //   módulo dentro del contenido (FinanceNav sin cambios). Integrantes no existe.
 // - Funciona sin AccessProvider (solo "Finanzas", como antes) y conserva el
@@ -16,7 +17,6 @@ import { useState } from "react";
 import {
   CalendarDays,
   ChartColumn,
-  Ellipsis,
   LoaderCircle,
   LogOut,
   Settings,
@@ -41,6 +41,12 @@ const ICONS: Record<ModuleIconName, LucideIcon> = {
   ChartColumn,
   Settings,
 };
+
+/**
+ * Etiqueta corta solo para la barra inferior en pantallas muy angostas (<360 px),
+ * donde "Configuración" no cabe en una columna. El nombre accesible es el completo.
+ */
+const BAR_SHORT_LABEL: Partial<Record<ModuleId, string>> = { settings: "Ajustes" };
 
 /** Sin AccessProvider el shell muestra solo Finanzas (comportamiento previo). */
 const FALLBACK_MODULES: readonly ModuleId[] = ["finance"];
@@ -144,7 +150,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
   const { logout } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<null | "Más" | "Cuenta">(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const activeLabel = modules.find((m) => m.id === activeModule)?.label ?? "CDS Suite";
 
   async function handleLogout() {
@@ -202,7 +208,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
               Cerrar sesión
             </span>
           </button>
-          {!sheet &&
+          {!accountOpen &&
             errorAlert(
               "mt-2 px-2 text-xs leading-5 text-[#f4b4b4] md:max-xl:fixed md:max-xl:bottom-4 md:max-xl:left-20 md:max-xl:z-50 md:max-xl:w-64 md:max-xl:rounded-lg md:max-xl:bg-white md:max-xl:p-3 md:max-xl:text-danger md:max-xl:shadow-lg",
             )}
@@ -217,7 +223,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
           className="flex size-11 items-center justify-center rounded-full"
           aria-label="Cuenta"
           aria-haspopup="dialog"
-          onClick={() => setSheet("Cuenta")}
+          onClick={() => setAccountOpen(true)}
         >
           <Avatar initial={account.initial} />
         </button>
@@ -233,15 +239,17 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
       <nav
         aria-label="Barra de módulos"
         className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(64px+env(safe-area-inset-bottom))] border-t border-line bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
-        style={{ gridTemplateColumns: `repeat(${modules.length + 1}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${modules.length}, minmax(0, 1fr))` }}
       >
         {modules.map((m) => {
           const Icon = ICONS[m.icon];
           const current = m.id === activeModule;
+          const short = BAR_SHORT_LABEL[m.id];
           return (
             <Link
               key={m.id}
               href={m.href}
+              aria-label={m.label}
               aria-current={current ? "page" : undefined}
               className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] leading-[14px] font-medium ${current ? "text-primary" : "text-muted"}`}
             >
@@ -251,27 +259,22 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
               >
                 <Icon className="size-[22px]" strokeWidth={1.75} />
               </span>
-              <span className="max-w-full truncate">{m.label}</span>
+              <span className={`max-w-full truncate whitespace-nowrap ${short ? "max-[359px]:hidden" : ""}`} aria-hidden="true">
+                {m.label}
+              </span>
+              {short && (
+                <span className="hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
+                  {short}
+                </span>
+              )}
             </Link>
           );
         })}
-        <button
-          type="button"
-          className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 text-[11px] leading-[14px] font-medium text-muted"
-          aria-haspopup="dialog"
-          onClick={() => setSheet("Más")}
-        >
-          <span className="flex h-7 w-14 max-w-full items-center justify-center rounded-full" aria-hidden="true">
-            <Ellipsis className="size-[22px]" strokeWidth={1.75} />
-          </span>
-          Más
-        </button>
       </nav>
 
-      {sheet && (
-        <Sheet title={sheet} onClose={() => setSheet(null)}>
-          <p className="px-2 pt-1 pb-2 text-[11px] font-semibold tracking-[0.06em] text-muted uppercase">Cuenta</p>
-          <div className="flex items-center gap-3 px-2 pb-3">
+      {accountOpen && (
+        <Sheet title="Cuenta" onClose={() => setAccountOpen(false)}>
+          <div className="flex items-center gap-3 px-2 pt-1 pb-3">
             <Avatar initial={account.initial} className="size-10 bg-primary-soft text-primary" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{account.name}</p>

@@ -10,10 +10,10 @@ import { useId, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Ban,
   Check,
   ChevronRight,
   CircleCheck,
-  CircleSlash,
   Lock,
   Mail,
   ShieldCheck,
@@ -517,7 +517,7 @@ function UserEditor({
   }
 
   return (
-    <Modal title={account.displayName} onClose={onClose} busy={busy}>
+    <Modal title={account.displayName} onClose={onClose} busy={busy} size="wide">
       <form onSubmit={save} className="flex flex-col">
         <div className="space-y-6 p-6">
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
@@ -775,7 +775,7 @@ function UserEditor({
           <Notice error={confirmRemove ? "" : error} success={success} />
         </div>
 
-        <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-line bg-white px-6 py-4">
+        <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-line bg-white px-6 py-4 md:flex-nowrap">
           {!self && (
             <button type="button" className="button-secondary" disabled={busy} onClick={resendAccess}>
               <Mail size={16} aria-hidden="true" />
@@ -796,7 +796,7 @@ function UserEditor({
               Quitar acceso
             </button>
           )}
-          <span className="ml-auto flex flex-wrap gap-3">
+          <span className="ml-auto flex flex-wrap gap-3 md:flex-nowrap">
             <button type="button" className="button-secondary" disabled={busy} onClick={onClose}>
               Cancelar
             </button>
@@ -824,14 +824,15 @@ function UserEditor({
 
 // ---------- Lista ----------
 
-function StatusBadge({ active }: { active: boolean }) {
+/** Estado con ícono + texto: check solo para activo; sin acceso con ícono "prohibido" en gris. */
+function StatusBadge({ active, className = "text-[13px]" }: { active: boolean; className?: string }) {
   return active ? (
-    <span className="inline-flex items-center gap-1 text-[13px] text-primary">
-      <CircleCheck size={14} aria-hidden="true" /> Activo
+    <span className={`inline-flex items-center gap-1 text-primary ${className}`}>
+      <CircleCheck size={14} aria-hidden="true" className="shrink-0" /> Activo
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-[13px] text-muted">
-      <CircleSlash size={14} aria-hidden="true" /> Sin acceso
+    <span className={`inline-flex items-center gap-1 text-muted ${className}`}>
+      <Ban size={14} aria-hidden="true" className="shrink-0" /> Sin acceso
     </span>
   );
 }
@@ -972,8 +973,8 @@ function UsersList({
                     {draft.baseRole === "admin" ? " · Administrador" : ""}
                     {areaNames.length ? ` · ${areaNames.join(", ")}` : ""}
                   </span>
-                  <span className="block text-xs text-muted">
-                    {draft.active ? "Activo" : "Sin acceso"}
+                  <span className="block">
+                    <StatusBadge active={draft.active} className="text-xs" />
                   </span>
                   {notices.length > 0 && (
                     <span className="flex flex-wrap gap-1 pt-1">

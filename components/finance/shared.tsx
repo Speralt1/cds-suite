@@ -198,11 +198,14 @@ export function Modal({
   children,
   onClose,
   busy = false,
+  size = "default",
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
   busy?: boolean;
+  /** "wide": 720 px desde 641 px de ancho (en móvil sigue siendo la hoja inferior). */
+  size?: "default" | "wide";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -219,7 +222,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className="finance-modal"
+      className={size === "wide" ? "finance-modal min-[641px]:w-[min(720px,calc(100%-32px))]!" : "finance-modal"}
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();

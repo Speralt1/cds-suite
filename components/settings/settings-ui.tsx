@@ -4,9 +4,22 @@
 // productivas (panel, button-*, notice) y utilidades de Tailwind con los tokens
 // existentes; sin una segunda familia de botones ni de modales.
 
+import { createContext, useContext } from "react";
 import { CircleAlert, Info, RotateCw, TriangleAlert } from "lucide-react";
 import { AREA_PALETTE, areaVar, type AreaColor } from "@/lib/calendar/areas";
 
+/**
+ * Dentro del layout de Configuración el h1 es "Configuración" (mismo patrón que
+ * Calendario y Reportes) y cada sección se titula con h2. Montada fuera de ese
+ * layout, la sección es el encabezado principal de la página (h1).
+ */
+const SettingsSectionContext = createContext(false);
+
+export function SettingsSectionProvider({ children }: { children: React.ReactNode }) {
+  return <SettingsSectionContext.Provider value>{children}</SettingsSectionContext.Provider>;
+}
+
+/** Encabezado de sección: h2 20/600 + descripción 14 muted; el CTA se alinea con el título. */
 export function PageHeading({
   title,
   subtitle,
@@ -16,13 +29,14 @@ export function PageHeading({
   subtitle: string;
   action?: React.ReactNode;
 }) {
+  const Heading = useContext(SettingsSectionContext) ? "h2" : "h1";
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-3xl font-medium sm:text-4xl">{title}</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{subtitle}</p>
+    <div className="mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <Heading className="min-w-0 text-xl leading-7 font-semibold text-ink">{title}</Heading>
+        {action}
       </div>
-      {action}
+      <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">{subtitle}</p>
     </div>
   );
 }

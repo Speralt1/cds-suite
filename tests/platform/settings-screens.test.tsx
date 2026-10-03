@@ -46,6 +46,7 @@ vi.mock("@/lib/settings/users-client", () => ({
 import { AreasPanel } from "@/components/settings/areas-panel";
 import { SettingsNav } from "@/components/settings/settings-nav";
 import { UsersPermissionsPanel } from "@/components/settings/users-permissions-panel";
+import { SettingsSectionProvider } from "@/components/settings/settings-ui";
 
 beforeAll(() => {
   // jsdom no implementa <dialog>.showModal().
@@ -376,5 +377,58 @@ describe("Configuración › subnav", () => {
     ]);
     expect(within(nav).getByRole("link", { name: "Áreas" })).toHaveAttribute("aria-current", "page");
     expect(links.filter((l) => l.getAttribute("aria-current") === "page")).toHaveLength(1);
+  });
+});
+
+describe("Configuración · ciclo 1 (C2–C4)", () => {
+  it("dentro del módulo, cada sección se titula con h2 (el h1 es «Configuración» del layout)", () => {
+    const { unmount } = render(
+      <SettingsSectionProvider>
+        <AreasPanel />
+      </SettingsSectionProvider>,
+    );
+    expect(screen.getByRole("heading", { level: 2, name: "Áreas" })).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    unmount();
+    render(
+      <SettingsSectionProvider>
+        <UsersPermissionsPanel />
+      </SettingsSectionProvider>,
+    );
+    expect(screen.getByRole("heading", { level: 2, name: "Usuarios y permisos" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Agregar usuario/ })).toBeVisible();
+  });
+
+  it("estados inactivos con ícono «prohibido»; el check solo para activo", () => {
+    const { container, unmount } = render(<AreasPanel />);
+    const inactive = within(container.querySelector("table") as HTMLElement).getByText("Inactiva");
+    expect(inactive.querySelector("svg.lucide-ban")).not.toBeNull();
+    expect(inactive.querySelector("svg.lucide-circle-check")).toBeNull();
+    const active = within(container.querySelector("table") as HTMLElement).getAllByText("Activa")[0];
+    expect(active.querySelector("svg.lucide-circle-check")).not.toBeNull();
+    expect(active.querySelector("svg.lucide-ban")).toBeNull();
+    unmount();
+    state.users = {
+      ...state.users,
+      data: [...state.users.data, user("off", { role: "finance", active: false, displayName: "Olga Off" })],
+    };
+    render(<UsersPermissionsPanel />);
+    const off = screen.getAllByText("Sin acceso");
+    expect(off.length).toBeGreaterThan(0);
+    for (const el of off) {
+      expect(el.querySelector("svg.lucide-ban")).not.toBeNull();
+      expect(el.querySelector("svg.lucide-circle-check")).toBeNull();
+    }
+  });
+
+  it("el editor de usuario usa la variante ancha del Modal productivo", () => {
+    render(<UsersPermissionsPanel />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);
+    const dialog = openDialog("Luis Líder");
+    expect(dialog.className).toContain("finance-modal");
+    expect(dialog.className).toContain("720px");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(screen.getByRole("button", { name: /Agregar usuario/ }));
+    expect(openDialog("Agregar usuario").className).toBe("finance-modal");
   });
 });

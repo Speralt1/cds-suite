@@ -72,9 +72,10 @@ describe("AppShell: módulos por perfil", () => {
       );
       const bar = screen.getByRole("navigation", { name: "Barra de módulos" });
       const items = [...within(bar).queryAllByRole("link"), ...within(bar).queryAllByRole("button")];
-      expect(items.length).toBe(p.modules.length + 1);
-      expect(items.length).toBeLessThanOrEqual(5);
-      expect(within(bar).getByRole("button", { name: "Más" })).toBeInTheDocument();
+      // Ciclo 1 (C1): sin "Más"; la cuenta vive en el avatar de la top bar.
+      expect(items.length).toBe(p.modules.length);
+      expect(items.length).toBeLessThanOrEqual(4);
+      expect(within(bar).queryByRole("button", { name: "Más" })).toBeNull();
       expect(screen.queryByText(/Integrantes/i)).toBeNull();
       expect(screen.getAllByRole("button", { name: "Cerrar sesión" })).toHaveLength(1);
       expect(screen.getByText("Contenido")).toBeVisible();
@@ -140,13 +141,13 @@ describe("AppShell: módulos por perfil", () => {
     expect(state.replace).not.toHaveBeenCalled();
   });
 
-  it("'Más' abre la hoja de cuenta con Cerrar sesión; el error de logout es un único alert", async () => {
+  it("el avatar 'Cuenta' abre la hoja de cuenta con Cerrar sesión; el error de logout es un único alert", async () => {
     const user = userEvent.setup();
     state.access = { role: "leader", active: true, displayName: "Ana" };
     state.logout.mockRejectedValueOnce({ code: "auth/network-request-failed" });
     shell();
-    await user.click(screen.getByRole("button", { name: "Más" }));
-    const sheet = screen.getByRole("dialog", { name: "Más" });
+    await user.click(screen.getByRole("button", { name: "Cuenta" }));
+    const sheet = screen.getByRole("dialog", { name: "Cuenta" });
     expect(within(sheet).getByText("Ana")).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Cerrar sesión" }));
     expect(state.logout).toHaveBeenCalledOnce();
@@ -163,6 +164,40 @@ describe("AppShell: módulos por perfil", () => {
     shell();
     await user.click(screen.getByRole("button", { name: "Cuenta" }));
     expect(screen.getByRole("dialog", { name: "Cuenta" })).toBeInTheDocument();
+  });
+});
+
+describe("AppShell · barra móvil sin «Más» (ciclo 1, C1)", () => {
+  it("admin: 4 módulos, sin «Más»; Configuración conserva su nombre accesible completo", () => {
+    state.access = { role: "admin", active: true };
+    shell();
+    const bar = screen.getByRole("navigation", { name: "Barra de módulos" });
+    expect(within(bar).getAllByRole("link").map((a) => a.getAttribute("aria-label"))).toEqual([
+      "Finanzas",
+      "Calendario",
+      "Reportes",
+      "Configuración",
+    ]);
+    expect(within(bar).queryAllByRole("button")).toHaveLength(0);
+    expect(bar.style.gridTemplateColumns).toBe("repeat(4, minmax(0, 1fr))");
+    const settings = within(bar).getByRole("link", { name: "Configuración" });
+    expect(settings).toHaveAttribute("href", "/configuracion");
+    // Etiqueta corta solo para pantallas muy angostas.
+    expect(within(settings).getByText("Ajustes")).toBeInTheDocument();
+    expect(screen.queryByText("Más")).toBeNull();
+  });
+
+  it("sin AccessProvider: un único «Cerrar sesión», el avatar abre la hoja y hay un solo alert", async () => {
+    const user = userEvent.setup();
+    state.logout.mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    shell();
+    expect(screen.getAllByRole("button", { name: "Cerrar sesión" })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Cuenta" }));
+    const sheet = screen.getByRole("dialog", { name: "Cuenta" });
+    expect(within(sheet).getByRole("alert")).toBeInTheDocument();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 });
 

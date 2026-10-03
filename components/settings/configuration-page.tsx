@@ -13,7 +13,7 @@ function GeneralSettings() {
     <section className="panel settings-info-panel">
       <div className="section-heading">
         <div>
-          <h2>Configuración general</h2>
+          <h3 className="text-base leading-6 font-semibold text-ink">Datos de la iglesia</h3>
           <p>Valores operativos actuales de CDS Suite.</p>
         </div>
       </div>
@@ -43,7 +43,7 @@ function GeneralSettings() {
 export function ConfigurationPage() {
   return (
     <SettingsGuard>
-      <PageHeading title="Configuración" subtitle="Datos generales de la iglesia en CDS Suite." />
+      <PageHeading title="General" subtitle="Datos generales de la iglesia en CDS Suite." />
       <GeneralSettings />
     </SettingsGuard>
   );

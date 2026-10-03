@@ -5,7 +5,7 @@
 // colores libres y vista previa, y activar/desactivar explicando la consecuencia.
 
 import { useId, useState } from "react";
-import { Check, ChevronRight, CircleCheck, CircleSlash, Plus, Tags } from "lucide-react";
+import { Ban, Check, ChevronRight, CircleCheck, Plus, Tags } from "lucide-react";
 import { Modal, Notice } from "@/components/finance/shared";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
@@ -348,14 +348,15 @@ function DeactivateDialog({
   );
 }
 
-function StatusText({ active }: { active: boolean }) {
+/** Estado con ícono + texto: check solo para activa; inactiva con ícono "prohibido" en gris. */
+function StatusText({ active, className = "text-[13px]" }: { active: boolean; className?: string }) {
   return active ? (
-    <span className="inline-flex items-center gap-1 text-[13px]">
-      <CircleCheck size={14} aria-hidden="true" className="text-primary" /> Activa
+    <span className={`inline-flex items-center gap-1 ${className}`}>
+      <CircleCheck size={14} aria-hidden="true" className="shrink-0 text-primary" /> Activa
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-[13px] text-muted">
-      <CircleSlash size={14} aria-hidden="true" /> Inactiva
+    <span className={`inline-flex items-center gap-1 text-muted ${className}`}>
+      <Ban size={14} aria-hidden="true" className="shrink-0" /> Inactiva
     </span>
   );
 }
@@ -427,7 +428,7 @@ function AreasContent({ usage, onRetry }: { usage?: AreaUsageMap | null; onRetry
     body = (
       <div className="panel empty flex flex-col items-center gap-3">
         <Tags size={28} aria-hidden="true" className="text-muted" />
-        <h2 className="text-lg font-medium text-ink">Aún no hay áreas</h2>
+        <h3 className="text-lg font-medium text-ink">Aún no hay áreas</h3>
         <p>Crea la primera para organizar el calendario.</p>
         {newButton}
       </div>
@@ -514,9 +515,9 @@ function AreasContent({ usage, onRetry }: { usage?: AreaUsageMap | null; onRetry
                   <AreaDot color={area.color} size={20} square />
                   <span className="min-w-0 flex-1">
                     <span className={`block truncate font-medium ${area.active ? "" : "text-muted"}`}>{area.name}</span>
-                    <span className="block text-xs text-muted">
-                      {line ? `${line} · ` : ""}
-                      {area.active ? "Activa" : "Inactiva"}
+                    <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted">
+                      {line && <span>{line} ·</span>}
+                      <StatusText active={area.active} className="text-xs" />
                     </span>
                   </span>
                   <ChevronRight size={18} aria-hidden="true" className="text-muted" />
