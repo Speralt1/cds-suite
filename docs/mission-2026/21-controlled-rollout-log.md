@@ -105,3 +105,21 @@ Fuente: documentos agregados `financeMonthlySummaries`, leídos el 2026-10-03 ~2
 | **Resultado** | **READY FOR A2** (espera el GO explícito de Salvador) |
 
 **Rollback requerido:** no. Si hiciera falta deshacer el merge sin desplegar, se haría con `git revert -m 1 0d1bb0d` en preproducción, con aprobación previa.
+
+### A2 · Firestore Rules: desplegado; smoke de la UI en curso
+
+**GO recibido:** "GO A2", solo `firebase deploy --only firestore:rules`.
+
+| Fecha (UTC) | Paso | Comando / método | Resultado |
+|---|---|---|---|
+| 22:13 | Prechecks | APIs de Rules, Hosting y Functions | Producción sin cambios desde A1. **Ruleset para rollback: `8d0087d6-b9a3-4c68-8649-d2fb3744c51f`** (2026-09-09). Métrica `firestore.googleapis.com/rules/evaluation_count`: **0 DENY en 7 días** (solo ALLOW, uso esporádico) |
+| 22:12 | Checkout de deploy | `git clone` → `~/cds-deploy`, `checkout` + `reset --hard 0d1bb0d` | `git status --short` vacío. Árbol = `e6b2084`; blob de `firestore.rules` `3c65b290` igual en ambos |
+| 22:14:23–22:14:33 | **Deploy** | `firebase deploy --only firestore:rules --project cds-administracion --non-interactive` (desde `~/cds-deploy` @ `0d1bb0d`) | ✔ compilado y publicado. Sin índices, Storage, Functions ni Hosting |
+| 22:15 | Ruleset nuevo | API de Rules | **`2d9939ab-2a9e-491e-b176-1cafd939e568`** (22:14:32). Contenido **byte a byte = `e6b2084:firestore.rules`** |
+| 22:15 | Otros componentes | APIs + `firebase firestore:indexes` | Storage `f700d246…` sin cambios · 5 índices · Hosting `f4591416f0474b0f` · Functions con fechas de 2026-09: **SIN CAMBIOS** |
+| 22:15 | Acceso por rol (simulado) | API `rulesets/2d9939ab…:test`: evalúa el ruleset desplegado con perfiles simulados; no lee ni escribe datos | **29/29.** admin y pastor: ALLOW en movimientos, resumen, reportes anuales, diezmos (fichas y aportes), seguimiento pastoral, Ofrendas/SumUp, configuración de finanzas, `sumupSyncRuns` y su propio perfil; admin lista usuarios. DENY esperado: crear `financeTransactions/sumup_*` (G3), anónimo, inactivo |
+| 22:15 | Denegaciones y errores reales | Métrica de reglas + `gcloud logging read severity>=ERROR` | Todavía sin evaluaciones (nadie usó la app). **0 errores** desde el deploy |
+
+**Denegación esperada en la ventana A2 → A4:** la app que corre hoy (`648afd1`) muestra "Editar/Anular" también en los movimientos SumUp. Con G3, esas acciones darán permission-denied hasta que A4 despliegue la UI de Slice 1b, que las oculta. Es el efecto buscado del cambio. **No editar ni anular movimientos SumUp hasta A4.**
+
+**Smoke de la UI (login real):** pendiente. Salvador inicia sesión en el navegador de la sesión; después se leen Resumen, Movimientos, Diezmos, Ofrendas y Reportes sin acciones de escritura, revisando la consola.
