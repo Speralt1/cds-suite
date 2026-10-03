@@ -12,6 +12,7 @@ export interface ParsedMigrationArgs {
   pastorHome: string;
   only: string | null;
   json: string | null;
+  summary: boolean;
   help: boolean;
   mode: "help" | "emulator" | "project";
   emulatorHost?: string | null;
@@ -46,7 +47,27 @@ export declare function summarize(rows: MigrationRowLike[]): {
   skip_already_v1: number;
   skip_invalid_role: number;
 };
+export interface AggregateReport {
+  total: number;
+  byStatus: { migrate: number; skip_already_v1: number; skip_invalid_role: number };
+  byOldRole: Record<string, number>;
+  active: number;
+  inactive: number;
+  byHomeModule: Record<string, number>;
+  warnings: Record<string, number>;
+  withoutModules: number;
+  needsAreas: number;
+  rollbackRisk: number;
+}
+export declare function aggregateReport(entries: { row: MigrationRowLike; doc: Record<string, unknown> }[]): AggregateReport;
+export declare function formatAggregate(report: AggregateReport): string;
 export declare function runMigration(
   parsed: ParsedMigrationArgs,
   opts?: { log?: (line: string) => void },
-): Promise<{ rows: (MigrationRowLike & { diff: FieldDiff[] })[]; summary: ReturnType<typeof summarize>; written: number; failed: { uid: string; reason: string }[] }>;
+): Promise<{
+  rows: (MigrationRowLike & { diff: FieldDiff[] })[];
+  summary: ReturnType<typeof summarize>;
+  aggregate: AggregateReport;
+  written: number;
+  failed: { uid: string; reason: string }[];
+}>;

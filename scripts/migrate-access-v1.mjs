@@ -9,8 +9,12 @@
  * documentos que ya son v1 se saltan (no pisa ediciones de un admin).
  *
  * Uso:
- *   node scripts/migrate-access-v1.mjs --emulator [--apply] [--pastor-home finance|calendar] [--only <uid>] [--json out.json]
- *   node scripts/migrate-access-v1.mjs --project <id> [--apply --confirm <id>]
+ *   node scripts/migrate-access-v1.mjs --emulator [--apply] [--pastor-home finance|calendar] [--only <uid>] [--json out.json] [--summary]
+ *   node scripts/migrate-access-v1.mjs --project <id> [--summary] [--apply --confirm <id>]
+ *
+ * `--summary` (doc 20 §10): imprime SOLO conteos agregados, sin uid, nombre ni
+ * correo de nadie. Con `--json`, el archivo también lleva solo el agregado.
+ * Es el modo para revisar el dry-run de producción sin exponer datos personales.
  *
  * Interlocks:
  *   - Emulador: FIRESTORE_EMULATOR_HOST seteado (o `--emulator`, que lo fija en
@@ -33,17 +37,25 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 const requireFromFunctions = createRequire(new URL("../functions/package.json", import.meta.url));
-const { planAccessMigration, MIGRATION_ACTOR } = requireFromFunctions("./shared/access.js");
+const {
+  planAccessMigration,
+  MIGRATION_ACTOR,
+  LEGACY_ROLE_ACCESS,
+  isLegacyRole,
+  effectivePermissions,
+  modulesForPermissions,
+} = requireFromFunctions("./shared/access.js");
 
 export const DEFAULT_EMULATOR_PROJECT = "demo-cds-suite";
 export const DEFAULT_FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 export const BATCH_LIMIT = 400;
 
 export const USAGE = `Uso:
-  node scripts/migrate-access-v1.mjs --emulator [--apply] [--pastor-home finance|calendar] [--only <uid>] [--json out.json]
-  node scripts/migrate-access-v1.mjs --project <id> [--apply --confirm <id>]
+  node scripts/migrate-access-v1.mjs --emulator [--apply] [--pastor-home finance|calendar] [--only <uid>] [--json out.json] [--summary]
+  node scripts/migrate-access-v1.mjs --project <id> [--summary] [--apply --confirm <id>]
 
-Por defecto es una simulación (dry run): no escribe nada.`;
+Por defecto es una simulación (dry run): no escribe nada.
+--summary imprime solo conteos agregados (sin uid, nombre ni correo).`;
 
 export class MigrationUsageError extends Error {}
 
@@ -61,6 +73,7 @@ export function parseMigrationArgs(argv, env = {}) {
     pastorHome: "finance",
     only: null,
     json: null,
+    summary: false,
     help: false,
   };
   const takeValue = (i, flag) => {
@@ -76,6 +89,9 @@ export function parseMigrationArgs(argv, env = {}) {
         break;
       case "--apply":
         opts.apply = true;
+        break;
+      case "--summary":
+        opts.summary = true;
         break;
       case "--help":
       case "-h":
@@ -190,6 +206,86 @@ export function summarize(rows) {
   return { total: rows.length, migrate: count("migrate"), skip_already_v1: count("skip_already_v1"), skip_invalid_role: count("skip_invalid_role") };
 }
 
+// ---------- Agregado sin datos personales (--summary) ----------
+
+const FINANCE_PREFIX = "finance.";
+const AREA_SCOPED = ["calendar.events.manage_assigned", "calendar.events.publish_assigned"];
+
+function bump(map, key) {
+  map[key] = (map[key] || 0) + 1;
+}
+
+/**
+ * Agregado del plan, sin uid, nombre ni correo (doc 20 §10). Para cada usuario
+ * usa el estado que tendría DESPUÉS de la migración (el plan para los legacy,
+ * el documento tal cual para los que ya son v1).
+ *
+ * - `withoutModules`: activos que no verían ningún módulo.
+ * - `needsAreas`: activos con un permiso por área (gestionar o publicar), sin
+ *   `manage_all` y sin áreas.
+ * - `rollbackRisk`: v1 activos cuyo `role` legacy da en las reglas anteriores
+ *   permisos financieros que su perfil v1 no tiene (caveat de rollback, doc 20 §14).
+ * @param {{ row: object, doc: Record<string, unknown> }[]} entries
+ */
+export function aggregateReport(entries) {
+  const report = {
+    total: entries.length,
+    byStatus: { migrate: 0, skip_already_v1: 0, skip_invalid_role: 0 },
+    byOldRole: {},
+    active: 0,
+    inactive: 0,
+    byHomeModule: {},
+    warnings: {},
+    withoutModules: 0,
+    needsAreas: 0,
+    rollbackRisk: 0,
+  };
+  for (const { row, doc } of entries) {
+    bump(report.byStatus, row.status);
+    // Un rol fuera del catálogo se agrupa: su texto podría ser cualquier cosa.
+    bump(report.byOldRole, row.oldRole === null ? "(sin rol)" : isLegacyRole(row.oldRole) ? row.oldRole : "(rol inválido)");
+    const active = doc.active === true;
+    if (active) report.active++;
+    else report.inactive++;
+    for (const w of row.warnings) bump(report.warnings, w.startsWith("Rol no válido") ? "Rol no válido" : w);
+    if (row.status === "skip_invalid_role") continue;
+
+    const after = row.status === "migrate" ? { ...doc, ...row.changes } : doc;
+    const eff = effectivePermissions(after);
+    bump(report.byHomeModule, row.status === "migrate" ? row.homeModule : typeof doc.homeModule === "string" ? doc.homeModule : "(sin módulo inicial)");
+    if (!active) continue;
+    if (modulesForPermissions(eff).length === 0) report.withoutModules++;
+    const areas = Array.isArray(after.areaIds) ? after.areaIds : [];
+    // manage_all implica manage_assigned pero no necesita áreas.
+    if (areas.length === 0 && !eff.has("calendar.events.manage_all") && AREA_SCOPED.some((p) => eff.has(p))) report.needsAreas++;
+    if (row.status === "skip_already_v1" && isLegacyRole(doc.role)) {
+      const legacyFinance = LEGACY_ROLE_ACCESS[doc.role].permissions.filter((p) => p.startsWith(FINANCE_PREFIX));
+      const grantsMore = doc.role === "admin" ? !eff.has("settings.manage") : legacyFinance.some((p) => !eff.has(p));
+      if (grantsMore) report.rollbackRisk++;
+    }
+  }
+  return report;
+}
+
+export function formatAggregate(report) {
+  const pairs = (obj) => {
+    const keys = Object.keys(obj).sort();
+    return keys.length ? keys.map((k) => `${k}: ${obj[k]}`).join(" · ") : "—";
+  };
+  return [
+    "Resumen agregado (sin datos personales)",
+    `  total                         ${report.total}`,
+    `  por estado                    migrar ${report.byStatus.migrate} · ya v1 ${report.byStatus.skip_already_v1} · rol inválido ${report.byStatus.skip_invalid_role}`,
+    `  por rol anterior              ${pairs(report.byOldRole)}`,
+    `  activos / inactivos           ${report.active} / ${report.inactive}`,
+    `  módulo inicial                ${pairs(report.byHomeModule)}`,
+    `  advertencias                  ${pairs(report.warnings)}`,
+    `  activos sin ningún módulo     ${report.withoutModules}`,
+    `  activos que requieren áreas   ${report.needsAreas}`,
+    `  v1 con riesgo de rollback     ${report.rollbackRisk}`,
+  ].join("\n");
+}
+
 // ---------- Ejecución ----------
 
 async function confirmOnTty(project) {
@@ -236,14 +332,17 @@ export async function runMigration(parsed, { log = console.log } = {}) {
   const entries = snaps.map((snap) => {
     const data = snap.data() || {};
     const row = planAccessMigration(snap.id, data, { pastorHome: parsed.pastorHome });
-    return { snap, row, diff: fieldDiff(row, data) };
+    return { snap, doc: data, row, diff: fieldDiff(row, data) };
   });
-  for (const e of entries) log(formatRow(e.row, e.diff));
+  if (!parsed.summary) for (const e of entries) log(formatRow(e.row, e.diff));
 
   const summary = summarize(entries.map((e) => e.row));
-  log(
-    `\nResumen: ${summary.total} usuarios · migrar ${summary.migrate} · ya v1 ${summary.skip_already_v1} · rol inválido ${summary.skip_invalid_role}`,
-  );
+  const aggregate = aggregateReport(entries);
+  if (parsed.summary) log(formatAggregate(aggregate));
+  else
+    log(
+      `\nResumen: ${summary.total} usuarios · migrar ${summary.migrate} · ya v1 ${summary.skip_already_v1} · rol inválido ${summary.skip_invalid_role}`,
+    );
 
   let written = 0;
   const failed = [];
@@ -265,17 +364,21 @@ export async function runMigration(parsed, { log = console.log } = {}) {
         for (const { row } of chunk) failed.push({ uid: row.uid, reason });
       }
     }
-    log(`Escritos: ${written}${failed.length ? ` · fallidos: ${failed.length} (${failed.map((f) => `${f.uid}: ${f.reason}`).join("; ")})` : ""}`);
+    const failedDetail = parsed.summary ? "" : ` (${failed.map((f) => `${f.uid}: ${f.reason}`).join("; ")})`;
+    log(`Escritos: ${written}${failed.length ? ` · fallidos: ${failed.length}${failedDetail}` : ""}`);
   } else {
     log("Simulación: no se escribió nada. Usa --apply para escribir.");
   }
 
   const rows = entries.map((e) => ({ ...e.row, diff: e.diff }));
   if (parsed.json) {
-    writeFileSync(parsed.json, `${JSON.stringify({ project: parsed.project, mode: parsed.mode, apply: parsed.apply, summary, written, failed, rows }, null, 2)}\n`);
+    const payload = parsed.summary
+      ? { project: parsed.project, mode: parsed.mode, apply: parsed.apply, summary, aggregate, written, failed: failed.length }
+      : { project: parsed.project, mode: parsed.mode, apply: parsed.apply, summary, written, failed, rows };
+    writeFileSync(parsed.json, `${JSON.stringify(payload, null, 2)}\n`);
     log(`Reporte JSON: ${parsed.json}`);
   }
-  return { rows, summary, written, failed };
+  return { rows, summary, aggregate, written, failed };
 }
 
 async function main() {
