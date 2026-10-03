@@ -123,3 +123,21 @@ Fuente: documentos agregados `financeMonthlySummaries`, leídos el 2026-10-03 ~2
 **Denegación esperada en la ventana A2 → A4:** la app que corre hoy (`648afd1`) muestra "Editar/Anular" también en los movimientos SumUp. Con G3, esas acciones darán permission-denied hasta que A4 despliegue la UI de Slice 1b, que las oculta. Es el efecto buscado del cambio. **No editar ni anular movimientos SumUp hasta A4.**
 
 **Smoke de la UI (login real):** pendiente. Salvador inicia sesión en el navegador de la sesión; después se leen Resumen, Movimientos, Diezmos, Ofrendas y Reportes sin acciones de escritura, revisando la consola.
+
+#### Smoke real de A2, sesión **Admin** (2026-10-03, 22:55–23:02 UTC)
+
+Salvador inició sesión en el navegador de la sesión. El recorrido fue **solo lectura**: navegación por URL, filtros de mes y vista Mensual/Anual. No se guardó, editó, anuló ni sincronizó nada, ni se tocaron "Editar/Anular" de SumUp ni "Inicializar ahora". El rol se confirmó porque la lista de Configuración › Usuarios y permisos carga, y esa lectura solo la permiten las reglas a `admin()`.
+
+| Pantalla | Resultado |
+|---|---|
+| Resumen (`/finanzas`) | **PASS.** Carga con KPIs; octubre sin movimientos, coherente con el baseline (no hay resumen 2026-10) |
+| Movimientos (`/finanzas/movimientos`) | **PASS.** Octubre vacío; con el filtro en septiembre se ven los movimientos (30 filas en pantalla) |
+| Diezmos (`/finanzas/diezmos`) | **PASS.** KPIs y fichas visibles |
+| Ofrendas (`/finanzas/ofrendas`) | **PASS.** Caja del día, Ofrendas/Cafetería e integración SumUp visibles |
+| Reportes (`/finanzas/reportes`) | **PASS.** Mensual sin error. **Anual 2026: ingresos $34.589.315 · gastos $6.910.000 · resultado $27.679.315, idénticos al baseline de A0.** Sin "sincronizando" |
+| Configuración › Usuarios y permisos | Carga (confirma el rol admin) |
+| Consola del navegador | Sin mensajes en todo el recorrido |
+| Reglas desde el deploy | **22 ALLOW · 0 DENY** |
+| Logs `severity>=ERROR` desde el deploy | **0** |
+
+**Smoke real Pastor:** pendiente. Salvador cierra sesión e inicia con una cuenta pastor; la sesión no cierra cuentas del usuario.
