@@ -4,6 +4,8 @@
 **Rama:** `mission/platform-core-calendar-v1`, desde `origin/mission/slice6-usability` @ `e6b2084`. Las ramas PR #3 y PR #4 son solo de referencia: se consultan con `git show`, no se fusionan.
 **Convenciones:** FACT = verificado en el código. DEC = decisión. RISK = riesgo. Todo lo escrito aquí es código de producción; nada se despliega en esta misión.
 
+> **Actualización RC1 ([doc 20](20-platform-calendar-rc1-readiness.md) §5):** el enlace público pasó a `/calendario-publico#<token>` (el fragmento no llega al servidor) y `calendarPublicFeed` recibe el token por **POST** en el cuerpo JSON, con `Cache-Control: no-store`. Se eliminó el rewrite `/calendario/compartir/**`. Las menciones de este documento a `?t=`, `/calendario/compartir/<token>` y `max-age=60` describen el diseño anterior.
+
 ---
 
 ## 0. Decisiones en una tabla

@@ -38,12 +38,12 @@
 36-admin-pdf-reporte pdf=reporte-calendario-2026-10.pdf
 46-sin-modulos-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
 45-inactivo-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
-50-publico-1440 url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
-51-publico-390 url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
-52-publico-390-full url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
-53-publico-375-detalle url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
-54-publico-mes-1440 url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
-55-publico-no-disponible-390 url=/calendario-publico?t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=2 errs=["Failed to load resource: the server responded with a status of 404 (Not Found)","Failed to load resource: the server responded with a status of 404 (Not Found)"]
+50-publico-1440 url=/calendario-publico?t=<token-del-emulador-retirado> overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+51-publico-390 url=/calendario-publico?t=<token-del-emulador-retirado> overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+52-publico-390-full url=/calendario-publico?t=<token-del-emulador-retirado> overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+53-publico-375-detalle url=/calendario-publico?t=<token-del-emulador-retirado> overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+54-publico-mes-1440 url=/calendario-publico?t=<token-del-emulador-retirado> overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+55-publico-no-disponible-390 url=/calendario-publico?t=<token-del-emulador-retirado> overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=2 errs=["Failed to load resource: the server responded with a status of 404 (Not Found)","Failed to load resource: the server responded with a status of 404 (Not Found)"]
 60-pastor-aterriza-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
 61-pastor-compartir-activo-1440 url=/calendario/compartir overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
 62-pastor-compartir-recien-generado-1440 url=/calendario/compartir overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0

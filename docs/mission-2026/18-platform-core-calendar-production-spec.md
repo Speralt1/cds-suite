@@ -2,6 +2,8 @@
 
 > **NO DEPLOY · NO PRODUCTION DATA · EMULATOR VALIDATED.**
 > Es código de producción, pero en esta misión no se despliega nada, no se escriben datos reales y no se ejecuta ninguna migración contra Firebase real. Todo se valida con Firebase Emulator Suite y datos ficticios.
+>
+> **Actualización RC1 ([doc 20](20-platform-calendar-rc1-readiness.md) §5):** el enlace público pasó a `/calendario-publico#<token>` (el fragmento no llega al servidor) y `calendarPublicFeed` recibe el token por **POST** en el cuerpo JSON, con `Cache-Control: no-store`. Se eliminó el rewrite `/calendario/compartir/**`. Las menciones de este documento a `?t=`, `/calendario/compartir/<token>` y `max-age=60` describen el diseño anterior.
 
 **Fecha:** 2026-10-02
 **Rama:** `mission/platform-core-calendar-v1`, creada desde `origin/mission/slice6-usability` @ `e6b2084` (la base productiva de Financial Core 2026, PR #1)

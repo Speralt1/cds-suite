@@ -2,6 +2,8 @@
 
 > **NO DEPLOY · NO PRODUCTION DATA · EMULATOR VALIDATED.**
 > Es código de producción validado solo con Firebase Emulator Suite y datos ficticios. No se desplegaron reglas, Functions, índices ni Hosting, y no se ejecutó la migración contra Firebase real.
+>
+> **Actualización RC1 ([doc 20](20-platform-calendar-rc1-readiness.md) §5):** el enlace público pasó a `/calendario-publico#<token>` (el fragmento no llega al servidor) y `calendarPublicFeed` recibe el token por **POST** en el cuerpo JSON, con `Cache-Control: no-store`. Se eliminó el rewrite `/calendario/compartir/**`. Las menciones de este documento a `?t=`, `/calendario/compartir/<token>` y `max-age=60` describen el diseño anterior.
 
 **Fecha:** 2026-10-03
 **Rama:** `mission/platform-core-calendar-v1`, desde `origin/mission/slice6-usability` @ `e6b2084` (PR #1)
@@ -223,8 +225,8 @@ En [screens-platform-core-calendar/](screens-platform-core-calendar/): 48 imáge
 
 ## 12. Riesgos residuales
 
-1. **Token en logs de plataforma** (Cloud Run registra la query `?t=`; Hosting registra la ruta si su logging está activo) y en el historial del navegador. La app nunca lo loguea, y la página usa `no-referrer` y `noindex`. **Mitigación futura:** enviar el token al feed por header o POST.
-2. **Caché del navegador:** hasta 60 s después de desactivar o regenerar el enlace.
+1. **[Cerrado en RC1, doc 20 §5]** **Token en logs de plataforma** (Cloud Run registra la query `?t=`; Hosting registra la ruta si su logging está activo) y en el historial del navegador. La app nunca lo loguea, y la página usa `no-referrer` y `noindex`. **Mitigación futura:** enviar el token al feed por header o POST.
+2. **[Cerrado en RC1: `no-store`]** **Caché del navegador:** hasta 60 s después de desactivar o regenerar el enlace.
 3. **"Activar" revive el mismo enlace:** si se filtró, hay que regenerarlo.
 4. **`internalNotes`** lo ven todos los que tienen `calendar.read`, incluido el rol legacy `finance`. La UI advierte "No escribas datos personales".
 5. **Campos del historial que declara el cliente:** solo el formato de `reason`, `scope` y `occurrenceDate`. Los valores de los 13 campos auditados sí se verifican, sin claves extra.
@@ -257,7 +259,7 @@ npm --prefix functions ci
 npm run dev:platform
 ```
 
-`dev:platform` levanta Auth + Firestore + Functions con el proyecto `demo-cds-suite`, siembra los datos ficticios, imprime **una vez** la URL del calendario público (`http://localhost:3000/calendario-publico?t=…`) y arranca Next en http://localhost:3000. Ctrl+C lo detiene todo. **No uses `npm run dev` a secas:** usa `.env.local`, que apunta al proyecto real.
+`dev:platform` levanta Auth + Firestore + Functions con el proyecto `demo-cds-suite`, siembra los datos ficticios, imprime **una vez** la URL del calendario público (`http://localhost:3000/calendario-publico#…` desde RC1) y arranca Next en http://localhost:3000. Ctrl+C lo detiene todo. **No uses `npm run dev` a secas:** usa `.env.local`, que apunta al proyecto real.
 
 **Cuentas ficticias** (contraseña `PruebaCDS2026!`):
 

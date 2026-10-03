@@ -341,17 +341,18 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (avanzó desde `42408d6` con el merge del PR #2, Project Control)
 - **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `648afd1`
 - **Rama activa principal (base productiva):** `mission/slice6-usability` @ `e6b2084` (PR #1, abierto, no draft)
-- **Misión en curso:** `mission/platform-core-calendar-v1` (desde `e6b2084`). Draft PR **[NO DEPLOY] Platform Core V1 + Calendar** contra `mission/slice6-usability`
+- **Release Candidate RC1:** `mission/platform-core-calendar-v1` (desde `e6b2084`), Draft PR #5 **[NO DEPLOY] Platform Core V1 + Calendar** contra `mission/slice6-usability`. Runbook y GO/NO-GO en `docs/mission-2026/20-platform-calendar-rc1-readiness.md`. **NOT DEPLOYED**
+- **Producción (`cds-administracion`):** corre `648afd1` (preproducción), deploy del 2026-09-11; reglas de Firestore idénticas a `648afd1` (snapshot de solo lectura del 2026-10-03, doc 20 §4)
 - **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
-- **Última sincronización de contexto:** 2026-10-03
+- **Última sincronización de contexto:** 2026-10-03 (RC1)
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-1. **Salvador prueba Platform Core V1 + Calendar sobre emuladores** (`npm run dev:platform`; ver `docs/mission-2026/19-platform-core-calendar-validation.md`) y valida las decisiones abiertas del doc 18 §11.
-2. Decidir el destino del PR #1. La misión platform-core-calendar se apoya en él: su rollout requiere que Financial Core 2026 se despliegue antes o junto.
+1. **Salvador prueba RC1 sobre emuladores** (`npm run dev:platform`) y decide si abre la misión de rollout controlado (doc 20, veredicto **GO FOR CONTROLLED DEPLOYMENT**, que no autoriza a desplegar).
+2. **Estrategia aprobada en el doc 20 §2 (opción A):** Etapa A = PR #1 solo (`e6b2084`) → observación ≥ 7 días → Etapa B = PR #5 (RC1). La Fase A0 exige backup, la consulta `feeAmount > 0` = 0 (la corre Salvador) y decidir la alerta del scheduler.
 3. Confirmar qué parte de Slice 3A se integra después.
 4. Mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esas decisiones sigan abiertas.
 5. No cambiar todavía la default branch de GitHub.
@@ -367,8 +368,9 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - `PROJECT_CONTEXT.md` adoptado como contrato de continuidad.
 - 2026-10-02: previews de diseño PR #3 (Financial UX V2) y PR #4 (Calendario + Integrantes/Consolidación), solo fixtures, sin deploy.
 - 2026-10-03: Platform Core V1 + Calendar implementado en código productivo (rama `mission/platform-core-calendar-v1`), validado con Firebase Emulator Suite. **No desplegado.**
+- 2026-10-03: RC1 / hardening previo al deploy (doc 20). Token del calendario público en el fragmento + POST; `--summary` en la migración; snapshot de producción; runbook por fases; GO FOR CONTROLLED DEPLOYMENT. **No desplegado.**
 
-## 19. Platform Core V1 + Calendar (misión en curso)
+## 19. Platform Core V1 + Calendar (RC1, NOT DEPLOYED)
 
 - **Rama:** `mission/platform-core-calendar-v1`, desde `origin/mission/slice6-usability` @ `e6b2084`. Draft PR contra `mission/slice6-usability`, marcado **NO DEPLOY · NO PRODUCTION DATA · EMULATOR VALIDATED**. **No mergear.**
 - **Docs:**
@@ -391,4 +393,9 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
   - PR #3 y PR #4 son referencias de diseño y producto: se portó código revisado de forma selectiva, sin merges;
   - Integrantes/Consolidación sigue siendo solo preview;
   - Slice 3A queda preservado y fuera de esta misión.
+- **RC1 (doc 20):**
+  - el enlace público es `/calendario-publico#<token>` y el feed recibe el token por POST (nunca en la URL);
+  - `node scripts/migrate-access-v1.mjs --project <id> --summary` da un dry-run solo con conteos;
+  - el rollback a reglas legacy exige primero el procedimiento del doc 20 §14 (v1 sin finanzas);
+  - en producción, PITR está desactivado y no hay backups ni alertas: se resuelven en la Fase 0 del rollout.
 - **Local:** `npm run dev:platform` levanta Auth + Firestore + Functions con el proyecto `demo-cds-suite`, siembra datos ficticios y arranca Next sin tocar Firebase real. **Ojo:** `npm run dev` a secas usa `.env.local`, que apunta al proyecto real.
