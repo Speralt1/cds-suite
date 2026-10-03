@@ -6,15 +6,28 @@
 ## 1. Identidad del proyecto
 
 - **Nombre:** CDS Suite
-- **Propósito:** suite operativa para Casa de Salvación, con foco actual en finanzas, SumUp, ofrendas, cafetería, diezmos, movimientos, reportes y configuración.
+- **Propósito:** suite operativa para Casa de Salvación, organizada por módulos (§1.1). Su foco actual son finanzas (SumUp, ofrendas, cafetería, diezmos, movimientos, reportes y configuración) y calendario.
 - **Owner:** Salvador
 - **Repositorio:** `Speralt1/cds-suite`
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
 - **Base histórica/default actual de GitHub:** `feature/base-cds-suite`
 - **Línea de integración / preproducción:** `feature/preproduccion-mobile-v1`
-- **Rama activa de trabajo:** `mission/slice6-usability`
+- **Rama activa de trabajo (base productiva):** `mission/slice6-usability` (PR #1)
+- **Rama de la misión en curso:** `mission/platform-core-calendar-v1`. Es el Draft PR "[NO DEPLOY] Platform Core V1 + Calendar" contra `mission/slice6-usability` (§19)
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees`
 - **Trello:** pendiente de enlazar.
+
+### 1.1 Módulos de CDS Suite
+
+| Módulo | Estado |
+|---|---|
+| **Finanzas** | En código productivo, en la base de PR #1 |
+| **Calendario** | Código productivo en `mission/platform-core-calendar-v1`, validado solo con emuladores. **No desplegado** |
+| **Reportes** | Reportes financieros (PR #1) y reporte de Calendario (misión platform-core-calendar). **No desplegado** |
+| **Configuración** | General y Finanzas (PR #1); Áreas y Usuarios y permisos (misión platform-core-calendar). **No desplegado** |
+| **Integrantes** (futuro) | Solo existe como **preview** (PR #4, `/preview/integrantes/*`, fixtures). Sin backend, sin colección `people` y sin datos reales |
+
+El modelo de acceso nuevo es `role` (legacy, se conserva) + `baseRole` + `position` + `permissions[]` + `areaIds[]` + `homeModule` + `active` + `accessSchemaVersion`. Las reglas tienen un fallback exacto al rol legacy mientras dure la migración. Detalle en `docs/mission-2026/18-platform-core-calendar-production-spec.md` §3.
 
 ## 2. Regla de continuidad
 
@@ -325,27 +338,24 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 > Por ahora esta sección se actualiza manualmente.
 
 <!-- AUTO-STATUS:START -->
-- **Base histórica:** `feature/base-cds-suite` @ `42408d6`
+- **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (avanzó desde `42408d6` con el merge del PR #2, Project Control)
 - **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `648afd1`
-- **Rama activa principal:** `mission/slice6-usability`
-- **HEAD previo a este contexto:** `70652bd`
-- **Upstream:** `origin/mission/slice6-usability`
-- **Local vs upstream al último chequeo:** `0 / 0`
-- **PR activo principal:** #1
-- **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5`
+- **Rama activa principal (base productiva):** `mission/slice6-usability` @ `e6b2084` (PR #1, abierto, no draft)
+- **Misión en curso:** `mission/platform-core-calendar-v1` (desde `e6b2084`). Draft PR **[NO DEPLOY] Platform Core V1 + Calendar** contra `mission/slice6-usability`
+- **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
+- **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
-- **Última sincronización de contexto:** 2026-09-27
+- **Última sincronización de contexto:** 2026-10-03
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-> No iniciar una nueva rama principal todavía.
-
-Primero:
-1. decidir el destino del PR #1;
-2. confirmar qué parte de Slice 3A debe integrarse después;
-3. mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esa decisión siga abierta;
-4. no cambiar todavía la default branch de GitHub.
+1. **Salvador prueba Platform Core V1 + Calendar sobre emuladores** (`npm run dev:platform`; ver `docs/mission-2026/19-platform-core-calendar-validation.md`) y valida las decisiones abiertas del doc 18 §11.
+2. Decidir el destino del PR #1. La misión platform-core-calendar se apoya en él: su rollout requiere que Financial Core 2026 se despliegue antes o junto.
+3. Confirmar qué parte de Slice 3A se integra después.
+4. Mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esas decisiones sigan abiertas.
+5. No cambiar todavía la default branch de GitHub.
+6. **Ningún deploy** de reglas, Functions ni Hosting sin el plan de rollout del doc 18 §12 y sin aprobación humana explícita en cada paso.
 
 ## 18. Hitos recientes
 
@@ -355,3 +365,30 @@ Primero:
 - Worktree temporal Slice 3A retirado sin perder commits.
 - Checkout principal movido a `Proyectos Desarrollo`.
 - `PROJECT_CONTEXT.md` adoptado como contrato de continuidad.
+- 2026-10-02: previews de diseño PR #3 (Financial UX V2) y PR #4 (Calendario + Integrantes/Consolidación), solo fixtures, sin deploy.
+- 2026-10-03: Platform Core V1 + Calendar implementado en código productivo (rama `mission/platform-core-calendar-v1`), validado con Firebase Emulator Suite. **No desplegado.**
+
+## 19. Platform Core V1 + Calendar (misión en curso)
+
+- **Rama:** `mission/platform-core-calendar-v1`, desde `origin/mission/slice6-usability` @ `e6b2084`. Draft PR contra `mission/slice6-usability`, marcado **NO DEPLOY · NO PRODUCTION DATA · EMULATOR VALIDATED**. **No mergear.**
+- **Docs:**
+  - `docs/mission-2026/18-platform-core-calendar-production-spec.md`, con anexos 18a (Atlas) y 18b (Designer);
+  - `docs/mission-2026/19-platform-core-calendar-validation.md`.
+- **Qué incluye:**
+  - shell global por módulos;
+  - acceso por permisos con fallback legacy exacto;
+  - áreas;
+  - Calendario (recurrencia V1 y auditoría atómica);
+  - publicar separado de gestionar;
+  - enlace público con token hasheado + Functions `calendarPublicFeed`/`calendarShareLinkManage`;
+  - reporte de Calendario + PDF;
+  - Configuración › Áreas y Usuarios y permisos;
+  - migración `scripts/migrate-access-v1.mjs` (dry-run por defecto);
+  - seed y experiencia local con emuladores.
+- **Qué NO está desplegado:** nada. Ni reglas, ni Functions, ni índices, ni Hosting. La migración de usuarios **no** se ejecutó contra producción.
+- **Relación con los PR:**
+  - se construye sobre PR #1 (base productiva);
+  - PR #3 y PR #4 son referencias de diseño y producto: se portó código revisado de forma selectiva, sin merges;
+  - Integrantes/Consolidación sigue siendo solo preview;
+  - Slice 3A queda preservado y fuera de esta misión.
+- **Local:** `npm run dev:platform` levanta Auth + Firestore + Functions con el proyecto `demo-cds-suite`, siembra datos ficticios y arranca Next sin tocar Firebase real. **Ojo:** `npm run dev` a secas usa `.env.local`, que apunta al proyecto real.
