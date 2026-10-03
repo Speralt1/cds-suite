@@ -281,6 +281,36 @@ describe("Configuración › Usuarios y permisos", () => {
     );
   });
 
+  it("«Otro cargo…» nunca escribe el valor interno de la opción en el cargo", async () => {
+    render(<UsersPermissionsPanel />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);
+    const dialog = openDialog("Luis Líder");
+    fireEvent.change(within(dialog).getByLabelText("Cargo"), { target: { value: "__otro" } });
+    // Ni propuesta de permisos ni el valor interno en el campo de texto.
+    expect(within(dialog).queryByRole("group", { name: /Permisos sugeridos/ })).toBeNull();
+    const name = within(dialog).getByRole("textbox", { name: "Nombre del cargo" });
+    expect(name).toHaveValue("");
+    fireEvent.change(name, { target: { value: "Coordinación de jóvenes" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(usersClient.updateManagedUserAccess).toHaveBeenCalledTimes(1));
+    const payload = (usersClient.updateManagedUserAccess.mock.calls[0] as unknown[])[3] as { position: string };
+    expect(payload.position).toBe("Coordinación de jóvenes");
+    expect(JSON.stringify(usersClient.updateManagedUserAccess.mock.calls)).not.toContain("__otro");
+  });
+
+  it("«Otro cargo…» sin nombre guarda el cargo vacío, nunca el valor interno", async () => {
+    render(<UsersPermissionsPanel />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);
+    const dialog = openDialog("Luis Líder");
+    fireEvent.change(within(dialog).getByLabelText("Cargo"), { target: { value: "__otro" } });
+    expect(within(dialog).getByRole("textbox", { name: "Nombre del cargo" })).toHaveValue("");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(usersClient.updateManagedUserAccess).toHaveBeenCalledTimes(1));
+    const payload = (usersClient.updateManagedUserAccess.mock.calls[0] as unknown[])[3] as { position: string };
+    expect(payload.position).toBe("");
+    expect(JSON.stringify(usersClient.updateManagedUserAccess.mock.calls)).not.toContain("__otro");
+  });
+
   it("mantener los actuales no cambia permisos", () => {
     render(<UsersPermissionsPanel />);
     fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);
@@ -365,15 +395,15 @@ describe("Configuración › Usuarios y permisos", () => {
 });
 
 describe("Configuración › subnav", () => {
-  it("muestra General, Finanzas e integraciones, Áreas y Usuarios y permisos", () => {
+  it("muestra Áreas, Usuarios y permisos, Finanzas e integraciones y General (en ese orden)", () => {
     render(<SettingsNav />);
     const nav = screen.getByRole("navigation", { name: "Secciones de Configuración" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["General", "/configuracion"],
-      ["Finanzas e integraciones", "/configuracion/finanzas"],
       ["Áreas", "/configuracion/areas"],
       ["Usuarios y permisos", "/configuracion/usuarios"],
+      ["Finanzas e integraciones", "/configuracion/finanzas"],
+      ["General", "/configuracion"],
     ]);
     expect(within(nav).getByRole("link", { name: "Áreas" })).toHaveAttribute("aria-current", "page");
     expect(links.filter((l) => l.getAttribute("aria-current") === "page")).toHaveLength(1);

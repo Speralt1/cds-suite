@@ -9,6 +9,7 @@
 // - Pie: "Página n de m" y, en la última página, la nota de lo que no incluye.
 // - Nunca notas internas, motivos ni correos: las filas (lib/calendar/report)
 //   no los traen.
+// - La visibilidad va en texto en la celda Estado ("Programada · Pública").
 //
 // Paginación por alto disponible: autoTable corta las páginas solo (filas
 // enteras). `calendarPdfLayout` reproduce ese cálculo SIN cargar jspdf
@@ -18,7 +19,7 @@
 import { CHURCH_NAME } from "@/lib/shared/public-calendar";
 import { numericYmd } from "@/lib/shared/dates";
 import type { AreaColor, LocalDateTime, Ymd } from "@/lib/shared/types";
-import { isWholeMonth, REPORT_COLUMNS, type CalendarReportRow } from "./report";
+import { isWholeMonth, REPORT_COLUMNS, REPORT_VISIBILITY_LABEL, type CalendarReportRow, type ReportColumnKey } from "./report";
 
 export interface CalendarReportMeta {
   /** Por defecto "Casa de Salvación". */
@@ -67,6 +68,22 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 const RESPONSIBLE_COL = REPORT_COLUMNS.findIndex((c) => c.key === "responsible");
+
+/**
+ * "Programada · Pública" / "Cancelada · Solo equipo": la visibilidad va en
+ * texto dentro de la celda Estado (las columnas siguen siendo las 8 de la
+ * misión). Con el ancho de la columna queda en dos líneas.
+ */
+export function pdfStatusText(row: Pick<CalendarReportRow, "statusLabel" | "visibility">): string {
+  const visibility = REPORT_VISIBILITY_LABEL[row.visibility] ?? "";
+  return visibility ? `${row.statusLabel} · ${visibility}` : row.statusLabel;
+}
+
+/** Texto de una celda del PDF (orden de REPORT_COLUMNS). */
+export function pdfCellText(row: CalendarReportRow, key: ReportColumnKey): string {
+  if (key === "statusLabel") return pdfStatusText(row);
+  return String(row[key] ?? "");
+}
 
 // ---------- Geometría (mm) ----------
 export const PDF_PAGE = { width: 297, height: 210 } as const;
@@ -277,7 +294,7 @@ export function calendarPdfLayout(rows: readonly CalendarReportRow[], meta: Cale
     REPORT_COLUMNS.map((c) => c.label),
     "bold",
   );
-  const body = rows.map((r) => tableRow(REPORT_COLUMNS.map((c) => String(r[c.key] ?? "")), "normal"));
+  const body = rows.map((r) => tableRow(REPORT_COLUMNS.map((c) => pdfCellText(r, c.key)), "normal"));
 
   const pages: number[][] = [[]];
   let cursor = startY;

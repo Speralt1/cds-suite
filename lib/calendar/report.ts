@@ -6,7 +6,8 @@
 //   filas se arman por lista blanca de campos y no tienen dónde guardarlos.
 // - Las actividades archivadas nunca aparecen.
 // - Columnas exactas de la misión (8). La visibilidad es filtro y se informa en
-//   el encabezado (doc 18 §11.4), no es columna.
+//   el encabezado (doc 18 §11.4), no es columna: va escrita junto al estado en
+//   el PDF y bajo el título en pantalla.
 
 import { occurrencesInRange } from "@/lib/shared/calendar-core";
 import { compareLocal, firstOfMonth, isValidYmd, lastOfMonth, MONTH_NAMES, monthTitle, numericYmd, parseYmd, weekdayOf } from "@/lib/shared/dates";
@@ -50,7 +51,7 @@ export interface CalendarReportRow {
   location: string;
   status: OccurrenceStatus;
   statusLabel: string;
-  /** Solo para el ícono en pantalla: no es columna del reporte. */
+  /** No es columna: se escribe junto al estado (PDF) y bajo el título (pantalla). */
   visibility: Visibility;
   publicDescription: string;
 }

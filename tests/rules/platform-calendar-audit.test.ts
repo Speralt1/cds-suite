@@ -4,7 +4,7 @@
 // las reglas tal cual. Solo emulador (demo-cds-suite).
 import { readFileSync } from "node:fs";
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, serverTimestamp, writeBatch, type DocumentData } from "firebase/firestore";
+import { deleteField, doc, serverTimestamp, updateDoc, writeBatch, type DocumentData } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   AUDIT_VALUE_FIELDS,
@@ -174,6 +174,30 @@ describe("historial: before/after deben ser los valores reales", () => {
     await assertSucceeds(commit("ser", planCancelOccurrence(s, addDays(FUTURE, 7), "Feriado nacional", ctx())));
     s = await current("ser");
     await assertSucceeds(commit("ser", planCancelSeriesFrom(s, addDays(FUTURE, 28), "Fin del ciclo", ctx())));
+  });
+
+  it("un campo auditado que falta en el evento no salta la comparación de valores", async () => {
+    // Evento guardado sin `location` ni `publicDescription` (p. ej. un documento antiguo).
+    await seedEvent(env, "legacy");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "calendarEvents", "legacy"), { location: deleteField(), publicDescription: deleteField() });
+    });
+    const add = { location: "Sala 2" };
+    // before inventa un valor para un campo que el evento no tenía → fail.
+    await assertFails(updateEvent(env, U, "legacy", add, { change: { before: { location: "Templo central" } } }));
+    await assertFails(updateEvent(env, U, "legacy", add, { change: { before: { location: null } } }));
+    // Clave extra en before/after que no cambió → fail.
+    await assertFails(updateEvent(env, U, "own", { title: "Nuevo título" }, {
+      change: { before: { title: "Reunión de jóvenes", publicDescription: "x" } },
+    }));
+    // after con un campo auditado que el evento ya no tiene (borrado en el mismo lote) → fail
+    // (también lo bloquea la validación del contenido).
+    await assertFails(updateEvent(env, U, "own", { publicDescription: deleteField() }, {
+      changedFields: ["publicDescription"],
+      change: { before: { publicDescription: "" }, after: { publicDescription: "" } },
+    }));
+    // Sin agregar ese campo, el evento antiguo se sigue editando normalmente.
+    await ok(updateEvent(env, U, "legacy", { title: "Título corregido" }), "legacy title");
   });
 
   it("peor caso de presupuesto con manage_all: todos los campos de valor cambian a la vez", async () => {

@@ -2,6 +2,7 @@
 // Datos del seed local (scripts/seed-platform-calendar-emulator.mjs): coherentes
 // con lo que validan firestore.rules aunque el Admin SDK no pase por ellas.
 import { describe, expect, it } from "vitest";
+import { AUDIT_IGNORED_FIELDS, AUDIT_VALUE_FIELDS } from "@/lib/calendar/audit";
 import { normalizeAccess, deriveLegacyRole, effectivePermissions } from "@/lib/shared/access";
 import { lastDateOf } from "@/lib/shared/calendar-core";
 import { addDays, compareLocal } from "@/lib/shared/dates";
@@ -9,6 +10,8 @@ import { isOccurrenceDate, validateRecurrence } from "@/lib/shared/recurrence";
 import { AREA_COLORS, STORABLE_PERMISSIONS, type CalendarEventDoc, type Permission } from "@/lib/shared/types";
 import {
   SEED_AREAS,
+  SEED_AUDIT_IGNORED_FIELDS,
+  SEED_AUDIT_VALUE_FIELDS,
   SEED_CANARIES,
   SEED_USERS,
   SEED_FINANCE_UID,
@@ -212,5 +215,14 @@ describe("seed: movimientos financieros ficticios", () => {
 
   it("los registra la cuenta de finanzas sembrada", () => {
     expect(SEED_USERS.find((u) => u.uid === SEED_FINANCE_UID)?.doc).toEqual({ role: "finance", active: true });
+  });
+});
+
+describe("seed: campos de auditoría con una sola fuente", () => {
+  it("la lista del seed es la misma (y en el mismo orden) que la de lib/calendar/audit.ts", () => {
+    expect([...SEED_AUDIT_VALUE_FIELDS]).toEqual([...AUDIT_VALUE_FIELDS]);
+    expect([...SEED_AUDIT_IGNORED_FIELDS]).toEqual([...AUDIT_IGNORED_FIELDS]);
+    expect(SEED_AUDIT_VALUE_FIELDS).not.toContain("internalNotes");
+    expect(Object.isFrozen(SEED_AUDIT_VALUE_FIELDS)).toBe(true);
   });
 });

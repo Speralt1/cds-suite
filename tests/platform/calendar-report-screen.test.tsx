@@ -90,4 +90,28 @@ describe("Reportes › Calendario", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar el reporte");
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
+
+  it("visibilidad en texto: bajo el título en la tabla y en la línea de fecha de la tarjeta móvil", () => {
+    const { container } = render(<CalendarReport />);
+    const table = screen.getByRole("table");
+    const rows = within(table).getAllByRole("row").slice(1);
+    const publicRow = rows.find((r) => within(r).queryByText("Culto dominical"))!;
+    const visText = publicRow.querySelector(".c-title .cal-rep-vis-text");
+    expect(visText).toHaveTextContent(/^Pública$/);
+    // El ícono es decorativo: la visibilidad se lee una sola vez, como texto.
+    expect(within(publicRow).queryByRole("img", { name: "Pública" })).toBeNull();
+    expect(publicRow.querySelector(".cal-rep-vis")).toHaveAttribute("title", "Pública");
+
+    const internalRow = rows.find((r) => within(r).queryByText(CANARIES.internalTitle))!;
+    expect(internalRow.querySelector(".c-title .cal-rep-vis-text")).toHaveTextContent(/^Solo equipo$/);
+
+    const items = within(screen.getByRole("list", { name: /Actividades de/ })).getAllByRole("listitem");
+    const publicItem = items.find((li) => within(li).queryByText("Culto dominical"))!;
+    expect(publicItem.querySelector(".cal-rep-item-top .cal-rep-num")!.textContent).toMatch(/ · Pública$/);
+    const internalItem = items.find((li) => within(li).queryByText(CANARIES.internalTitle))!;
+    expect(internalItem.querySelector(".cal-rep-item-top .cal-rep-num")!.textContent).toMatch(/ · Solo equipo$/);
+    // Las 8 columnas se mantienen.
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(8);
+    expect(container.querySelectorAll(".cal-rep-vis-text").length).toBe(rows.length);
+  });
 });

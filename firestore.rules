@@ -1065,11 +1065,17 @@ service cloud.firestore {
     // before/after del change = valores REALES del evento antes y después del lote, para cada campo de
     // valor que cambió (v); ambos null si no cambió ninguno (p. ej. solo internalNotes o excepciones).
     // changedKeys() compara en un paso todas las claves comunes (presupuesto de expresiones).
+    // addedKeys() == 0: toda clave de before/after existe en el evento (antes/después); si faltara,
+    // quedaría fuera de changedKeys() y su valor no se compararía. (Con m.diff(evento), addedKeys son
+    // las claves de m que el evento no tiene; removedKeys serían las del evento fuera de m, que
+    // siempre existen: internalNotes, revision, etc.)
     function changeValuesOk(d, after, before, v) {
       return v.size() == 0 ? (d.before == null && d.after == null)
         : (d.before.keys().toSet() == v && d.after.keys().toSet() == v
           && d.before.diff(before).changedKeys().size() == 0
-          && d.after.diff(after).changedKeys().size() == 0);
+          && d.after.diff(after).changedKeys().size() == 0
+          && d.before.diff(before).addedKeys().size() == 0
+          && d.after.diff(after).addedKeys().size() == 0);
     }
     function validChange(d) {
       return d.keys().hasAll(['revision','action','actorUid','at','changedFields','before','after','reason'])

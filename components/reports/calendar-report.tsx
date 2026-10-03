@@ -72,11 +72,22 @@ function StatusBadge({ status }: { status: OccurrenceStatus }) {
   );
 }
 
-/** Ícono de visibilidad: nombre accesible y tooltip "Pública" / "Solo equipo". */
-export function VisibilityMark({ row }: { row: Pick<CalendarReportRow, "visibility"> }) {
+/**
+ * Ícono de visibilidad: nombre accesible y tooltip "Pública" / "Solo equipo".
+ * Con `decorative`, el ícono se oculta a lectores de pantalla porque la
+ * visibilidad ya va escrita junto a él.
+ */
+export function VisibilityMark({
+  row,
+  decorative = false,
+}: {
+  row: Pick<CalendarReportRow, "visibility">;
+  decorative?: boolean;
+}) {
   const label = REPORT_VISIBILITY_LABEL[row.visibility];
+  const a11y = decorative ? { "aria-hidden": true as const } : { role: "img", "aria-label": label };
   return (
-    <span className="cal-rep-vis" role="img" aria-label={label} title={label}>
+    <span className="cal-rep-vis" {...a11y} title={label}>
       {row.visibility === "public" ? <Globe size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}
     </span>
   );
@@ -280,9 +291,10 @@ export function CalendarReport() {
                     <td className="c-time cal-rep-num">{r.time}</td>
                     <td className="c-title">
                       <span className="cal-rep-title">
-                        <VisibilityMark row={r} />
+                        <VisibilityMark row={r} decorative />
                         <span className="cal-rep-title-text">{r.title}</span>
                       </span>
+                      <span className="cal-rep-vis-text">{REPORT_VISIBILITY_LABEL[r.visibility]}</span>
                       {r.participants && <span className="cal-rep-with">con {r.participants}</span>}
                       {r.location && <span className="cal-rep-where">{r.location}</span>}
                     </td>
@@ -307,12 +319,12 @@ export function CalendarReport() {
                 <li key={r.key} className={`cal-rep-item${r.status === "cancelled" ? " is-cancelled" : ""}`}>
                   <div className="cal-rep-item-top">
                     <span className="cal-rep-num">
-                      {r.dateLabel} · {r.time}
+                      {r.dateLabel} · {r.time} · {REPORT_VISIBILITY_LABEL[r.visibility]}
                     </span>
                     <StatusBadge status={r.status} />
                   </div>
                   <div className="cal-rep-title">
-                    <VisibilityMark row={r} />
+                    <VisibilityMark row={r} decorative />
                     <span className="cal-rep-title-text">{r.title}</span>
                   </div>
                   <span className="cal-rep-resp">

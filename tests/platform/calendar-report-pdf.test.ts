@@ -11,6 +11,7 @@ import {
   PDF_COLUMN_WIDTHS,
   PDF_EXCLUSION_NOTE,
   PDF_PAGE,
+  pdfStatusText,
   type CalendarReportMeta,
 } from "@/lib/calendar/report-pdf";
 import { AREAS, CANARIES, EVENTS, NOW } from "./public-calendar-fixtures";
@@ -179,5 +180,47 @@ describe("jspdf solo por import dinámico (escaneo estático)", () => {
     for (const rel of ["lib/calendar/report.ts", "lib/calendar/report-pdf.ts", "components/reports/calendar-report.tsx"]) {
       expect(read(rel), rel).not.toMatch(/Vista previa|\bDemo\b|DEMO/);
     }
+  });
+});
+
+describe("visibilidad en texto en la celda Estado (8 columnas)", () => {
+  const STATUS_COL = 6;
+
+  it("pdfStatusText: estado · visibilidad", () => {
+    expect(pdfStatusText({ statusLabel: "Programada", visibility: "public" })).toBe("Programada · Pública");
+    expect(pdfStatusText({ statusLabel: "Cancelada", visibility: "internal" })).toBe("Cancelada · Solo equipo");
+    expect(pdfStatusText({ statusLabel: "Realizada", visibility: "public" })).toBe("Realizada · Pública");
+  });
+
+  it("el layout lleva la visibilidad como segunda línea del Estado y mantiene 8 columnas", () => {
+    const rows = syntheticRows(3);
+    rows[1] = { ...rows[1], status: "cancelled", statusLabel: "Cancelada", visibility: "internal" };
+    const layout = calendarPdfLayout(rows, META);
+    expect(layout.head.lines).toHaveLength(8);
+    expect(layout.head.lines[STATUS_COL]).toEqual(["Estado"]);
+    layout.rows.forEach((r) => expect(r.lines).toHaveLength(8));
+    expect(layout.rows[0].lines[STATUS_COL]).toEqual(["Programada ·", "Pública"]);
+    expect(layout.rows[1].lines[STATUS_COL]).toEqual(["Cancelada ·", "Solo equipo"]);
+  });
+
+  it("filas reales: cada fila escribe su visibilidad", () => {
+    const rows = realRows();
+    expect(rows.some((r) => r.visibility === "internal")).toBe(true);
+    const layout = calendarPdfLayout(rows, META);
+    rows.forEach((r, i) => {
+      const cell = layout.rows[i].lines[STATUS_COL].join(" ");
+      expect(cell).toBe(`${r.statusLabel} · ${r.visibility === "public" ? "Pública" : "Solo equipo"}`);
+    });
+  });
+
+  it("PDF real: misma paginación que el layout con la segunda línea y el texto «Solo equipo» presente", async () => {
+    const rows = syntheticRows(70).map((r, i) => (i % 2 ? { ...r, visibility: "internal" as const } : r));
+    const layout = calendarPdfLayout(rows, META);
+    const pdf = await buildCalendarPdf(rows, META);
+    expect(pdf.pageCount).toBe(layout.pageCount);
+    expect(pdf.rowsPerPage).toEqual(layout.pages.map((p) => p.length));
+    const raw = Buffer.from(pdf.output()).toString("latin1");
+    expect(raw).toContain("Solo equipo");
+    expect(raw).toContain("Programada ");
   });
 });

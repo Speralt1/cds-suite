@@ -71,6 +71,9 @@ export declare const SEED_FINANCE_UID: string;
 export declare function buildFinanceSeed(today: string): FinanceSeedItem[];
 export declare const SEED_USERS: readonly SeedUser[];
 export declare const SEED_AREAS: readonly SeedArea[];
+/** Espejo de AUDIT_IGNORED_FIELDS / AUDIT_VALUE_FIELDS de lib/calendar/audit.ts (prueba de paridad). */
+export declare const SEED_AUDIT_IGNORED_FIELDS: readonly string[];
+export declare const SEED_AUDIT_VALUE_FIELDS: readonly string[];
 export declare function assertSeedEnvironment(env?: Record<string, string | undefined>): string;
 export declare function buildSeedData(today: string, nowMs: number): SeedData;
 export declare function publicUrlFor(token: string): string;

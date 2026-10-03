@@ -173,16 +173,35 @@ describe("serie cancelada desde una fecha: el feed público no muestra lo que qu
     expect(build().areas.map((a) => a.slug)).toContain("intercesion");
   });
 
-  it("una fecha cancelada sola (excepción) sí se publica como Cancelada, antes o después del corte", () => {
+  it("una fecha cancelada sola (excepción) antes del corte se publica como Cancelada; después del corte no", () => {
     const x = (date: string) => ({ date, type: "cancelled", reason: CANARIES.exceptionReason, by: CANARIES.uid });
     const cal = withOracion({ exceptions: [x("2026-10-06"), x("2026-10-20")] });
     const list = titled(cal, "Oración de los martes");
     expect(list.map((e) => [e.startDate, e.status])).toEqual([
       ["2026-09-29", "scheduled"],
       ["2026-10-06", "cancelled"],
-      ["2026-10-20", "cancelled"],
     ]);
     expect(JSON.stringify(cal)).not.toContain(CANARIES.exceptionReason);
+  });
+
+  it("nada después del corte se publica: excepciones en, justo después y lejos del corte quedan fuera", () => {
+    const x = (date: string) => ({ date, type: "cancelled", reason: CANARIES.exceptionReason, by: CANARIES.uid });
+    const cal = withOracion({ exceptions: [x("2026-10-13"), x("2026-10-20"), x("2026-12-29")] });
+    const list = titled(cal, "Oración de los martes");
+    expect(list.map((e) => e.startDate)).toEqual(["2026-09-29", "2026-10-06"]);
+    expect(list.every((e) => e.startDate < "2026-10-13")).toBe(true);
+    const occ = expandRecurrence(
+      { ...oracion, exceptions: [x("2026-10-20")] } as typeof oracion,
+      "2026-09-01",
+      "2026-12-31",
+      NOW,
+    );
+    const exceptionAfterCut = occ.find((o) => o.date === "2026-10-20")!;
+    expect(exceptionAfterCut.status).toBe("cancelled");
+    expect(isSeriesCutOccurrence(exceptionAfterCut)).toBe(true);
+    // Sin serie cancelada, la misma excepción sí se publica como Cancelada.
+    const noCut = withOracion({ seriesCancellation: undefined, exceptions: [x("2026-10-20")] });
+    expect(titled(noCut, "Oración de los martes").find((e) => e.startDate === "2026-10-20")?.status).toBe("cancelled");
   });
 
   it("serie cortada desde su inicio → no aparece, y su área sale del encabezado si nadie más la usa", () => {

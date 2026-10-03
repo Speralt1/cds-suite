@@ -374,6 +374,13 @@
   flex: 0 0 auto;
   color: var(--color-muted);
 }
+/* Visibilidad escrita bajo el título, alineada con el texto (ícono 13 + 6). */
+.cal-rep-vis-text {
+  display: block;
+  padding-left: 19px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
 .cal-rep-with,
 .cal-rep-where {
   display: none;

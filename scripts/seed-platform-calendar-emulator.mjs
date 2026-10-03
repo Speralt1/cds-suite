@@ -188,9 +188,13 @@ function nthWeekdayShifted(today, monthsDelta, wd, ord) {
 }
 
 // ---------- Auditoría (espejo de lib/calendar/audit.ts y de las reglas) ----------
+// lib/calendar/audit.ts es TypeScript con alias "@/": este script (node puro) no
+// lo puede importar. Una sola lista aquí, exportada, y una prueba de paridad
+// (tests/platform/seed-platform-data.test.ts) la compara con AUDIT_VALUE_FIELDS y
+// AUDIT_IGNORED_FIELDS de audit.ts; las reglas tienen su propia prueba de paridad.
 
-const AUDIT_IGNORED = new Set(["revision", "lastChangeId", "updatedBy", "updatedAt", "lastDate"]);
-const AUDIT_VALUE_FIELDS = new Set([
+export const SEED_AUDIT_IGNORED_FIELDS = Object.freeze(["revision", "lastChangeId", "updatedBy", "updatedAt", "lastDate"]);
+export const SEED_AUDIT_VALUE_FIELDS = Object.freeze([
   "title",
   "responsibleAreaId",
   "participantAreaIds",
@@ -205,6 +209,8 @@ const AUDIT_VALUE_FIELDS = new Set([
   "recurrence",
   "status",
 ]);
+const AUDIT_IGNORED = new Set(SEED_AUDIT_IGNORED_FIELDS);
+const AUDIT_VALUE_FIELDS = new Set(SEED_AUDIT_VALUE_FIELDS);
 
 function sameValue(a, b) {
   if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();

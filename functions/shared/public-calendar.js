@@ -138,25 +138,22 @@ function isExpandable(e) {
         (e.recurrence.freq === "none" || (0, dates_1.isValidYmd)(e.recurrence.until)));
 }
 /**
- * ¿La ocurrencia está cancelada SOLO por la cancelación de la serie
- * (`seriesCancellation.from` ≤ fecha, sin excepción propia ese día)? Esas no se
- * publican: tras el corte la serie simplemente termina. Una excepción de una
- * fecha (aunque caiga después del corte) sí se publica como "Cancelada", igual
- * que en recurrence.ts, donde la excepción tiene precedencia.
+ * ¿La ocurrencia cae en o después del corte de una serie cancelada
+ * (`seriesCancellation.from` ≤ fecha)? Esas no se publican: tras el corte la
+ * serie simplemente termina y no se publica NADA, tampoco las fechas que además
+ * tenían una cancelación propia (excepción). Antes del corte, las fechas
+ * canceladas una a una sí se publican como "Cancelada".
  */
 function isSeriesCutOccurrence(o) {
     const e = o.event;
     const cut = e.seriesCancellation;
-    if (o.status !== "cancelled" || !cut || !(0, dates_1.isValidYmd)(cut.from) || (0, dates_1.compareLocal)(o.date, cut.from) < 0)
-        return false;
-    const exceptions = Array.isArray(e.exceptions) ? e.exceptions : [];
-    return !exceptions.some((x) => x && x.date === o.date && x.type === "cancelled");
+    return !!cut && (0, dates_1.isValidYmd)(cut.from) && (0, dates_1.compareLocal)(o.date, cut.from) >= 0;
 }
 /**
  * Calendario público: solo actividades `public` no archivadas, expandidas en
- * `publicRange(today)` y proyectadas por lista blanca. Las ocurrencias que
- * caen después del corte de una serie cancelada no se publican (las fechas
- * canceladas una a una sí, como "Cancelada"). Las áreas del encabezado son las
+ * `publicRange(today)` y proyectadas por lista blanca. Nada de lo que cae en o
+ * después del corte de una serie cancelada se publica (antes del corte, las
+ * fechas canceladas una a una sí, como "Cancelada"). Las áreas del encabezado son las
  * activas que aparecen en alguna actividad publicada.
  */
 function buildPublicCalendar(input) {
