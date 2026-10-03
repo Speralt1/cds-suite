@@ -261,7 +261,11 @@ export interface ShareLinkDoc {
   createdAt: StoredTimestamp;
   createdBy: string;
   regeneratedAt?: StoredTimestamp;
+  /** uid de quien regeneró por última vez (el estado expone solo su nombre visible). */
+  regeneratedBy?: string;
   disabledAt?: StoredTimestamp;
+  /** uid de quien pausó el enlace (solo mientras está pausado). */
+  disabledBy?: string;
   rotation: number;
   updatedAt: StoredTimestamp;
   updatedBy: string;

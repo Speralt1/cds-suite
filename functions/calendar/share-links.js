@@ -9,7 +9,9 @@
  * Acciones: status | create | regenerate | activate | deactivate.
  * Solo `calendar.events.manage_all` (con fallback legacy: pastor y admin).
  * El token en claro se devuelve UNA vez (create/regenerate); se guarda solo
- * su SHA-256. `status` nunca devuelve hash ni token.
+ * su SHA-256. `status` nunca devuelve hash ni token, ni correos ni uids: las
+ * personas salen solo como nombre visible (`createdByName`, `regeneratedByName`,
+ * `disabledByName`, desde users/{uid}.displayName; null si no hay).
  *
  * Errores: HttpsError con message = clave traducible:
  *   share/unauthenticated · share/forbidden · share/invalid-action ·
@@ -49,7 +51,7 @@ function compact(doc) {
   return out;
 }
 
-/** Vista pública del documento: NUNCA hash ni token. */
+/** Vista pública del documento: NUNCA hash ni token (sin nombres; ver describeStatus). */
 function toStatus(doc) {
   if (!doc) return { exists: false, active: false, createdAt: null, regeneratedAt: null, disabledAt: null };
   return {
@@ -58,6 +60,24 @@ function toStatus(doc) {
     createdAt: toIso(doc.createdAt),
     regeneratedAt: toIso(doc.regeneratedAt),
     disabledAt: toIso(doc.disabledAt),
+  };
+}
+
+/** Nombre visible seguro: string no vacío, sin "@" (nunca un correo), máx. 120. */
+function safeDisplayName(user) {
+  const name = user && typeof user.displayName === "string" ? user.displayName.trim() : "";
+  if (!name || name.includes("@")) return null;
+  return name.slice(0, 120);
+}
+
+/** uid que corresponde a cada nombre del estado (solo si la marca de tiempo existe). */
+function actorUids(doc) {
+  if (!doc) return { createdBy: null, regeneratedBy: null, disabledBy: null };
+  const uid = (v) => (typeof v === "string" && v ? v : null);
+  return {
+    createdBy: uid(doc.createdBy),
+    regeneratedBy: doc.regeneratedAt !== undefined && doc.regeneratedAt !== null ? uid(doc.regeneratedBy) : null,
+    disabledBy: doc.active !== true && doc.disabledAt !== undefined && doc.disabledAt !== null ? uid(doc.disabledBy) : null,
   };
 }
 
@@ -82,12 +102,34 @@ function createShareLinkService({ store, clock, randomBytes, logger = console })
     if (!can(userDoc, "calendar.events.manage_all")) throw new HttpsError("permission-denied", SHARE_ERROR_KEYS.forbidden);
   }
 
+  /** Estado + nombres visibles (lecturas fuera de la transacción; un get por persona distinta). */
+  async function describeStatus(doc) {
+    const uids = actorUids(doc);
+    const names = new Map();
+    for (const uid of new Set(Object.values(uids).filter(Boolean))) names.set(uid, safeDisplayName(await store.getUser(uid)));
+    const nameOf = (uid) => (uid ? names.get(uid) ?? null : null);
+    return {
+      ...toStatus(doc),
+      createdByName: nameOf(uids.createdBy),
+      regeneratedByName: nameOf(uids.regeneratedBy),
+      disabledByName: nameOf(uids.disabledBy),
+    };
+  }
+
+  /** Corre la transacción (que devuelve { doc, token? }) y arma la respuesta con nombres. */
+  async function respond(run) {
+    const { doc, token } = await store.shareLinkTransaction(run);
+    const result = { status: await describeStatus(doc) };
+    if (token !== undefined) result.token = token;
+    return result;
+  }
+
   async function status() {
-    return store.shareLinkTransaction(async ({ current }) => ({ status: toStatus(current) }));
+    return respond(async ({ current }) => ({ doc: current }));
   }
 
   async function create(uid) {
-    return store.shareLinkTransaction(async ({ current, set }) => {
+    return respond(async ({ current, set }) => {
       if (current) throw new HttpsError("failed-precondition", SHARE_ERROR_KEYS.alreadyExists);
       const token = newToken();
       const now = nowDate();
@@ -101,12 +143,12 @@ function createShareLinkService({ store, clock, randomBytes, logger = console })
         updatedBy: uid,
       };
       set(compact(doc));
-      return { status: toStatus(doc), token };
+      return { doc, token };
     });
   }
 
   async function regenerate(uid) {
-    return store.shareLinkTransaction(async ({ current, set }) => {
+    return respond(async ({ current, set }) => {
       if (!current) throw new HttpsError("not-found", SHARE_ERROR_KEYS.notFound);
       const token = newToken();
       const now = nowDate();
@@ -116,19 +158,20 @@ function createShareLinkService({ store, clock, randomBytes, logger = console })
         createdAt: current.createdAt,
         createdBy: current.createdBy,
         regeneratedAt: now,
+        regeneratedBy: uid,
         rotation: (Number.isInteger(current.rotation) ? current.rotation : 0) + 1,
         updatedAt: now,
         updatedBy: uid,
       };
       set(compact(doc));
-      return { status: toStatus(doc), token };
+      return { doc, token };
     });
   }
 
   async function setActive(uid, active) {
-    return store.shareLinkTransaction(async ({ current, set }) => {
+    return respond(async ({ current, set }) => {
       if (!current) throw new HttpsError("not-found", SHARE_ERROR_KEYS.notFound);
-      if ((current.active === true) === active) return { status: toStatus(current) };
+      if ((current.active === true) === active) return { doc: current };
       const now = nowDate();
       const doc = {
         tokenHash: current.tokenHash,
@@ -140,9 +183,13 @@ function createShareLinkService({ store, clock, randomBytes, logger = console })
         updatedBy: uid,
       };
       if (current.regeneratedAt !== undefined) doc.regeneratedAt = current.regeneratedAt;
-      if (!active) doc.disabledAt = now;
+      if (current.regeneratedBy !== undefined) doc.regeneratedBy = current.regeneratedBy;
+      if (!active) {
+        doc.disabledAt = now;
+        doc.disabledBy = uid;
+      }
       set(compact(doc));
-      return { status: toStatus(doc) };
+      return { doc };
     });
   }
 
@@ -178,7 +225,7 @@ function createShareLinkService({ store, clock, randomBytes, logger = console })
     }
   }
 
-  return { authorize, status, create, regenerate, activate: (uid) => setActive(uid, true), deactivate: (uid) => setActive(uid, false), handle };
+  return { authorize, status, describeStatus, create, regenerate, activate: (uid) => setActive(uid, true), deactivate: (uid) => setActive(uid, false), handle };
 }
 
 /** Adaptador onCall: `(request) => service.handle(request.auth?.uid, request.data?.action)`. */
@@ -196,4 +243,5 @@ module.exports = {
   SHARE_ACTIONS,
   SHARE_ERROR_KEYS,
   toStatus,
+  safeDisplayName,
 };

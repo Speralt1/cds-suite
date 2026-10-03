@@ -63,6 +63,8 @@ service cloud.firestore {
         && u.permissions.hasAny(['calendar.events.manage_assigned','calendar.events.manage_all'])) ? u.areaIds : [];
     }
     function inActiveArea(areas, areaId) { return areas.hasAny([areaId]) && get(/databases/$(database)/documents/areas/$(areaId)).data.active == true; }
+    // manage_all no exige área activa ni asignada, pero sí que el área responsable exista.
+    function areaExists(areaId) { return exists(/databases/$(database)/documents/areas/$(areaId)); }
     function manageAreaOf(u, areaId) { return inActiveArea(managedAreasOf(u), areaId); }
     // calendarPublish sobre un perfil ya leído: publish_assigned ∧ hasArea (manage_all se evalúa aparte).
     function publishAreaOf(u, areaId) {
@@ -957,6 +959,8 @@ service cloud.firestore {
     function editOk(n, o, k, today, all) {
       return o.status == 'scheduled' && n.status == 'scheduled' && k.hasOnly(editableFields())
         && (all || !o.keys().hasAny(['seriesCancellation']))
+        // manage_assigned no mueve el inicio al pasado (crear ya lo exige con startDate >= hoy)
+        && (all || !k.hasAny(['startDate']) || n.startDate >= today)
         && startedLockOk(n, o, k, today) && validEventEdit(n, k);
     }
     // (b) cancelar un evento simple (las series se cancelan con exceptions/seriesCancellation)
@@ -990,7 +994,7 @@ service cloud.firestore {
       return n.status == 'scheduled' && n.revision == 1 && n.lastChangeId == 'r1'
         && n.exceptions == []
         && !n.keys().hasAny(['seriesCancellation','cancelReason','archivedAt','archiveReason'])
-        && (all || manageAreaOf(u, n.responsibleAreaId))
+        && (all ? areaExists(n.responsibleAreaId) : manageAreaOf(u, n.responsibleAreaId))
         && (all || n.startDate >= today)
         && (all || n.visibility == 'internal' || publishAreaOf(u, n.responsibleAreaId))
         && auditCreate(n)
@@ -1010,7 +1014,9 @@ service cloud.firestore {
         // auditoría: createdBy/createdAt inmutables (además ninguna transición los admite en k)
         && n.updatedBy == request.auth.uid && n.updatedAt == request.time && !k.hasAny(['createdBy','createdAt'])
         // participante ≠ editar; no mover a/desde un área ajena
-        && (all || (inActiveArea(mine, o.responsibleAreaId)
+        // manage_all: si cambia el área responsable, la nueva debe existir
+        && (all ? (n.responsibleAreaId == o.responsibleAreaId || areaExists(n.responsibleAreaId))
+            : (inActiveArea(mine, o.responsibleAreaId)
               && (n.responsibleAreaId == o.responsibleAreaId || inActiveArea(mine, n.responsibleAreaId))))
         // pasado = solo lectura para manage_assigned
         && (all || o.lastDate >= today)
@@ -1045,11 +1051,25 @@ service cloud.firestore {
         && (!exists(eventPath(id))
           ? (d.action == 'created' && d.revision == 1 && d.changedFields.size() == 0 && d.before == null && d.after == null
             && scheduleOk(after))
-          : changeDiffOk(d, after, after.diff(get(eventPath(id)).data).affectedKeys()));
+          : changeDiffOk(d, after, get(eventPath(id)).data));
     }
-    function changeDiffOk(d, after, k) {
+    function changeDiffOk(d, after, before) {
+      let k = after.diff(before).affectedKeys();
       return d.changedFields.toSet() == k.difference(['revision','lastChangeId','updatedBy','updatedAt','lastDate'].toSet())
-        && (!k.hasAny(scheduleFields()) || scheduleOk(after));
+        && (!k.hasAny(scheduleFields()) || scheduleOk(after))
+        && changeValuesOk(d, after, before, k.intersection(auditValueFields().toSet()));
+    }
+    // Campos cuyo valor queda en before/after (espejo de AUDIT_VALUE_FIELDS de lib/calendar/audit.ts;
+    // nunca internalNotes, motivos, marcas de tiempo, excepciones ni seriesCancellation).
+    function auditValueFields() { return ['title','responsibleAreaId','participantAreaIds','startDate','endDate','allDay','startTime','endTime','location','publicDescription','visibility','recurrence','status']; }
+    // before/after del change = valores REALES del evento antes y después del lote, para cada campo de
+    // valor que cambió (v); ambos null si no cambió ninguno (p. ej. solo internalNotes o excepciones).
+    // changedKeys() compara en un paso todas las claves comunes (presupuesto de expresiones).
+    function changeValuesOk(d, after, before, v) {
+      return v.size() == 0 ? (d.before == null && d.after == null)
+        : (d.before.keys().toSet() == v && d.after.keys().toSet() == v
+          && d.before.diff(before).changedKeys().size() == 0
+          && d.after.diff(after).changedKeys().size() == 0);
     }
     function validChange(d) {
       return d.keys().hasAll(['revision','action','actorUid','at','changedFields','before','after','reason'])

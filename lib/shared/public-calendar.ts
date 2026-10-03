@@ -163,9 +163,28 @@ function isExpandable(e: PublicSourceEvent): boolean {
 }
 
 /**
+ * ¿La ocurrencia está cancelada SOLO por la cancelación de la serie
+ * (`seriesCancellation.from` ≤ fecha, sin excepción propia ese día)? Esas no se
+ * publican: tras el corte la serie simplemente termina. Una excepción de una
+ * fecha (aunque caiga después del corte) sí se publica como "Cancelada", igual
+ * que en recurrence.ts, donde la excepción tiene precedencia.
+ */
+export function isSeriesCutOccurrence(
+  o: Pick<Occurrence<PublicSourceEvent>, "date" | "status" | "event">,
+): boolean {
+  const e = o.event as PublicSourceEvent & Partial<Pick<CalendarEvent, "seriesCancellation" | "exceptions">>;
+  const cut = e.seriesCancellation;
+  if (o.status !== "cancelled" || !cut || !isValidYmd(cut.from) || compareLocal(o.date, cut.from) < 0) return false;
+  const exceptions = Array.isArray(e.exceptions) ? e.exceptions : [];
+  return !exceptions.some((x) => x && x.date === o.date && x.type === "cancelled");
+}
+
+/**
  * Calendario público: solo actividades `public` no archivadas, expandidas en
- * `publicRange(today)` y proyectadas por lista blanca. Las áreas del
- * encabezado son las activas que aparecen en alguna actividad publicada.
+ * `publicRange(today)` y proyectadas por lista blanca. Las ocurrencias que
+ * caen después del corte de una serie cancelada no se publican (las fechas
+ * canceladas una a una sí, como "Cancelada"). Las áreas del encabezado son las
+ * activas que aparecen en alguna actividad publicada.
  */
 export function buildPublicCalendar<E extends PublicSourceEvent>(input: {
   events: readonly E[];
@@ -180,7 +199,9 @@ export function buildPublicCalendar<E extends PublicSourceEvent>(input: {
       isExpandable(e) && e.visibility === "public" && e.status !== "archived" && compareLocal(e.startDate, range.to) <= 0,
   );
   const events = sortPublicEvents(
-    occurrencesInRange(visible, range.from, range.to, input.now, input.areas).map((o) => toPublicEvent(o, o.event, areaMap)),
+    occurrencesInRange(visible, range.from, range.to, input.now, input.areas)
+      .filter((o) => !isSeriesCutOccurrence(o))
+      .map((o) => toPublicEvent(o, o.event, areaMap)),
   );
   const used = new Set(events.flatMap((e) => [e.responsibleArea.slug, ...e.participantAreas.map((a) => a.slug)]));
   const areas = input.areas

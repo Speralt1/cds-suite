@@ -22,6 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { saveTransaction } from "../../lib/finance/transactions";
 import { addFollowup, saveProfile } from "../../lib/finance/profiles";
 import type { TransactionInput } from "../../lib/finance/types";
+import { LEGACY_ROLE_ACCESS } from "../../lib/shared/access";
 import {
   FALLBACK_EXPENSE_CATEGORIES,
   FALLBACK_INCOME_CATEGORIES,
@@ -430,6 +431,20 @@ describe("firestore.rules: tablas de acceso", () => {
     const table: Record<string, string[]> = {};
     for (const m of src.matchAll(/r == '(\w+)' \? \[([^\]]*)\]/g)) table[m[1]] = list(m[2]);
     expect(table).toEqual(LEGACY_PERMS);
+  });
+
+  it("legacyPermissions() coincide con LEGACY_ROLE_ACCESS importado de lib/shared (fuente única)", () => {
+    const src = body("legacyPermissions");
+    const table: Record<string, string[]> = {};
+    for (const m of src.matchAll(/r == '(\w+)' \? \[([^\]]*)\]/g)) table[m[1]] = list(m[2]);
+    // admin no figura en la tabla: lo resuelve isAdminUser() (permisos vacíos + baseRole admin).
+    expect(LEGACY_ROLE_ACCESS.admin).toMatchObject({ baseRole: "admin", permissions: [] });
+    const expected = Object.fromEntries(
+      Object.entries(LEGACY_ROLE_ACCESS)
+        .filter(([role]) => role !== "admin")
+        .map(([role, access]) => [role, [...access.permissions]]),
+    );
+    expect(table).toEqual(expected);
   });
 
   it("el catálogo almacenable no incluye settings.manage", () => {

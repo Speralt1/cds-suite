@@ -19,6 +19,7 @@
  *   lider.sinarea@cds.test   v1 Líder sin áreas
  *   diacono.publica@cds.test v1 Diácono: manage_assigned + publish_assigned en [multimedia, varones]
  *   inactivo@cds.test        doc LEGACY role finance, active:false
+ *   sinmodulos@cds.test      v1 activo SIN permisos ni áreas ("Aún no tienes módulos asignados")
  *
  * Áreas: 9 activas + Matrimonios inactiva (paleta cerrada). Actividades
  * relativas a "hoy" en America/Santiago, cada una con revision/lastChangeId y
@@ -29,8 +30,12 @@
  * (functions/calendar/share-links.js + store Admin), así solo se guarda el
  * hash; el enlace en claro se imprime UNA vez.
  *
- * Finanzas: este seed NO crea movimientos ni resúmenes (sus reglas encadenan
- * resumen mensual y atribuciones; se registran desde la UI como finanzas@cds.test).
+ * Finanzas: algunos movimientos FICTICIOS del mes anterior y del mes en curso
+ * (hasta hoy), sin diezmos ni datos pastorales. Se escriben como
+ * finanzas@cds.test con el helper productivo saveTransaction contra el emulador
+ * (scripts/seed-platform-finance.ts), así pasan por firestore.rules igual que
+ * la app y el resumen mensual queda encadenado. Ids fijos por mes: re-correr el
+ * seed no los duplica ni los reescribe.
  *
  * Idempotente: ids fijos; re-correrlo resetea las cuentas, perfiles, áreas,
  * actividades (con su historial) y el enlace sembrados.
@@ -45,7 +50,7 @@ const dates = requireFromFunctions("./shared/dates.js");
 const { lastDateOf } = requireFromFunctions("./shared/calendar-core.js");
 const { LEGACY_ROLE_ACCESS } = requireFromFunctions("./shared/access.js");
 
-const { localToday, addDays, weekdayOf, nthWeekdayOfMonth, parseYmd, shiftMonth } = dates;
+const { localToday, addDays, weekdayOf, nthWeekdayOfMonth, parseYmd, shiftMonth, ymd, daysInMonth } = dates;
 
 export const SEED_PROJECT = "demo-cds-suite";
 export const SEED_FIRESTORE_HOST = "127.0.0.1:8080";
@@ -55,13 +60,17 @@ export const SEED_PASSWORD = "PruebaCDS2026!";
 export const SEED_FUNCTIONS_ORIGIN = "http://127.0.0.1:5001";
 export const SEED_REGION = "southamerica-west1";
 
-/** Literales que NUNCA deben aparecer en la salida pública. */
+/**
+ * Frases internas (naturales y únicas en el seed) que NUNCA deben aparecer en la
+ * salida pública. Se ven como texto real en la app; los tests las buscan por
+ * esta constante.
+ */
 export const SEED_CANARIES = Object.freeze({
-  internalNote: "CANARIO_NOTA_INTERNA_7Q",
-  exceptionReason: "CANARIO_EXCEPCION_9P",
-  cancelReason: "CANARIO_MOTIVO_CANCELACION_3K",
-  archiveReason: "CANARIO_MOTIVO_ARCHIVO_2M",
-  seriesReason: "CANARIO_MOTIVO_SERIE_5T",
+  internalNote: "Las llaves del salón las tiene el hermano Ernesto",
+  exceptionReason: "El grupo viaja al encuentro regional de Olmué",
+  cancelReason: "Se suspende por el pronóstico de lluvia en la comuna",
+  archiveReason: "Quedó registrada dos veces al copiar la semana",
+  seriesReason: "Se fusiona con el culto de oración del miércoles",
 });
 
 export const ARCHIVED_TITLE = "Culto dominical (duplicado por error)";
@@ -130,6 +139,13 @@ export const SEED_USERS = Object.freeze([
     displayName: "Usuario inactivo (prueba)",
     note: "legacy finance inactivo",
     doc: { role: "finance", active: false },
+  },
+  {
+    uid: "seed-sin-modulos",
+    email: "sinmodulos@cds.test",
+    displayName: "Javiera Muñoz (prueba)",
+    note: "v1 activo sin módulos",
+    doc: { role: "leader", active: true, baseRole: "standard", position: "Colaboradora", permissions: [], areaIds: [], homeModule: "calendar" },
   },
 ]);
 
@@ -328,7 +344,7 @@ export function buildSeedData(today, nowMs) {
         endTime: "13:00",
         location: "Templo",
         publicDescription: "Culto de adoración y predicación. El primer domingo de cada mes celebramos la Santa Cena.",
-        internalNotes: `Coordinar ujieres y recepción. ${SEED_CANARIES.internalNote}`,
+        internalNotes: `Coordinar ujieres y recepción. ${SEED_CANARIES.internalNote}.`,
         visibility: "public",
         recurrence: { freq: "weekly", until: addDays(sunday0, weeks(22)) },
       },
@@ -371,10 +387,10 @@ export function buildSeedData(today, nowMs) {
           action: "cancelled",
           scope: "occurrence",
           occurrenceDate: jovenesException,
-          reason: `El grupo viaja a un encuentro regional. ${SEED_CANARIES.exceptionReason}`,
+          reason: `${SEED_CANARIES.exceptionReason}.`,
           patch: {
             exceptions: [
-              { date: jovenesException, type: "cancelled", reason: `El grupo viaja a un encuentro regional. ${SEED_CANARIES.exceptionReason}`, by: "seed-lider-jovenes" },
+              { date: jovenesException, type: "cancelled", reason: `${SEED_CANARIES.exceptionReason}.`, by: "seed-lider-jovenes" },
             ],
           },
         },
@@ -390,7 +406,7 @@ export function buildSeedData(today, nowMs) {
         startTime: "20:00",
         endTime: "22:00",
         location: "Templo",
-        internalNotes: `Repertorio en la carpeta del equipo. ${SEED_CANARIES.internalNote}`,
+        internalNotes: `Repertorio en la carpeta del equipo. ${SEED_CANARIES.internalNote}.`,
         visibility: "internal",
         recurrence: { freq: "weekly", until: addDays(thursday0, weeks(22)) },
       },
@@ -468,8 +484,8 @@ export function buildSeedData(today, nowMs) {
           actor: "seed-pastor",
           at: at(1, 9),
           action: "cancelled",
-          reason: `Se suspende por pronóstico de lluvia. ${SEED_CANARIES.cancelReason}`,
-          patch: { status: "cancelled", cancelReason: `Se suspende por pronóstico de lluvia. ${SEED_CANARIES.cancelReason}` },
+          reason: `${SEED_CANARIES.cancelReason}.`,
+          patch: { status: "cancelled", cancelReason: `${SEED_CANARIES.cancelReason}.` },
         },
       ],
     ),
@@ -491,8 +507,8 @@ export function buildSeedData(today, nowMs) {
           actor: "seed-pastor",
           at: at(9, 11),
           action: "archived",
-          reason: `Creada dos veces por error. ${SEED_CANARIES.archiveReason}`,
-          patch: { status: "archived", archivedAt: at(9, 11), archiveReason: `Creada dos veces por error. ${SEED_CANARIES.archiveReason}` },
+          reason: `${SEED_CANARIES.archiveReason}.`,
+          patch: { status: "archived", archivedAt: at(9, 11), archiveReason: `${SEED_CANARIES.archiveReason}.` },
         },
       ],
     ),
@@ -506,7 +522,7 @@ export function buildSeedData(today, nowMs) {
         endTime: "21:00",
         location: "Sala 2",
         publicDescription: "Reunión abierta para preparar el retiro de verano.",
-        internalNotes: `Revisar presupuesto con Finanzas. ${SEED_CANARIES.internalNote}`,
+        internalNotes: `Revisar presupuesto con Finanzas. ${SEED_CANARIES.internalNote}.`,
         visibility: "internal",
       },
       created("seed-lider-jovenes", 3),
@@ -547,11 +563,11 @@ export function buildSeedData(today, nowMs) {
           action: "cancelled",
           scope: "series",
           occurrenceDate: damasCutFrom,
-          reason: `Se fusiona con el culto de oración. ${SEED_CANARIES.seriesReason}`,
+          reason: `${SEED_CANARIES.seriesReason}.`,
           patch: {
             seriesCancellation: {
               from: damasCutFrom,
-              reason: `Se fusiona con el culto de oración. ${SEED_CANARIES.seriesReason}`,
+              reason: `${SEED_CANARIES.seriesReason}.`,
               by: "seed-pastor",
               at: at(1, 15),
             },
@@ -575,6 +591,61 @@ export function buildSeedData(today, nowMs) {
   ];
 
   return { users, areas, events };
+}
+
+// ---------- Finanzas (movimientos ficticios) ----------
+
+/** Cuenta que registra los movimientos del seed (legacy finance: finance.records.manage). */
+export const SEED_FINANCE_UID = "seed-finanzas";
+
+/**
+ * Movimientos ficticios del mes anterior (completo) y del mes en curso (solo
+ * fechas ≤ hoy). Pura. Ids `seed-fin-{yyyy-mm}-{n}`: estables por mes.
+ * Categorías del catálogo base (activas por defecto); nunca Diezmos.
+ */
+export function buildFinanceSeed(today) {
+  const { y, m, d: todayDay } = parseYmd(today);
+  const prev = shiftMonth(y, m, -1);
+  const months = [
+    { y: prev.y, m: prev.m, maxDay: daysInMonth(prev.y, prev.m) },
+    { y, m, maxDay: todayDay },
+  ];
+  const items = [];
+  for (const mo of months) {
+    const period = `${mo.y}-${String(mo.m).padStart(2, "0")}`;
+    let n = 0;
+    const add = (day, type, amount, category, paymentMethod, description) => {
+      if (day < 1 || day > mo.maxDay) return;
+      n += 1;
+      items.push({
+        id: `seed-fin-${period}-${String(n).padStart(2, "0")}`,
+        input: { type, amount, date: ymd(mo.y, mo.m, day), category, paymentMethod, description, note: "" },
+      });
+    };
+    // Ofrendas de cada domingo del mes
+    const sundays = [];
+    for (let day = 1; day <= daysInMonth(mo.y, mo.m); day++) if (weekdayOf(ymd(mo.y, mo.m, day)) === 0) sundays.push(day);
+    const offerings = [186500, 212300, 174800, 228900, 195400];
+    sundays.forEach((day, i) => add(day, "income", offerings[i % offerings.length], "Ofrendas", "cash", "Ofrenda culto dominical"));
+    add(1, "income", 64200, "Ofrendas", "cash", "Ofrenda reunión de oración");
+    add(3, "expense", 84600, "Servicios básicos", "transfer", "Cuenta de luz y agua del templo");
+    add(6, "income", 150000, "Donaciones", "transfer", "Donación para el fondo de ayuda social");
+    add(9, "expense", 42300, "Compras y materiales", "card", "Materiales para la escuela dominical");
+    add(12, "income", 38700, "Cafetería", "cash", "Ventas de cafetería después del culto");
+    add(16, "expense", 65000, "Mantención", "transfer", "Mantención del equipo de sonido");
+    add(21, "expense", 30000, "Ministerio Jóvenes", "cash", "Colación de la reunión de jóvenes");
+  }
+  return items;
+}
+
+async function loadFinanceSeeder() {
+  // Bajo vitest el import de TS lo resuelve Vite; en el CLI (node) se registra el
+  // loader de tsx (como `node --import tsx`) y se importa el módulo TS.
+  if (process.env.VITEST) return import("./seed-platform-finance.ts");
+  // El repo no es "type": "module": los .ts cargan como CommonJS, así que hacen falta ambos loaders.
+  (await import("tsx/esm/api")).register();
+  (await import("tsx/cjs/api")).register();
+  return import(new URL("./seed-platform-finance.ts", import.meta.url).href);
 }
 
 // ---------- Auth emulator (REST) ----------
@@ -652,12 +723,21 @@ export async function runSeed({ env = process.env, now = Date.now() } = {}) {
   const service = createShareLinkService({ store: createCalendarStore({ db }), clock: { now: () => Date.now() }, randomBytes: crypto.randomBytes });
   const { token } = await service.handle("seed-pastor", "create");
 
+  // Finanzas: como cliente autenticado (reglas reales), después de sembrar los perfiles.
+  const { seedFinanceMovements } = await loadFinanceSeeder();
+  const finance = await seedFinanceMovements({
+    financeUid: SEED_FINANCE_UID,
+    items: buildFinanceSeed(today),
+    firestoreHost: env.FIRESTORE_EMULATOR_HOST,
+  });
+
   return {
     today,
     token,
     publicUrl: publicUrlFor(token),
     feedUrl: feedUrlFor(token),
     counts: { users: data.users.length, areas: data.areas.length, events: data.events.length },
+    finance,
   };
 }
 
@@ -673,7 +753,7 @@ async function main() {
   console.log(`Seed local listo (hoy en Santiago: ${result.today}) · ${result.counts.users} cuentas · ${result.counts.areas} áreas · ${result.counts.events} actividades`);
   console.log(`Cuentas del emulador (contraseña ficticia ${SEED_PASSWORD}):`);
   for (const u of SEED_USERS) console.log(`  ${u.email.padEnd(26)} ${u.note}`);
-  console.log("Finanzas: sin movimientos sembrados (regístralos desde la app como finanzas@cds.test).");
+  console.log(`Finanzas: ${result.finance.created} movimientos ficticios nuevos (${result.finance.skipped} ya existían), registrados como finanzas@cds.test.`);
   console.log("Enlace del calendario público (solo local, se muestra una vez):");
   console.log(`  ${result.publicUrl}`);
 }

@@ -86,7 +86,7 @@ describe("autorización (manage_all con fallback legacy)", () => {
   it.each(["u-admin", "u-admin-v1", "u-pastor", "u-all-v1"])("%s puede administrar el enlace", async (uid) => {
     const { service } = setup();
     await expect(service.handle(uid, "status")).resolves.toEqual({
-      status: { exists: false, active: false, createdAt: null, regeneratedAt: null, disabledAt: null },
+      status: { exists: false, active: false, createdAt: null, regeneratedAt: null, disabledAt: null, createdByName: null, regeneratedByName: null, disabledByName: null },
     });
   });
 
@@ -125,7 +125,7 @@ describe("create / regenerate / activate / deactivate", () => {
     const result = await service.handle("u-admin", "create");
     expect(Object.keys(result).sort()).toEqual(["status", "token"]);
     expect(result.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(result.status).toEqual({ exists: true, active: true, createdAt: T0, regeneratedAt: null, disabledAt: null });
+    expect(result.status).toEqual({ exists: true, active: true, createdAt: T0, regeneratedAt: null, disabledAt: null, createdByName: null, regeneratedByName: null, disabledByName: null });
     const doc = store.shareLink!;
     expect(Object.keys(doc).sort()).toEqual(["active", "createdAt", "createdBy", "rotation", "tokenHash", "updatedAt", "updatedBy"]);
     expect(doc).toMatchObject({ tokenHash: hashShareToken(result.token), active: true, createdBy: "u-admin", rotation: 1, updatedBy: "u-admin" });
@@ -167,6 +167,9 @@ describe("create / regenerate / activate / deactivate", () => {
       createdAt: T0,
       regeneratedAt: "2026-10-04T15:02:00.000Z",
       disabledAt: null,
+      createdByName: null,
+      regeneratedByName: null,
+      disabledByName: null,
     });
     expect(deepStrings(doc).some((s) => s.includes(second.token) || s.includes(first.token))).toBe(false);
     // no es idempotente: cada llamada rota
@@ -184,7 +187,7 @@ describe("create / regenerate / activate / deactivate", () => {
     advance(1000);
     const off = await service.handle("u-admin", "deactivate");
     expect(off).toEqual({
-      status: { exists: true, active: false, createdAt: T0, regeneratedAt: null, disabledAt: "2026-10-04T15:00:01.000Z" },
+      status: { exists: true, active: false, createdAt: T0, regeneratedAt: null, disabledAt: "2026-10-04T15:00:01.000Z", createdByName: null, regeneratedByName: null, disabledByName: null },
     });
     expect(store.shareLink).toMatchObject({ active: false, tokenHash: hash });
     const writes = store.writes.length;
@@ -204,7 +207,9 @@ describe("create / regenerate / activate / deactivate", () => {
     const check = async () => {
       const r = await service.handle("u-admin", "status");
       expect(Object.keys(r)).toEqual(["status"]);
-      expect(Object.keys(r.status).sort()).toEqual(["active", "createdAt", "disabledAt", "exists", "regeneratedAt"]);
+      expect(Object.keys(r.status).sort()).toEqual([
+        "active", "createdAt", "createdByName", "disabledAt", "disabledByName", "exists", "regeneratedAt", "regeneratedByName",
+      ]);
       const json = JSON.stringify(r);
       if (store.shareLink) expect(json).not.toContain(store.shareLink.tokenHash as string);
       for (const t of seen) expect(json).not.toContain(t);
@@ -250,5 +255,70 @@ describe("adaptador onCall", () => {
     expect(await rejection(handler({ auth: { uid: "u-admin" }, data: null }))).toMatchObject({ code: "invalid-argument" });
     const created = await handler({ auth: { uid: "u-admin" }, data: { action: "create" } });
     expect(created.token).toHaveLength(43);
+  });
+});
+
+describe("nombres visibles en el estado (createdByName / regeneratedByName / disabledByName)", () => {
+  function named() {
+    const ctx = setup();
+    ctx.store.users.set("u-admin", { ...USERS["u-admin"], displayName: "Ana Pérez", email: "ana@cds.test" });
+    ctx.store.users.set("u-pastor", { ...USERS["u-pastor"], displayName: "  Daniel Herrera  ", email: "daniel@cds.test" });
+    ctx.store.users.set("u-all-v1", { ...USERS["u-all-v1"], displayName: "correo@cds.test", email: "correo@cds.test" });
+    return ctx;
+  }
+
+  it("cada acción devuelve el nombre de quien creó, regeneró y pausó; nunca correos ni uids", async () => {
+    const { service, store, advance } = named();
+    const created = await service.handle("u-admin", "create");
+    expect(created.status).toMatchObject({ createdByName: "Ana Pérez", regeneratedByName: null, disabledByName: null });
+    advance(1000);
+    const regenerated = await service.handle("u-pastor", "regenerate");
+    expect(regenerated.status).toMatchObject({ createdByName: "Ana Pérez", regeneratedByName: "Daniel Herrera", disabledByName: null });
+    expect(store.shareLink).toMatchObject({ createdBy: "u-admin", regeneratedBy: "u-pastor" });
+    advance(1000);
+    const off = await service.handle("u-admin", "deactivate");
+    expect(off.status).toMatchObject({ active: false, regeneratedByName: "Daniel Herrera", disabledByName: "Ana Pérez" });
+    expect(store.shareLink).toMatchObject({ disabledBy: "u-admin", regeneratedBy: "u-pastor" });
+    const status = await service.handle("u-pastor", "status");
+    expect(status).toEqual(off);
+    // reactivar borra quién lo pausó y conserva quién lo regeneró
+    const on = await service.handle("u-pastor", "activate");
+    expect(on.status).toMatchObject({ active: true, disabledAt: null, disabledByName: null, regeneratedByName: "Daniel Herrera" });
+    expect(store.shareLink).not.toHaveProperty("disabledBy");
+    for (const r of [created, regenerated, off, status, on]) {
+      const json = JSON.stringify(r.status);
+      expect(json).not.toMatch(/@|u-admin|u-pastor/);
+    }
+  });
+
+  it("displayName con forma de correo, vacío o usuario inexistente → null", async () => {
+    const { service, store } = named();
+    await service.handle("u-all-v1", "create");
+    expect((await service.handle("u-admin", "status")).status.createdByName).toBeNull();
+    store.shareLink = { ...store.shareLink!, createdBy: "u-borrado" };
+    expect((await service.handle("u-admin", "status")).status.createdByName).toBeNull();
+    store.users.set("u-blank", { role: "admin", active: true, displayName: "   " });
+    store.shareLink = { ...store.shareLink!, createdBy: "u-blank" };
+    expect((await service.handle("u-admin", "status")).status.createdByName).toBeNull();
+  });
+
+  it("documento previo sin regeneratedBy/disabledBy → nombres null (sin inventar)", async () => {
+    const { service, store } = named();
+    store.shareLink = {
+      tokenHash: "a".repeat(64), active: false, createdAt: new Date(T0), createdBy: "u-admin", rotation: 2,
+      regeneratedAt: new Date(T0), disabledAt: new Date(T0), updatedAt: new Date(T0), updatedBy: "u-pastor",
+    };
+    const r = await service.handle("u-admin", "status");
+    expect(r.status).toMatchObject({ createdByName: "Ana Pérez", regeneratedByName: null, disabledByName: null });
+  });
+
+  it("una sola lectura por persona distinta, fuera de la transacción", async () => {
+    const { service, store } = named();
+    await service.handle("u-admin", "create");
+    await service.handle("u-admin", "regenerate");
+    store.calls = [];
+    await service.handle("u-pastor", "status");
+    // authorize lee al actor; describeStatus lee una vez a u-admin (creó y regeneró)
+    expect(store.calls).toEqual(["getUser:u-pastor", "shareLinkTransaction", "getUser:u-admin"]);
   });
 });

@@ -7,6 +7,7 @@ import {
   PUBLIC_EVENT_KEYS,
   buildPublicCalendar,
   fnv1a64,
+  isSeriesCutOccurrence,
   publicRange,
   publicRecurrenceLabel,
   sortPublicEvents,
@@ -156,5 +157,52 @@ describe("fnv1a64", () => {
     expect(fnv1a64("")).toBe("cbf29ce484222325");
     expect(fnv1a64("a")).toBe("af63dc4c8601ec8c");
     expect(fnv1a64("abc")).toBe("e71fa2190541574b");
+  });
+});
+
+describe("serie cancelada desde una fecha: el feed público no muestra lo que queda después del corte", () => {
+  const oracion = EVENTS.find((e) => e.id === "ev-oracion")!;
+  const withOracion = (over: Record<string, unknown>) =>
+    build(EVENTS.map((e) => (e.id === "ev-oracion" ? ({ ...e, ...over } as typeof e) : e)));
+  const titled = (cal: PublicCalendar, title: string) => cal.events.filter((e) => e.title === title);
+
+  it("las ocurrencias desde `from` desaparecen; las anteriores siguen programadas; el área sigue en el encabezado", () => {
+    const list = titled(build(), "Oración de los martes");
+    expect(list.map((e) => e.startDate)).toEqual(["2026-09-29", "2026-10-06"]);
+    expect(list.every((e) => e.status === "scheduled")).toBe(true);
+    expect(build().areas.map((a) => a.slug)).toContain("intercesion");
+  });
+
+  it("una fecha cancelada sola (excepción) sí se publica como Cancelada, antes o después del corte", () => {
+    const x = (date: string) => ({ date, type: "cancelled", reason: CANARIES.exceptionReason, by: CANARIES.uid });
+    const cal = withOracion({ exceptions: [x("2026-10-06"), x("2026-10-20")] });
+    const list = titled(cal, "Oración de los martes");
+    expect(list.map((e) => [e.startDate, e.status])).toEqual([
+      ["2026-09-29", "scheduled"],
+      ["2026-10-06", "cancelled"],
+      ["2026-10-20", "cancelled"],
+    ]);
+    expect(JSON.stringify(cal)).not.toContain(CANARIES.exceptionReason);
+  });
+
+  it("serie cortada desde su inicio → no aparece, y su área sale del encabezado si nadie más la usa", () => {
+    const cal = build([
+      { ...oracion, seriesCancellation: { from: oracion.startDate, reason: "x", by: "u", at: null } },
+    ] as typeof EVENTS);
+    expect(cal.events).toEqual([]);
+    expect(cal.areas).toEqual([]);
+  });
+
+  it("actividades simples canceladas siguen saliendo como Cancelada (no les aplica el corte)", () => {
+    expect(build().events.find((e) => e.title === "Evangelismo en la plaza")?.status).toBe("cancelled");
+  });
+
+  it("la vista interna no cambia: expandRecurrence sigue entregando las canceladas por la serie", () => {
+    const occ = expandRecurrence(oracion, "2026-09-01", "2026-12-31", NOW);
+    const cut = occ.filter((o) => o.date >= "2026-10-13");
+    expect(cut.length).toBe(12);
+    expect(cut.every((o) => o.status === "cancelled")).toBe(true);
+    expect(cut.every((o) => isSeriesCutOccurrence(o))).toBe(true);
+    expect(occ.filter((o) => o.date < "2026-10-13").some((o) => isSeriesCutOccurrence(o))).toBe(false);
   });
 });

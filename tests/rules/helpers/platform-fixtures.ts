@@ -15,6 +15,7 @@ import {
   type DocumentData,
   type Firestore,
 } from "firebase/firestore";
+import { AUDIT_VALUE_FIELDS } from "../../../lib/calendar/audit";
 
 export async function createRulesEnv(): Promise<RulesTestEnvironment> {
   return initializeTestEnvironment({
@@ -341,6 +342,14 @@ export function expectedAction(before: DocumentData, after: DocumentData, change
   return "updated";
 }
 
+/** before/after con los valores reales (espejo de valueMap en lib/calendar/audit.ts); null si no hay campos de valor. */
+export function auditValues(state: DocumentData, fields: string[]): DocumentData | null {
+  const out: DocumentData = {};
+  for (const f of fields)
+    if ((AUDIT_VALUE_FIELDS as readonly string[]).includes(f) && state[f] !== undefined) out[f] = state[f];
+  return Object.keys(out).length ? out : null;
+}
+
 export type UpdateOptions = {
   action?: string;
   actorUid?: string;
@@ -364,6 +373,7 @@ export async function updateEvent(
     (k) => !META.includes(k) && !sameValue(stored[k], patch[k]),
   );
   const action = opts.action ?? expectedAction(stored, { ...stored, ...patch }, changed);
+  const fields = opts.changedFields ?? changed;
   const db = dbOf(env, uid);
   const batch = writeBatch(db);
   batch.update(doc(db, "calendarEvents", id), {
@@ -379,9 +389,9 @@ export async function updateEvent(
       action,
       actorUid: opts.actorUid ?? uid,
       at: serverTimestamp(),
-      changedFields: opts.changedFields ?? changed,
-      before: null,
-      after: null,
+      changedFields: fields,
+      before: auditValues(stored, fields),
+      after: auditValues({ ...stored, ...patch }, fields),
       reason: null,
       ...opts.change,
     });

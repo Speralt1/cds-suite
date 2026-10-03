@@ -11,7 +11,9 @@ import {
   SEED_AREAS,
   SEED_CANARIES,
   SEED_USERS,
+  SEED_FINANCE_UID,
   assertSeedEnvironment,
+  buildFinanceSeed,
   buildSeedData,
   publicUrlFor,
 } from "../../scripts/seed-platform-calendar-emulator.mjs";
@@ -160,5 +162,55 @@ describe.each(TODAYS)("seed: actividades coherentes con las reglas (hoy = %s)", 
     }
     const all = JSON.stringify(data.events.map((e) => e.data));
     for (const c of canaries) expect(all).toContain(c);
+  });
+});
+
+describe("seed: usuario sin módulos y frases internas naturales", () => {
+  const data = buildSeedData("2026-10-03", NOW);
+
+  it("sinmodulos@cds.test: v1 activo, sin permisos ni áreas → sin módulos", () => {
+    const u = SEED_USERS.find((x) => x.email === "sinmodulos@cds.test")!;
+    expect(u.doc).toMatchObject({ active: true, baseRole: "standard", permissions: [], areaIds: [] });
+    const d = data.users.find((x) => x.uid === u.uid)!.data;
+    expect(d.accessSchemaVersion).toBe(1);
+    expect(effectivePermissions(d).size).toBe(0);
+  });
+
+  it("las frases internas son texto natural (sin marcadores tipo CANARIO) y únicas", () => {
+    const values = Object.values(SEED_CANARIES);
+    expect(new Set(values).size).toBe(values.length);
+    for (const v of values) {
+      expect(v).not.toMatch(/CANARIO|_[0-9A-Z]{2}$/);
+      expect(v).toMatch(/^[A-ZÁÉÍÓÚÑ][A-Za-záéíóúñü ,]+$/);
+      expect(v.length).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe("seed: movimientos financieros ficticios", () => {
+  const INCOME = ["Ofrendas", "Donaciones", "Cafetería"];
+  const EXPENSE = ["Servicios básicos", "Compras y materiales", "Mantención", "Ministerio Jóvenes"];
+
+  it.each(TODAYS)("hoy=%s: mes anterior completo + mes en curso hasta hoy, ids estables y sin diezmos", (today) => {
+    const items = buildFinanceSeed(today);
+    const prevMonth = addDays(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
+    expect(items.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+    for (const { id, input } of items) {
+      expect(id).toMatch(/^seed-fin-\d{4}-\d{2}-\d{2}$/);
+      expect(id.slice(9, 16)).toBe(input.date.slice(0, 7));
+      expect([prevMonth, today.slice(0, 7)]).toContain(input.date.slice(0, 7));
+      expect(compareLocal(input.date, today)).toBeLessThanOrEqual(0);
+      expect(input.type === "income" ? INCOME : EXPENSE).toContain(input.category);
+      expect(input.category).not.toBe("Diezmos");
+      expect(Number.isInteger(input.amount) && input.amount > 0).toBe(true);
+      expect(input.description.length).toBeGreaterThan(0);
+      expect(input.note).toBe("");
+    }
+    expect(buildFinanceSeed(today)).toEqual(items);
+  });
+
+  it("los registra la cuenta de finanzas sembrada", () => {
+    expect(SEED_USERS.find((u) => u.uid === SEED_FINANCE_UID)?.doc).toEqual({ role: "finance", active: true });
   });
 });

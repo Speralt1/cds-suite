@@ -39,6 +39,19 @@ export interface SeedResult {
   publicUrl: string;
   feedUrl: string;
   counts: { users: number; areas: number; events: number };
+  finance: { created: number; skipped: number };
+}
+export interface FinanceSeedItem {
+  id: string;
+  input: {
+    type: "income" | "expense";
+    amount: number;
+    date: string;
+    category: string;
+    paymentMethod: "cash" | "transfer" | "card" | "other";
+    description: string;
+    note: string;
+  };
 }
 export declare const SEED_PROJECT: string;
 export declare const SEED_FIRESTORE_HOST: string;
@@ -54,6 +67,8 @@ export declare const SEED_CANARIES: Readonly<{
   seriesReason: string;
 }>;
 export declare const ARCHIVED_TITLE: string;
+export declare const SEED_FINANCE_UID: string;
+export declare function buildFinanceSeed(today: string): FinanceSeedItem[];
 export declare const SEED_USERS: readonly SeedUser[];
 export declare const SEED_AREAS: readonly SeedArea[];
 export declare function assertSeedEnvironment(env?: Record<string, string | undefined>): string;

@@ -118,10 +118,10 @@ describe("migración de acceso v1 contra el emulador", () => {
     expect(inactive).toMatch(/estado\s+migrate/);
     expect(inactive).toContain("Usuario inactivo");
 
-    for (const uid of ["seed-pastor", "seed-lider-jovenes", "seed-lider-sin-area", "seed-diacono-publica"]) {
+    for (const uid of ["seed-pastor", "seed-lider-jovenes", "seed-lider-sin-area", "seed-diacono-publica", "seed-sin-modulos"]) {
       expect(block(out, uid)).toMatch(/estado\s+skip_already_v1/);
     }
-    expect(out).toContain("migrar 3 · ya v1 4 · rol inválido 0");
+    expect(out).toContain("migrar 3 · ya v1 5 · rol inválido 0");
 
     const after = await adminDb("users/seed-finanzas");
     expect(after.accessSchemaVersion).toBeUndefined();
@@ -166,7 +166,7 @@ describe("migración de acceso v1 contra el emulador", () => {
 
     const second = migrate("--apply");
     expect(second.code).toBe(0);
-    expect(second.out).toContain("migrar 0 · ya v1 7");
+    expect(second.out).toContain("migrar 0 · ya v1 8");
     expect(second.out).toContain("Escritos: 0");
   });
 });

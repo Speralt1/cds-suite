@@ -15,6 +15,7 @@ exports.publicRecurrenceLabel = publicRecurrenceLabel;
 exports.toPublicEvent = toPublicEvent;
 exports.publicRange = publicRange;
 exports.sortPublicEvents = sortPublicEvents;
+exports.isSeriesCutOccurrence = isSeriesCutOccurrence;
 exports.buildPublicCalendar = buildPublicCalendar;
 const calendar_core_1 = require("./calendar-core");
 const dates_1 = require("./dates");
@@ -137,15 +138,34 @@ function isExpandable(e) {
         (e.recurrence.freq === "none" || (0, dates_1.isValidYmd)(e.recurrence.until)));
 }
 /**
+ * ¿La ocurrencia está cancelada SOLO por la cancelación de la serie
+ * (`seriesCancellation.from` ≤ fecha, sin excepción propia ese día)? Esas no se
+ * publican: tras el corte la serie simplemente termina. Una excepción de una
+ * fecha (aunque caiga después del corte) sí se publica como "Cancelada", igual
+ * que en recurrence.ts, donde la excepción tiene precedencia.
+ */
+function isSeriesCutOccurrence(o) {
+    const e = o.event;
+    const cut = e.seriesCancellation;
+    if (o.status !== "cancelled" || !cut || !(0, dates_1.isValidYmd)(cut.from) || (0, dates_1.compareLocal)(o.date, cut.from) < 0)
+        return false;
+    const exceptions = Array.isArray(e.exceptions) ? e.exceptions : [];
+    return !exceptions.some((x) => x && x.date === o.date && x.type === "cancelled");
+}
+/**
  * Calendario público: solo actividades `public` no archivadas, expandidas en
- * `publicRange(today)` y proyectadas por lista blanca. Las áreas del
- * encabezado son las activas que aparecen en alguna actividad publicada.
+ * `publicRange(today)` y proyectadas por lista blanca. Las ocurrencias que
+ * caen después del corte de una serie cancelada no se publican (las fechas
+ * canceladas una a una sí, como "Cancelada"). Las áreas del encabezado son las
+ * activas que aparecen en alguna actividad publicada.
  */
 function buildPublicCalendar(input) {
     const range = publicRange(input.today);
     const areaMap = new Map(input.areas.map((a) => [a.id, a]));
     const visible = input.events.filter((e) => isExpandable(e) && e.visibility === "public" && e.status !== "archived" && (0, dates_1.compareLocal)(e.startDate, range.to) <= 0);
-    const events = sortPublicEvents((0, calendar_core_1.occurrencesInRange)(visible, range.from, range.to, input.now, input.areas).map((o) => toPublicEvent(o, o.event, areaMap)));
+    const events = sortPublicEvents((0, calendar_core_1.occurrencesInRange)(visible, range.from, range.to, input.now, input.areas)
+        .filter((o) => !isSeriesCutOccurrence(o))
+        .map((o) => toPublicEvent(o, o.event, areaMap)));
     const used = new Set(events.flatMap((e) => [e.responsibleArea.slug, ...e.participantAreas.map((a) => a.slug)]));
     const areas = input.areas
         .filter((a) => a.active === true && used.has(a.id))
