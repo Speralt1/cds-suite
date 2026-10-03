@@ -81,3 +81,27 @@ Fuente: documentos agregados `financeMonthlySummaries`, leídos el 2026-10-03 ~2
 | **Resultado** | **READY FOR A1** (espera el GO explícito de Salvador) |
 
 **Rollback requerido:** no. A0 no cambió nada desplegado; solo creó el bucket, el export, el canal y la alerta.
+
+### A1 · Merge de PR #1: completada (2026-10-03)
+
+**GO recibido:** "GO A1", que autoriza solo el merge de PR #1 y sus verificaciones, sin deploy. Antes se hizo el push de `e05a787` a `mission/platform-core-calendar-v1`; el remoto quedó sincronizado.
+
+| Fecha (UTC) | Paso | Comando / método | Resultado |
+|---|---|---|---|
+| 22:08 | Verificación previa | `gh pr view 1`, `git fetch`, `gh api` | PR #1 OPEN, no draft, MERGEABLE, `mergeStateStatus` CLEAN. Head `e6b2084d9d3b…`, base `feature/preproduccion-mobile-v1` @ `648afd1` (**no avanzó**: slice6 39 por delante / 0 por detrás). Rama sin protección, sin checks. Política del repo: merge commit (precedente: PR #2) |
+| 22:09 | Merge | `gh pr merge 1 --merge --match-head-commit e6b2084d9d3b9e1a73a2998d5ffa09e04e55ee3f` (sin `--delete-branch`) | **MERGED** a las 22:09:42. Merge commit **`0d1bb0d`** (padres `648afd1` y `e6b2084`) |
+| 22:10 | Verificación posterior | `git fetch`; `git diff --stat e6b2084 origin/feature/preproduccion-mobile-v1`; hashes de árbol | **Diff vacío.** Árbol `55b29f6f…` idéntico en `e6b2084` y `0d1bb0d` |
+| 22:10 | Ramas y PR | `git rev-parse`, `gh pr view 5` | `mission/slice6-usability` se conserva (`e6b2084`), porque es la base de PR #5. PR #5 sigue abierto en Draft, base `mission/slice6-usability`, sin cambios |
+| 22:11 | Producción | APIs de Rules, Hosting y Functions | **SIN CAMBIOS:** ruleset `8d0087d6…`, Hosting `f4591416f0474b0f` y Functions con las fechas del 2026-09 |
+
+#### A1 STATUS
+
+| Ítem | Estado |
+|---|---|
+| PR #1 merged | **PASS** |
+| Commit resultante | `0d1bb0d` en `feature/preproduccion-mobile-v1` |
+| Diff contra `e6b2084` | **EMPTY** |
+| Estado de producción | **SIN CAMBIOS** |
+| **Resultado** | **READY FOR A2** (espera el GO explícito de Salvador) |
+
+**Rollback requerido:** no. Si hiciera falta deshacer el merge sin desplegar, se haría con `git revert -m 1 0d1bb0d` en preproducción, con aprobación previa.
