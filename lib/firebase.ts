@@ -1,7 +1,11 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
+
+/** Región de las Cloud Functions (igual a `REGION` de functions/index.js). */
+export const FUNCTIONS_REGION = "southamerica-west1";
 
 // Access each NEXT_PUBLIC value explicitly so Next.js can inline it at build time.
 const firebaseConfig = {
@@ -53,4 +57,24 @@ export function getFirebaseServices() {
   }
   const storage = getStorage(app);
   return { app, auth, db, storage };
+}
+
+let functionsInstance: Functions | null = null;
+
+// Callables (p. ej. calendarShareLinkManage). Misma guardia que Firestore: el
+// emulador solo en desarrollo, con la variable explícita y un proyecto demo-.
+export function getFirebaseFunctions(): Functions {
+  if (functionsInstance) return functionsInstance;
+  const { app } = getFirebaseServices();
+  const functions = getFunctions(app, FUNCTIONS_REGION);
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true"
+  ) {
+    if (!firebaseConfig.projectId?.startsWith("demo-"))
+      throw new Error("Functions emulator requires a demo project.");
+    connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  }
+  functionsInstance = functions;
+  return functions;
 }
