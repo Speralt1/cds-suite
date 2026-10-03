@@ -85,7 +85,7 @@ function CategorySection({
     <section className="settings-section">
       <div className="section-heading">
         <div>
-          <h2>{title}</h2>
+          <h3 className="text-base leading-6 font-semibold text-ink">{title}</h3>
           <p>
             Desactivar oculta la categoría en registros nuevos y conserva todo
             el historial.
@@ -99,7 +99,7 @@ function CategorySection({
           return (
             <article className="settings-row" key={category}>
               <div className="min-w-0">
-                <h3 className="break-words">{category}</h3>
+                <h4 className="text-sm font-medium break-words">{category}</h4>
                 <span className={`status-pill mt-2 ${enabled ? "" : "voided"}`}>
                   {enabled ? "Activa" : "Inactiva"}
                 </span>
@@ -196,7 +196,7 @@ export function FinanceSettingsPanel() {
         onSuccess={setSuccess}
       />
       <section className="panel settings-info-panel">
-        <h2>Métodos de pago</h2>
+        <h3 className="text-base leading-6 font-semibold text-ink">Métodos de pago</h3>
         <p className="mt-2 text-sm text-muted">
           Efectivo · Transferencia · Tarjeta · Otro
         </p>

@@ -1,0 +1,50 @@
+/* Piezas de área compartidas (Calendario y Reportes). Prefijo cal-area-*.
+   El color llega por las variables locales --area-swatch|ink|soft (areaStyle). */
+.cal-area-swatch {
+  display: inline-block;
+  flex: none;
+  border-radius: 999px;
+  background: var(--area-swatch);
+}
+.cal-area-swatch.is-square {
+  border-radius: 3px;
+}
+.cal-area-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: white;
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.cal-area-chip > span:not(.cal-area-swatch) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-area-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-left: 4px solid var(--area-swatch);
+  border-radius: 6px;
+  background: var(--area-soft);
+  font-size: 13px;
+  line-height: 20px;
+}
+.cal-area-pill-name {
+  color: var(--area-ink);
+  font-weight: 600;
+}
+.cal-area-pill-suffix,
+.cal-area-inactive {
+  color: var(--color-muted);
+  font-weight: 400;
+}

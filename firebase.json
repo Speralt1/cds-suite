@@ -30,6 +30,40 @@
             "value": "application/manifest+json"
           }
         ]
+      },
+      {
+        "source": "/calendario/compartir/**",
+        "headers": [
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/calendario-publico",
+        "headers": [
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ],
     "rewrites": [
@@ -37,6 +71,13 @@
         "source": "/api/sumup-sync",
         "function": {
           "functionId": "sumupSyncNow",
+          "region": "southamerica-west1"
+        }
+      },
+      {
+        "source": "/api/calendario-publico",
+        "function": {
+          "functionId": "calendarPublicFeed",
           "region": "southamerica-west1"
         }
       },
@@ -50,6 +91,10 @@
       {
         "source": "/campanas/**",
         "destination": "/campanas.html"
+      },
+      {
+        "source": "/calendario/compartir/**",
+        "destination": "/calendario-publico.html"
       }
     ]
   },
@@ -62,6 +107,10 @@
       "host": "127.0.0.1",
       "port": 8080
     },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
+    },
     "ui": {
       "enabled": false
     },
@@ -72,6 +121,9 @@
   },
   "functions": {
     "source": "functions",
-    "codebase": "default"
+    "codebase": "default",
+    "predeploy": [
+      "node scripts/build-shared.mjs --check"
+    ]
   }
 }

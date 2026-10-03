@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 import { TriangleAlert, CircleDashed, CircleCheck, Banknote, Clock } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
-import { canSeeDetails } from "@/lib/finance/permissions";
+import { can } from "@/lib/shared/access";
 import {
   usePeriod,
   useSummaries,
@@ -337,7 +337,7 @@ export function SummaryPage() {
   const [summaryView, setSummaryView] =
     useState<SummaryView>(period.view);
   const [dailyDate, setDailyDate] = useState(today());
-  const details = canSeeDetails(useAccess().role);
+  const details = can(useAccess(), "finance.details.read");
 
   const dailyPeriod: PeriodSelection = {
     year: Number(dailyDate.slice(0, 4)),

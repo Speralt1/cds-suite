@@ -1,0 +1,50 @@
+01-lider-aterriza-calendario-1440 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/calendario
+02-lider-calendario-mes-1440 url=/calendario?vista=mes overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+03-lider-calendario-semana-1440 url=/calendario?vista=semana overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+04-lider-actividad-ajena-1440 url=/calendario?vista=agenda overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+05-lider-crear-actividad-1440 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+06-lider-mis-actividades-1440 url=/calendario/mis-actividades overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+07-lider-resumen-finanzas-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+08-lider-sin-acceso-configuracion-1440 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+09-lider-reporte-calendario-1440 url=/reportes/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+10-lider-calendario-390 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+11-lider-crear-actividad-390 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+12-lider-calendario-375-full url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+13-lider-calendario-rail-1024 url=/calendario?vista=mes overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+14-diacono-publicar-actividad-1440 url=/calendario?vista=agenda overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+15-diacono-form-publicable-1440 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+16-lider-sinarea-mis-actividades-1440 url=/calendario/mis-actividades overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+20-admin-aterriza-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
+21-admin-finanzas-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+22-admin-finanzas-1024 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+23-admin-finanzas-390 url=/finanzas overflow=0 inner=0 small=3 jargon=0 saldo=0 errors=0 smallList=["BUTTON:Diario(109x38)","BUTTON:Mensual(109x38)","BUTTON:Anual(109x38)"]
+24-admin-calendario-1440 url=/calendario?vista=mes overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+25-admin-filtro-area-1440 url=/calendario?vista=mes overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+26-admin-configuracion-areas-1440 url=/configuracion/areas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+27-admin-area-editor-1440 url=/configuracion/areas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+28-admin-usuarios-1440 url=/configuracion/usuarios overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+29-admin-usuario-editor-1440 url=/configuracion/usuarios overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+30-admin-reporte-calendario-1440 url=/reportes/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+31-admin-reportes-hub-1440 url=/reportes overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+32-admin-reporte-calendario-390 url=/reportes/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+33-admin-usuarios-390 url=/configuracion/usuarios overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+40-finanzas-aterriza-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
+41-finanzas-calendario-lectura-1440 url=/calendario?vista=agenda overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+17-lider-form-publica-bloqueada-1440 url=/calendario overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+18-lider-detalle-propio-sin-publicar-1440 url=/calendario?vista=agenda overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+19-diacono-toast-publicada-1440 url=/calendario?vista=agenda overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+34-admin-usuario-editor-permisos-1440 url=/configuracion/usuarios overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+35-admin-quitar-acceso-1440 url=/configuracion/usuarios overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+36-admin-pdf-reporte pdf=reporte-calendario-2026-10.pdf
+46-sin-modulos-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
+45-inactivo-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
+50-publico-1440 url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+51-publico-390 url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+52-publico-390-full url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+53-publico-375-detalle url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+54-publico-mes-1440 url=/calendario-publico?t=qu84l322Nw9_NYYDIAaIVGglLW4JyKukl7kvruDYCQ4 overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+55-publico-no-disponible-390 url=/calendario-publico?t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=2 errs=["Failed to load resource: the server responded with a status of 404 (Not Found)","Failed to load resource: the server responded with a status of 404 (Not Found)"]
+60-pastor-aterriza-1440 url=/finanzas overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0 landedAt=/finanzas
+61-pastor-compartir-activo-1440 url=/calendario/compartir overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+62-pastor-compartir-recien-generado-1440 url=/calendario/compartir overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0
+63-pastor-compartir-desactivado-1440 url=/calendario/compartir overflow=0 inner=0 small=0 jargon=0 saldo=0 errors=0

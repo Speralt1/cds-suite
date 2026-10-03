@@ -24,14 +24,31 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import { getFirebaseServices } from "@/lib/firebase";
-import { errorMessage } from "@/lib/finance/formatters";
+import { settingsLoadError } from "./errors";
+import { LEGACY_ROLE_ACCESS, deriveLegacyRole, normalizeAccess } from "@/lib/shared/access";
 import {
+  accessDraftForCreate,
+  accessDraftFromUser,
+  buildUserAccessV1Fields,
+  buildUserDocV1,
+  validateManagedUserAccessV1,
   validateManagedUserCreate,
   validateManagedUserUpdate,
+  type AccessDraft,
   type ManagedUser,
   type ManagedUserCreate,
+  type ManagedUserLike,
   type ManagedUserUpdate,
 } from "./users";
+
+/** Acceso v1 opcional del alta (sin él, se usa el mapeo del rol). */
+export type ManagedUserCreateAccess = Omit<AccessDraft, "displayName" | "active">;
+
+function actorUidOf(auth: Auth): string {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Tu sesión expiró. Vuelve a ingresar para continuar.");
+  return uid;
+}
 
 export function useManagedUsers() {
   const [state, setState] = useState<{
@@ -63,7 +80,7 @@ export function useManagedUsers() {
           setState({
             data: [],
             loading: false,
-            error: errorMessage(error),
+            error: settingsLoadError(error, "los usuarios"),
           }),
       ),
     [],
@@ -87,9 +104,19 @@ function temporaryPassword() {
 export async function createManagedUser(
   db: Firestore,
   primaryAuth: Auth,
-  input: ManagedUserCreate,
+  input: ManagedUserCreate & { access?: ManagedUserCreateAccess },
 ) {
-  const valid = validateManagedUserCreate(input);
+  // El rol legacy se conserva siempre: con acceso v1 explícito se deriva de él.
+  const role = input.access
+    ? deriveLegacyRole(input.access.baseRole, input.access.permissions)
+    : input.role;
+  const valid = validateManagedUserCreate({ ...input, role });
+  const actorUid = actorUidOf(primaryAuth);
+  const draft = validateManagedUserAccessV1(
+    actorUid,
+    "",
+    accessDraftForCreate({ displayName: valid.displayName, role: valid.role }, input.access),
+  );
   const primaryApp = getFirebaseServices().app;
 
   const secondaryApp = initializeApp(
@@ -111,13 +138,15 @@ export async function createManagedUser(
     );
 
     try {
-      await setDoc(doc(db, "users", credential.user.uid), {
-        displayName: valid.displayName,
-        email: valid.email,
-        role: valid.role,
-        active: true,
-        createdAt: serverTimestamp(),
-      });
+      await setDoc(
+        doc(db, "users", credential.user.uid),
+        buildUserDocV1(draft, {
+          email: valid.email,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: actorUid,
+        }),
+      );
     } catch (error) {
       await deleteUser(credential.user).catch(() => undefined);
       throw error;
@@ -175,11 +204,17 @@ export async function resendPasswordSetup(
   );
 }
 
+/**
+ * Edición clásica {displayName, role, active}. Escribe siempre el payload v1:
+ * si el documento es legacy (o cambia el rol) se promueve con el mapeo exacto
+ * del rol; si ya es v1 y el rol no cambia, conserva su acceso v1.
+ */
 export async function updateManagedUser(
   db: Firestore,
   currentUid: string,
   targetUid: string,
   update: ManagedUserUpdate,
+  current?: ManagedUserLike,
 ) {
   const valid = validateManagedUserUpdate(
     currentUid,
@@ -187,5 +222,63 @@ export async function updateManagedUser(
     update,
   );
 
-  await updateDoc(doc(db, "users", targetUid), valid);
+  const profile = current ? normalizeAccess(current) : null;
+  const keepV1 =
+    !!current &&
+    profile?.schema === "v1" &&
+    deriveLegacyRole(profile.baseRole, profile.permissions) === valid.role;
+  const mapped = LEGACY_ROLE_ACCESS[valid.role];
+  const draft: AccessDraft = keepV1
+    ? { ...accessDraftFromUser(current), displayName: valid.displayName, active: valid.active }
+    : {
+        displayName: valid.displayName,
+        active: valid.active,
+        baseRole: mapped.baseRole,
+        position: mapped.position,
+        permissions: [...mapped.permissions],
+        areaIds: [],
+        homeModule: mapped.homeModule,
+      };
+
+  await updateDoc(
+    doc(db, "users", targetUid),
+    { ...buildUserAccessV1Fields(draft, { updatedAt: serverTimestamp(), updatedBy: currentUid }) },
+  );
+}
+
+/**
+ * Guarda el acceso v1 completo de una persona (editor nuevo). Valida la
+ * auto-protección y que quede al menos un administrador activo en `users`.
+ * `email` y `createdAt` no se tocan (son inmutables).
+ */
+export async function updateManagedUserAccess(
+  db: Firestore,
+  currentUid: string,
+  targetUid: string,
+  draft: AccessDraft,
+  users: readonly ManagedUserLike[],
+) {
+  const valid = validateManagedUserAccessV1(currentUid, targetUid, draft, users);
+  await updateDoc(
+    doc(db, "users", targetUid),
+    { ...buildUserAccessV1Fields(valid, { updatedAt: serverTimestamp(), updatedBy: currentUid }) },
+  );
+  return valid;
+}
+
+/** Quitar o devolver el acceso, a partir de lo guardado (promueve a v1 si es legacy). */
+export async function setManagedUserActive(
+  db: Firestore,
+  currentUid: string,
+  target: ManagedUserLike,
+  active: boolean,
+  users: readonly ManagedUserLike[],
+) {
+  return updateManagedUserAccess(
+    db,
+    currentUid,
+    target.id,
+    { ...accessDraftFromUser(target), active },
+    users,
+  );
 }

@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useAccess } from "@/lib/auth/access-provider";
+import { can } from "@/lib/shared/access";
 
 export function SettingsGuard({ children }: { children: React.ReactNode }) {
   const access = useAccess();
-  if (access.role !== "admin")
+  if (!can(access, "settings.manage"))
     return (
       <div className="panel empty">
         <h1>Configuración solo está disponible para administradores.</h1>

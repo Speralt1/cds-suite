@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useAccess } from "@/lib/auth/access-provider";
-import { canSeeDetails } from "@/lib/finance/permissions";
+import { can } from "@/lib/shared/access";
 import { clp, errorMessage, today } from "@/lib/finance/formatters";
 import { useTransactions } from "@/lib/finance/hooks";
 import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/insights";
@@ -321,7 +321,7 @@ export function OfferingsPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
 
-  if (!canSeeDetails(access.role)) {
+  if (!can(access, "finance.details.read")) {
     return <Empty>Esta sección está reservada para Administración, Pastor y Finanzas.</Empty>;
   }
 
