@@ -1984,9 +1984,11 @@
   }
 }
 
-/* ---------- Agenda centrada (desktop) ---------- */
+/* ---------- Agenda alineada a la izquierda (con h1, subnav y toolbar) ---------- */
 .cds-calendar .cal-screen .cal-agenda-wrap {
-  margin: 0 auto;
+  max-width: 880px;
+  margin-left: 0;
+  margin-right: auto;
 }
 
 /* ---------- Mis actividades ---------- */
@@ -2106,3 +2108,51 @@
   color: var(--cal-neutral);
 }
 
+/* ---------- Ciclo 1 (UX) ---------- */
+/* Estado vacío de Mis actividades con el mismo ancho que la lista. */
+.cds-calendar .cal-my-empty {
+  max-width: 880px;
+}
+
+/* Compartir: "Copiar enlace" nunca se parte en dos líneas. */
+.cds-calendar .cal-share-copy {
+  flex: 0 0 auto;
+  justify-content: center;
+  min-width: 168px;
+  white-space: nowrap;
+}
+
+/* "+ Crear" flotante (solo se monta en móvil y si el usuario puede crear). */
+.cds-calendar .cal-fab {
+  display: none;
+}
+@media (max-width: 767px) {
+  .cds-calendar .cal-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(64px + env(safe-area-inset-bottom) + 16px);
+    z-index: 35;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 48px;
+    padding: 0 18px 0 16px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(20, 35, 29, 0.24);
+  }
+  /* Aire bajo la lista para que el botón no tape la última actividad. */
+  .cds-calendar .cal-screen.has-fab {
+    padding-bottom: 72px;
+  }
+  .cds-calendar .cal-add-areas {
+    min-height: 44px;
+  }
+  .cds-calendar .cal-share-field {
+    flex-direction: column;
+  }
+  .cds-calendar .cal-share-copy {
+    min-height: 44px;
+  }
+}

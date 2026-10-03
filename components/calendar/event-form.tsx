@@ -429,6 +429,7 @@ function EventForm({
               lang="es-CL"
               className="cal-input"
               value={s.startDate}
+              min={temporalLocked || actor?.can("calendar.events.manage_all") ? undefined : today}
               onChange={(e) => e.target.value && update({ startDate: e.target.value })}
               {...invalid("startDate", longDateEcho(s.startDate) ? fid("date-echo") : undefined)}
             />

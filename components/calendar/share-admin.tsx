@@ -38,6 +38,18 @@ type Confirm = "none" | "regenerate" | "deactivate" | "finish";
 const GENERATE_FAILED = "No pudimos generar el enlace. Revisa tu conexión e inténtalo de nuevo.";
 const COPY_FAILED = "No pudimos copiar automáticamente. El enlace quedó seleccionado: cópialo con Ctrl+C o mantén presionado para copiar.";
 
+const byName = (name: string | null | undefined) => (name?.trim() ? ` por ${name.trim()}` : "");
+
+/** "Enlace activo · creado el 01-10-2026 por Daniel Herrera" (sin "por …" si no hay nombre). */
+export function activeStatusText(verb: "creado" | "generado", date: string, name?: string | null): string {
+  return date ? `Enlace activo · ${verb} el ${date}${byName(name)}` : "Enlace activo";
+}
+
+/** "Desactivado el 05-10-2026 por …" (sin "por …" si no hay nombre). */
+export function disabledStatusText(date: string, name?: string | null): string {
+  return date ? `Desactivado el ${date}${byName(name)}` : "Desactivado";
+}
+
 function actionError(action: ShareLinkAction, error: unknown): string {
   if (calendarErrorKind(error) === "network") {
     if (action === "create") return GENERATE_FAILED;
@@ -186,7 +198,7 @@ function ShareAdmin({ header }: { header: React.ReactNode }) {
             value={freshUrl}
             onFocus={(e) => e.currentTarget.select()}
           />
-          <button type="button" className="button-primary" onClick={copy}>
+          <button type="button" className="button-primary cal-share-copy" onClick={copy}>
             {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />} {copied ? "Copiado" : "Copiar enlace"}
           </button>
         </div>
@@ -223,12 +235,13 @@ function ShareAdmin({ header }: { header: React.ReactNode }) {
   } else if (status.active) {
     // C. Activo (el enlace ya no se puede mostrar).
     const since = status.regeneratedAt ?? status.createdAt;
+    const by = status.regeneratedAt ? status.regeneratedByName : status.createdByName;
     panel = (
       <div className="cal-share-state">
         <div className="cal-share-status">
           <CalBadge icon={CircleCheck} text="Activo" tone="success" />
           <span className="cal-share-status-text">
-            Enlace activo{storedDate(since) ? ` · ${status.regeneratedAt ? "generado" : "creado"} el ${storedDate(since)}` : ""}
+            {activeStatusText(status.regeneratedAt ? "generado" : "creado", storedDate(since), by)}
           </span>
         </div>
         <p className="cal-help-13">
@@ -252,7 +265,7 @@ function ShareAdmin({ header }: { header: React.ReactNode }) {
         <div className="cal-share-status">
           <CalBadge icon={Ban} text="Desactivado" tone="neutral" />
           <span className="cal-share-status-text">
-            {storedDate(status.disabledAt) ? `Desactivado el ${storedDate(status.disabledAt)}` : "Desactivado"}
+            {disabledStatusText(storedDate(status.disabledAt), status.disabledByName)}
           </span>
         </div>
         <p className="cal-help-13">

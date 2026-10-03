@@ -6,8 +6,8 @@
 // Mes por defecto en escritorio; Agenda por defecto en móvil (<768), donde
 // Semana no existe.
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarX2, Eye, EyeOff, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { CalendarX2, Eye, EyeOff, Plus, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { canCreateEvents, filterByAreas, monthGrid, weekRange } from "@/lib/calendar/calendar";
 import { CALENDAR_ERROR_MESSAGES } from "@/lib/calendar/errors";
 import { useCalendarEvents } from "@/lib/calendar/events-client";
@@ -100,6 +100,34 @@ export function OfflineBanner() {
     <InlineNotice tone="warning" icon={WifiOff}>
       {CALENDAR_ERROR_MESSAGES.offline}
     </InlineNotice>
+  );
+}
+
+/**
+ * "+ Crear" flotante del móvil (<768): la barra superior del Calendario no deja
+ * "Crear actividad" en la primera pantalla, así que queda fijo abajo a la
+ * derecha, 16 px sobre la barra inferior. Solo para quien puede crear.
+ */
+export function CreateFab({ onCreate, disabledReason }: { onCreate: () => void; disabledReason?: string }) {
+  const helpId = useId();
+  return (
+    <>
+      <button
+        type="button"
+        className="button-primary cal-fab"
+        aria-label="Crear actividad"
+        aria-disabled={disabledReason ? true : undefined}
+        aria-describedby={disabledReason ? helpId : undefined}
+        onClick={() => !disabledReason && onCreate()}
+      >
+        <Plus size={18} aria-hidden="true" /> Crear
+      </button>
+      {disabledReason && (
+        <span className="cal-sr" id={helpId}>
+          {disabledReason}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -290,8 +318,10 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
     }
   }
 
+  const showFab = mobile && canCreate;
+
   return (
-    <div className="cal-screen">
+    <div className={`cal-screen${showFab ? " has-fab" : ""}`}>
       {offline && <OfflineBanner />}
       <CalendarToolbar
         title={title}
@@ -345,6 +375,7 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
           }}
         />
       )}
+      {showFab && <CreateFab onCreate={create} disabledReason={offline ? CALENDAR_ERROR_MESSAGES.offline : undefined} />}
       {sheets.sheets}
     </div>
   );

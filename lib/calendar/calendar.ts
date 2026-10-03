@@ -189,6 +189,31 @@ export function canCreateEvents(actor: CalendarActor | null, areas: readonly Are
 
 // ---------- Mis actividades y filtros ----------
 
+/**
+ * ¿Se ofrece "Mis actividades" (pestaña y ruta)?
+ * - con áreas asignadas, aunque solo lea (18 §11.7);
+ * - con `manage_assigned` sin áreas: llega al vacío "Aún no tienes áreas
+ *   asignadas" (sabe que debe pedir un área);
+ * - Pastor/Administración (`manage_all`) sin áreas no la necesitan: ya
+ *   administran todo desde el Calendario;
+ * - solo lectura sin áreas: no hay nada que mostrar.
+ */
+export function showsMyActivities(actor: CalendarActor | null): boolean {
+  if (!actor) return false;
+  if (actor.areaIds.length > 0) return true;
+  return actor.can("calendar.events.manage_assigned") && !actor.can("calendar.events.manage_all");
+}
+
+/**
+ * Qué hace la ruta /calendario/mis-actividades: "show" si la pestaña se ofrece
+ * o si administra todo (entra por enlace directo y ve el vacío); "redirect" al
+ * Calendario (con aviso) para quien solo lee y no tiene áreas.
+ */
+export function myActivitiesRoute(actor: CalendarActor | null): "show" | "redirect" {
+  if (showsMyActivities(actor) || actor?.can("calendar.events.manage_all")) return "show";
+  return "redirect";
+}
+
 export interface MyActivity {
   occurrence: Occurrence;
   role: "responsable" | "participante";
@@ -331,6 +356,7 @@ export interface ValidationContext {
 
 export const STARTED_SERIES_HELP =
   "Esta serie ya empezó: no se puede cambiar el día, la hora ni la frecuencia. Puedes cambiar hasta cuándo se repite y los demás datos.";
+export const PAST_START_EDIT_ERROR = "No puedes mover la actividad a una fecha pasada. Elige hoy o una fecha futura.";
 export const STARTED_EVENT_HELP = "Esta actividad ya empezó: no se pueden cambiar la fecha ni la hora.";
 
 /** Explicación de una línea para una actividad o serie ya iniciada. */
@@ -391,6 +417,9 @@ export function validateEvent(input: EventInput, ctx: ValidationContext): EventE
   if (!isValidYmd(input.startDate)) e.startDate = "Elige la fecha.";
   else if (!existing && !manageAll && compareLocal(input.startDate, ctx.today) < 0)
     e.startDate = "No puedes crear actividades en fechas pasadas.";
+  else if (existing && !manageAll && input.startDate !== existing.startDate && compareLocal(input.startDate, ctx.today) < 0)
+    // Espejo de editOk() en las reglas: sin manage_all, la fecha no se mueve al pasado.
+    e.startDate = PAST_START_EDIT_ERROR;
   if (!isValidYmd(endDate)) e.endDate = "Elige la fecha de término.";
   else if (isValidYmd(input.startDate) && compareLocal(endDate, input.startDate) < 0)
     e.endDate = "La fecha de término no puede ser anterior al inicio.";

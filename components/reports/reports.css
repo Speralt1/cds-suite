@@ -153,8 +153,8 @@
 .cal-rep-stepper > button {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
 }
 .cal-rep-stepper > button:hover {
@@ -326,12 +326,17 @@
 .cal-rep-table tr:last-child td {
   border-bottom: 0;
 }
+/* Fecha y Hora nunca se pegan ni se parten ("dom 04-10-2026" | "11:00–12:30"):
+   anchos border-box con aire a la derecha; Actividad (sin ancho) absorbe el
+   resto y nunca queda bajo ~160 px gracias a los cortes de columnas de abajo. */
 .cal-rep-table .c-date {
-  width: 108px;
+  width: 148px;
+  padding-right: 16px;
   white-space: nowrap;
 }
 .cal-rep-table .c-time {
-  width: 104px;
+  width: 116px;
+  padding-right: 16px;
   white-space: nowrap;
 }
 .cal-rep-table .c-resp {
@@ -405,12 +410,11 @@ tr.is-cancelled .cal-rep-title-text,
 .cal-rep-item .cal-rep-title-text {
   font-size: 14px;
 }
-@container (max-width: 1100px) {
-  .cal-rep-table .c-desc {
-    display: none;
-  }
-}
-@container (max-width: 960px) {
+/* Cortes por ancho del panel (fijas: fecha 148 + hora 116 + área 140 +
+   estado 124 = 528; + lugar 130; + descripción 200; + participantes 150).
+   Participantes sale primero porque se repite como "con …" bajo el título;
+   luego Descripción y Lugar; bajo 700 px, lista. Actividad queda ≥ 160 px. */
+@container (max-width: 1180px) {
   .cal-rep-table .c-part {
     display: none;
   }
@@ -418,7 +422,12 @@ tr.is-cancelled .cal-rep-title-text,
     display: block;
   }
 }
-@container (max-width: 800px) {
+@container (max-width: 1020px) {
+  .cal-rep-table .c-desc {
+    display: none;
+  }
+}
+@container (max-width: 820px) {
   .cal-rep-table .c-loc {
     display: none;
   }
@@ -426,7 +435,7 @@ tr.is-cancelled .cal-rep-title-text,
     display: block;
   }
 }
-@container (max-width: 600px) {
+@container (max-width: 700px) {
   .cal-rep-table {
     display: none;
   }

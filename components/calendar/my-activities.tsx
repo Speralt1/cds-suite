@@ -8,14 +8,16 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, CalendarX2, Ellipsis, Info, Pencil, Tags, Trash2 } from "lucide-react";
 import { areaById } from "@/lib/calendar/areas";
 import { canCreateEvents, myActivities } from "@/lib/calendar/calendar";
+import { CALENDAR_ERROR_MESSAGES } from "@/lib/calendar/errors";
 import { useCalendarEvents } from "@/lib/calendar/events-client";
 import { addDays, addMonthsClamped, firstOfMonth, lastOfMonth } from "@/lib/shared/dates";
 import type { Area, Occurrence } from "@/lib/shared/types";
 import { AgendaList } from "./agenda-view";
 import { AreaChip } from "./area-badges";
-import { LoadErrorBody, OfflineBanner } from "./calendar-screen";
+import { CreateFab, LoadErrorBody, OfflineBanner } from "./calendar-screen";
 import { eventActions } from "./event-actions";
 import { useEventSheets } from "./event-sheets";
+import { MOBILE_QUERY, useMedia } from "./hooks";
 import { shortDateYear } from "./labels";
 import { EmptyState, PageHeader, Skeleton } from "./ui";
 import { useCalendarBase, type CalendarBase } from "./use-calendar-base";
@@ -95,6 +97,7 @@ function MyActivitiesInner({ onRetry }: { onRetry: () => void }) {
   const { actor, areas, today, now, offline } = base;
   const [tab, setTab] = useState<"responsable" | "participa">("responsable");
   const [showPast, setShowPast] = useState(false);
+  const mobile = useMedia(MOBILE_QUERY);
   const to = lastOfMonth(addMonthsClamped(today, 1));
   const pastFrom = firstOfMonth(addMonthsClamped(today, -1));
   const { events, loading, error } = useCalendarEvents(pastFrom);
@@ -144,7 +147,7 @@ function MyActivitiesInner({ onRetry }: { onRetry: () => void }) {
     return (
       <div className="cal-screen">
         {header}
-        <div className="panel">
+        <div className="panel cal-my-empty">
           <EmptyState
             icon={Tags}
             title="Aún no tienes áreas asignadas"
@@ -161,9 +164,10 @@ function MyActivitiesInner({ onRetry }: { onRetry: () => void }) {
   const countR = upcoming.filter((x) => x.role === "responsable").length;
   const countP = upcoming.length - countR;
   const canCreate = canCreateEvents(actor, areas);
+  const showFab = mobile && canCreate;
 
   return (
-    <div className="cal-screen">
+    <div className={`cal-screen${showFab ? " has-fab" : ""}`}>
       {header}
       {offline && <OfflineBanner />}
       <div className="cal-my-toolbar">
@@ -245,6 +249,7 @@ function MyActivitiesInner({ onRetry }: { onRetry: () => void }) {
           </div>
         )}
       </div>
+      {showFab && <CreateFab onCreate={sheets.openCreate} disabledReason={offline ? CALENDAR_ERROR_MESSAGES.offline : undefined} />}
       {sheets.sheets}
     </div>
   );

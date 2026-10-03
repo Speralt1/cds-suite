@@ -72,12 +72,12 @@ function StatusBadge({ status }: { status: OccurrenceStatus }) {
   );
 }
 
-function VisibilityMark({ row }: { row: CalendarReportRow }) {
+/** Ícono de visibilidad: nombre accesible y tooltip "Pública" / "Solo equipo". */
+export function VisibilityMark({ row }: { row: Pick<CalendarReportRow, "visibility"> }) {
   const label = REPORT_VISIBILITY_LABEL[row.visibility];
   return (
-    <span className="cal-rep-vis" title={label}>
+    <span className="cal-rep-vis" role="img" aria-label={label} title={label}>
       {row.visibility === "public" ? <Globe size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}
-      <span className="cal-sr">{label}</span>
     </span>
   );
 }

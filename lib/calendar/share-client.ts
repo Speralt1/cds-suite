@@ -19,6 +19,13 @@ export interface ShareLinkStatus {
   createdAt: string | null;
   regeneratedAt: string | null;
   disabledAt: string | null;
+  /**
+   * Nombre visible de quien creó / generó / desactivó el enlace (displayName del
+   * perfil; nunca correo ni identificador). null u omitido si no se conoce.
+   */
+  createdByName?: string | null;
+  regeneratedByName?: string | null;
+  disabledByName?: string | null;
 }
 
 export interface ShareLinkResult {
@@ -41,6 +48,14 @@ export function shareErrorMessage(error: unknown): string {
   return SHARE_ERROR_MESSAGES[errorKey(error)] ?? calendarErrorMessage(error, "share");
 }
 
+/** Nombre de quien hizo el cambio: texto recortado (≤ 80), o null. Nunca un correo. */
+export function shareActorName(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const name = v.replace(/\s+/g, " ").trim().slice(0, 80).trim();
+  if (!name || name.includes("@")) return null;
+  return name;
+}
+
 function normalizeStatus(raw: unknown): ShareLinkStatus {
   const s = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const iso = (v: unknown) => (typeof v === "string" && v ? v : null);
@@ -50,6 +65,9 @@ function normalizeStatus(raw: unknown): ShareLinkStatus {
     createdAt: iso(s.createdAt),
     regeneratedAt: iso(s.regeneratedAt),
     disabledAt: iso(s.disabledAt),
+    createdByName: shareActorName(s.createdByName),
+    regeneratedByName: shareActorName(s.regeneratedByName),
+    disabledByName: shareActorName(s.disabledByName),
   };
 }
 
