@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { PUBLIC_AREA_KEYS, PUBLIC_CALENDAR_KEYS, PUBLIC_EVENT_KEYS } from "@/lib/shared/public-calendar";
 import type { PublicCalendar } from "@/lib/shared/types";
 import { ARCHIVED_TITLE, SEED_CANARIES, SEED_USERS } from "../../scripts/seed-platform-calendar-emulator.mjs";
-import { callShareLink, fetchFeed, seed, signIn, type FeedResponse } from "./helpers";
+import { FEED_URL, callShareLink, fetchFeed, seed, signIn, type FeedResponse } from "./helpers";
 
 const PUBLIC_TITLES = [
   "Culto dominical",
@@ -48,7 +48,10 @@ describe("calendario público vía emulador de Functions", () => {
   beforeAll(async () => {
     const result = await seed();
     token = result.token;
-    expect(result.feedUrl).toContain("/demo-cds-suite/southamerica-west1/calendarPublicFeed?t=");
+    // El token nunca va en una URL: el enlace lo lleva en el fragmento y el feed lo recibe en el cuerpo.
+    expect(result.feedUrl).toBe(FEED_URL);
+    expect(result.feedUrl).not.toContain(token);
+    expect(result.publicUrl).toBe(`http://localhost:3000/calendario-publico#${token}`);
     pastorToken = await signIn("pastor@cds.test");
     malformed = await fetchFeed("abc");
   });
@@ -59,6 +62,7 @@ describe("calendario público vía emulador de Functions", () => {
     expect(res.headers["content-type"]).toMatch(/application\/json/);
     expect(res.headers["referrer-policy"]).toBe("no-referrer");
     expect(res.headers["x-robots-tag"]).toBe("noindex, nofollow");
+    expect(res.headers["cache-control"]).toBe("no-store");
 
     const body = JSON.parse(res.text) as { ok: boolean; calendar: PublicCalendar };
     expect(Object.keys(body).sort()).toEqual(["calendar", "ok"]);
@@ -91,6 +95,19 @@ describe("calendario público vía emulador de Functions", () => {
     expectUnavailable(await fetchFeed(null), malformed);
     expectUnavailable(await fetchFeed(UNKNOWN_TOKEN), malformed);
     expectUnavailable(await fetchFeed(`${token}x`), malformed);
+    expectUnavailable(await fetchFeed(null, { body: JSON.stringify({ token: [token] }) }), malformed);
+    expectUnavailable(await fetchFeed(null, { body: JSON.stringify([token]) }), malformed);
+  });
+
+  it("token en la query (formato anterior) nunca se acepta: GET → 405 y POST sin cuerpo → el mismo 404", async () => {
+    const get = await fetchFeed(null, { method: "GET", query: `t=${encodeURIComponent(token)}` });
+    expect(get.status).toBe(405);
+    expect(get.text).not.toContain('"calendar"');
+    expect(get.headers["cache-control"]).toBe("no-store");
+    expectUnavailable(await fetchFeed(null, { query: `t=${encodeURIComponent(token)}` }), malformed);
+    expectUnavailable(await fetchFeed(null, { query: `token=${encodeURIComponent(token)}`, body: "{}" }), malformed);
+    // El token válido en el cuerpo sigue funcionando.
+    expect((await fetchFeed(token)).status).toBe(200);
   });
 
   it("desactivar el enlace → mismo 404; activarlo devuelve el MISMO enlace (R4)", async () => {

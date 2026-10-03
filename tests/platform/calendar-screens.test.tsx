@@ -293,7 +293,7 @@ describe("Compartir calendario", () => {
         // B
     const field = (await screen.findByLabelText("Enlace del calendario compartido")) as HTMLInputElement;
     expect(h.manageShareLink).toHaveBeenCalledWith("create");
-    expect(field.value).toBe(`${window.location.origin}/calendario/compartir/${TOKEN}`);
+    expect(field.value).toBe(`${window.location.origin}/calendario-publico#${TOKEN}`);
     expect(screen.getByText(/Cópialo ahora: por seguridad no lo volveremos a mostrar/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Copiar enlace/ })).toBeInTheDocument();
     const open = screen.getByRole("link", { name: /Abrir vista pública/ });
@@ -328,7 +328,7 @@ describe("Compartir calendario", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Copiar enlace/ }));
     });
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`${window.location.origin}/calendario/compartir/${TOKEN}`);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`${window.location.origin}/calendario-publico#${TOKEN}`);
     expect(h.toast).toHaveBeenCalledWith("Enlace copiado.");
     expect(screen.getByRole("button", { name: /Copiado/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Listo" }));

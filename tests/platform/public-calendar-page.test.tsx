@@ -119,36 +119,73 @@ describe("ruta pública /calendario-publico", () => {
   });
 
   it("'no disponible' es idéntico para enlace mal formado (sin red) y 404", async () => {
-    const malformed = await renderAt("/calendario/compartir/no-es-un-enlace");
+    const malformed = await renderAt("/calendario-publico#no-es-un-enlace");
     await screen.findByRole("heading", { name: PUBLIC_UNAVAILABLE_TITLE });
     expect(fetchMock).not.toHaveBeenCalled();
     const malformedHtml = malformed.container.innerHTML;
     malformed.unmount();
 
-    const missingQuery = await renderAt("/calendario-publico");
+    const missingHash = await renderAt("/calendario-publico");
     await screen.findByRole("heading", { name: PUBLIC_UNAVAILABLE_TITLE });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(missingQuery.container.innerHTML).toBe(malformedHtml);
-    missingQuery.unmount();
+    expect(missingHash.container.innerHTML).toBe(malformedHtml);
+    missingHash.unmount();
 
     fetchMock.mockImplementation(() => json(404, { ok: false, error: "unavailable" }));
-    const notFound = await renderAt(`/calendario/compartir/${VALID}`);
+    const notFound = await renderAt(`/calendario-publico#${VALID}`);
     await screen.findByRole("heading", { name: PUBLIC_UNAVAILABLE_TITLE });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toBe(`/api/calendario-publico?t=${VALID}`);
+    // El token va en el cuerpo del POST, nunca en la URL del feed.
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/calendario-publico");
+    expect(init).toMatchObject({ method: "POST", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer" });
+    expect(JSON.parse(String(init?.body))).toEqual({ token: VALID });
     expect(notFound.container.innerHTML).toBe(malformedHtml);
-    notFound.unmount();
-
-    const notFoundQuery = await renderAt(`/calendario-publico?t=${VALID}`);
-    await screen.findByRole("heading", { name: PUBLIC_UNAVAILABLE_TITLE });
-    expect(notFoundQuery.container.innerHTML).toBe(malformedHtml);
     expect(malformedHtml).toContain("Es posible que el enlace haya cambiado. Pide el enlace actualizado a la iglesia.");
+    notFound.unmount();
+  });
+
+  it("el formato anterior (?t= o /calendario/compartir/<t>) no se acepta ni se envía", async () => {
+    for (const url of [`/calendario-publico?t=${VALID}`, `/calendario/compartir/${VALID}`]) {
+      const view = await renderAt(url);
+      await screen.findByRole("heading", { name: PUBLIC_UNAVAILABLE_TITLE });
+      view.unmount();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("el token no se persiste en localStorage, sessionStorage ni cookies, y no aparece en el HTML", async () => {
+    fetchMock.mockImplementation(() => json(200, { ok: true, calendar: CAL }));
+    const { container } = await renderAt(`/calendario-publico#${VALID}`);
+    await waitFor(() => expect(screen.getAllByText("Culto dominical").length).toBeGreaterThan(0));
+    const stored = [
+      ...Object.keys(window.localStorage).map((k) => `${k}=${window.localStorage.getItem(k)}`),
+      ...Object.keys(window.sessionStorage).map((k) => `${k}=${window.sessionStorage.getItem(k)}`),
+      document.cookie,
+    ].join("\n");
+    expect(stored).not.toContain(VALID);
+    expect(container.innerHTML).not.toContain(VALID);
+    expect(document.documentElement.outerHTML).not.toContain(VALID);
+  });
+
+  it("otro enlace pegado en la misma pestaña (cambio de fragmento) se vuelve a leer", async () => {
+    fetchMock.mockImplementation(() => json(404, { ok: false, error: "unavailable" }));
+    await renderAt("/calendario-publico#no-es-un-enlace");
+    await screen.findByRole("heading", { name: PUBLIC_UNAVAILABLE_TITLE });
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockImplementation(() => json(200, { ok: true, calendar: CAL }));
+    await act(async () => {
+      window.history.replaceState({}, "", `/calendario-publico#${VALID}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await waitFor(() => expect(screen.getAllByText("Culto dominical").length).toBeGreaterThan(0));
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ token: VALID });
   });
 
   it("error de red → Reintentar vuelve a pedir y muestra el calendario", async () => {
     fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError("Failed to fetch")));
     fetchMock.mockImplementationOnce(() => json(200, { ok: true, calendar: CAL }));
-    const { container } = await renderAt(`/calendario/compartir/${VALID}`);
+    const { container } = await renderAt(`/calendario-publico#${VALID}`);
     await screen.findByText(PUBLIC_ERROR_TEXT);
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     await waitFor(() => expect(screen.getAllByText("Culto dominical").length).toBeGreaterThan(0));

@@ -42,7 +42,7 @@ describe("seed: interlock", () => {
     expect(() => assertSeedEnvironment({ ...ok, GCLOUD_PROJECT: "cds-administracion" })).toThrow(/demo-cds-suite/);
   });
   it("URL pública en formato de desarrollo", () => {
-    expect(publicUrlFor("abc")).toBe("http://localhost:3000/calendario-publico?t=abc");
+    expect(publicUrlFor("abc")).toBe("http://localhost:3000/calendario-publico#abc");
   });
 });
 

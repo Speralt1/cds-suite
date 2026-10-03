@@ -45,10 +45,18 @@ function fakeRes(): Res {
   return res;
 }
 
-function fakeReq(method: string, query: Record<string, unknown> = {}, headers: Record<string, string> = {}) {
+// El token viaja en el cuerpo JSON ya parseado ({ token }) — doc 20 §5. `query` existe para
+// probar que la URL se ignora.
+function fakeReq(
+  method: string,
+  body: unknown = undefined,
+  headers: Record<string, string> = {},
+  query: Record<string, unknown> = {},
+) {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
-  return { method, query, headers: lower, get: (name: string) => lower[name.toLowerCase()] };
+  return { method, body, query, headers: lower, get: (name: string) => lower[name.toLowerCase()] };
 }
+const post = (token: unknown, headers: Record<string, string> = {}) => fakeReq("POST", { token }, headers);
 
 function seededStore(link: Record<string, unknown> | null = { tokenHash: hashShareToken(TOKEN), active: true, rotation: 1 }) {
   const store = new CalendarMemoryStore();
@@ -92,20 +100,20 @@ function expectNoSecretsInLogs(...secrets: string[]) {
 describe("calendarPublicFeed · 200", () => {
   it("forma exacta, proyección compartida y headers de privacidad", async () => {
     const handler = createPublicFeedHandler({ store: seededStore(), clock: CLOCK, isEmulator: false });
-    const r = await call(handler, fakeReq("GET", { t: TOKEN }));
+    const r = await call(handler, post(TOKEN));
     expect(r.status).toBe(200);
-    expect(r.headers).toEqual({ ...SAFE_HEADERS, "cache-control": "private, max-age=60" });
+    expect(r.headers).toEqual({ ...SAFE_HEADERS, "cache-control": "no-store" });
     expect(Object.keys(r.body).sort()).toEqual(["calendar", "ok"]);
     expect(r.body.ok).toBe(true);
     const expected = buildPublicCalendar({ events: EVENTS, areas: AREAS, today: TODAY, now: NOW });
     expect(r.body.calendar).toEqual(JSON.parse(JSON.stringify(expected)));
     expect(r.body.calendar.range).toEqual({ from: "2026-09-01", to: "2027-04-30" });
-    expect(r.headers["cache-control"]).not.toMatch(/s-maxage|public/);
+    expect(r.headers["cache-control"]).not.toMatch(/max-age|public/);
   });
 
   it("recurrencia expandida en el servidor; internas y archivadas fuera; canarios ausentes", async () => {
     const handler = createPublicFeedHandler({ store: seededStore(), clock: CLOCK, isEmulator: false });
-    const r = await call(handler, fakeReq("GET", { t: TOKEN }));
+    const r = await call(handler, post(TOKEN));
     const cultos = r.body.calendar.events.filter((e: { title: string }) => e.title === "Culto dominical");
     expect(cultos.length).toBeGreaterThan(20);
     for (const c of Object.values(CANARIES)) expect(r.raw).not.toContain(c);
@@ -117,7 +125,7 @@ describe("calendarPublicFeed · 200", () => {
   it("solo pide eventos desde el inicio del rango público", async () => {
     const store = seededStore();
     const handler = createPublicFeedHandler({ store, clock: CLOCK });
-    await call(handler, fakeReq("GET", { t: TOKEN }));
+    await call(handler, post(TOKEN));
     expect(store.calls).toContain("listPublicEventsFrom:2026-09-01");
   });
 });
@@ -127,15 +135,20 @@ describe("calendarPublicFeed · 404 uniforme", () => {
     const make = (link: Record<string, unknown> | null) => createPublicFeedHandler({ store: seededStore(link), clock: CLOCK });
     const active = { tokenHash: hashShareToken(TOKEN), active: true };
     const cases = [
-      await call(make(active), fakeReq("GET", {})),
-      await call(make(active), fakeReq("GET", { t: "corto" })),
-      await call(make(active), fakeReq("GET", { t: `${TOKEN}A` })),
-      await call(make(active), fakeReq("GET", { t: `${TOKEN.slice(0, 42)}=` })),
-      await call(make(active), fakeReq("GET", { t: [TOKEN, TOKEN] })),
-      await call(make(active), fakeReq("GET", { t: OTHER_TOKEN })),
-      await call(make(null), fakeReq("GET", { t: TOKEN })),
-      await call(make({ ...active, active: false }), fakeReq("GET", { t: TOKEN })),
-      await call(make({ ...active, active: "true" }), fakeReq("GET", { t: TOKEN })),
+      await call(make(active), fakeReq("POST", {})),
+      await call(make(active), fakeReq("POST")),
+      await call(make(active), fakeReq("POST", TOKEN)),
+      await call(make(active), fakeReq("POST", [TOKEN])),
+      await call(make(active), fakeReq("POST", Buffer.from(JSON.stringify({ token: TOKEN })))),
+      await call(make(active), fakeReq("POST", {}, {}, { t: TOKEN })),
+      await call(make(active), post("corto")),
+      await call(make(active), post(`${TOKEN}A`)),
+      await call(make(active), post(`${TOKEN.slice(0, 42)}=`)),
+      await call(make(active), post([TOKEN, TOKEN])),
+      await call(make(active), post(OTHER_TOKEN)),
+      await call(make(null), post(TOKEN)),
+      await call(make({ ...active, active: false }), post(TOKEN)),
+      await call(make({ ...active, active: "true" }), post(TOKEN)),
     ];
     const first = cases[0];
     expect(first.status).toBe(404);
@@ -149,7 +162,7 @@ describe("calendarPublicFeed · 404 uniforme", () => {
 
   it("un token mal formado no llega al store", async () => {
     const store = seededStore();
-    await call(createPublicFeedHandler({ store, clock: CLOCK }), fakeReq("GET", { t: "nope" }));
+    await call(createPublicFeedHandler({ store, clock: CLOCK }), post("nope"));
     expect(store.calls).toEqual([]);
   });
 
@@ -159,38 +172,47 @@ describe("calendarPublicFeed · 404 uniforme", () => {
     const service = createShareLinkService({ store, clock: CLOCK });
     const { token: first } = await service.handle("u-admin", "create");
     const handler = createPublicFeedHandler({ store, clock: CLOCK });
-    expect((await call(handler, fakeReq("GET", { t: first }))).status).toBe(200);
+    expect((await call(handler, post(first))).status).toBe(200);
     const { token: second } = await service.handle("u-admin", "regenerate");
     expect(second).not.toBe(first);
-    const old = await call(handler, fakeReq("GET", { t: first }));
-    const nonexistent = await call(handler, fakeReq("GET", { t: OTHER_TOKEN }));
+    const old = await call(handler, post(first));
+    const nonexistent = await call(handler, post(OTHER_TOKEN));
     expect(old).toEqual(nonexistent);
     expect(old.status).toBe(404);
-    expect((await call(handler, fakeReq("GET", { t: second }))).status).toBe(200);
+    expect((await call(handler, post(second))).status).toBe(200);
     // desactivar corta; activar vuelve a habilitar el MISMO token
     await service.handle("u-admin", "deactivate");
-    expect((await call(handler, fakeReq("GET", { t: second }))).status).toBe(404);
+    expect((await call(handler, post(second))).status).toBe(404);
     await service.handle("u-admin", "activate");
-    expect((await call(handler, fakeReq("GET", { t: second }))).status).toBe(200);
+    expect((await call(handler, post(second))).status).toBe(200);
     expectNoSecretsInLogs(first, second, hashShareToken(first), hashShareToken(second));
   });
 });
 
 describe("calendarPublicFeed · métodos, CORS y errores", () => {
-  it("métodos distintos de GET → 405 sin cache", async () => {
-    const handler = createPublicFeedHandler({ store: seededStore(), clock: CLOCK, isEmulator: false });
-    for (const method of ["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]) {
-      const r = await call(handler, fakeReq(method, { t: TOKEN }));
+  it("métodos distintos de POST → 405 sin cache, aunque traigan el token en la query o el cuerpo", async () => {
+    const store = seededStore();
+    const handler = createPublicFeedHandler({ store, clock: CLOCK, isEmulator: false });
+    for (const method of ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]) {
+      const r = await call(handler, fakeReq(method, { token: TOKEN }, {}, { t: TOKEN }));
       expect(r.status).toBe(405);
       expect(r.body).toEqual({ ok: false, error: "method_not_allowed" });
       expect(r.headers["cache-control"]).toBe("no-store");
-      expect(r.headers.allow).toBe("GET");
+      expect(r.headers.allow).toBe("POST");
     }
+    expect(store.calls).toEqual([]);
+  });
+
+  it("el token en la query nunca se lee (POST con ?t= válido y sin cuerpo → 404 sin tocar el store)", async () => {
+    const store = seededStore();
+    const r = await call(createPublicFeedHandler({ store, clock: CLOCK }), fakeReq("POST", undefined, {}, { t: TOKEN }));
+    expect(r.status).toBe(404);
+    expect(store.calls).toEqual([]);
   });
 
   it("sin emulador nunca emite CORS (aunque el origen sea localhost)", async () => {
     const handler = createPublicFeedHandler({ store: seededStore(), clock: CLOCK, isEmulator: false });
-    const r = await call(handler, fakeReq("GET", { t: TOKEN }, { Origin: "http://localhost:3000" }));
+    const r = await call(handler, post(TOKEN, { Origin: "http://localhost:3000" }));
     expect(Object.keys(r.headers).some((k) => k.startsWith("access-control-"))).toBe(false);
     expect(r.headers.vary).toBeUndefined();
   });
@@ -198,20 +220,21 @@ describe("calendarPublicFeed · métodos, CORS y errores", () => {
   it("en el emulador: CORS solo para localhost:3000 / 127.0.0.1:3000, con Vary: Origin", async () => {
     const handler = createPublicFeedHandler({ store: seededStore(), clock: CLOCK, isEmulator: true });
     for (const origin of ["http://localhost:3000", "http://127.0.0.1:3000"]) {
-      const ok = await call(handler, fakeReq("GET", { t: TOKEN }, { Origin: origin }));
+      const ok = await call(handler, post(TOKEN, { Origin: origin }));
       expect(ok.status).toBe(200);
       expect(ok.headers["access-control-allow-origin"]).toBe(origin);
       expect(ok.headers.vary).toBe("Origin");
-      const missing = await call(handler, fakeReq("GET", { t: "x" }, { Origin: origin }));
+      const missing = await call(handler, post("x", { Origin: origin }));
       expect(missing.status).toBe(404);
       expect(missing.headers["access-control-allow-origin"]).toBe(origin);
     }
-    const evil = await call(handler, fakeReq("GET", { t: TOKEN }, { Origin: "https://evil.example" }));
+    const evil = await call(handler, post(TOKEN, { Origin: "https://evil.example" }));
     expect(evil.headers["access-control-allow-origin"]).toBeUndefined();
     expect(evil.headers.vary).toBe("Origin");
-    const preflight = await call(handler, fakeReq("OPTIONS", {}, { Origin: "http://localhost:3000" }));
+    const preflight = await call(handler, fakeReq("OPTIONS", undefined, { Origin: "http://localhost:3000" }));
     expect(preflight.status).toBe(204);
-    expect(preflight.headers["access-control-allow-methods"]).toBe("GET, OPTIONS");
+    expect(preflight.headers["access-control-allow-methods"]).toBe("POST, OPTIONS");
+    expect(preflight.headers["access-control-allow-headers"]).toBe("Content-Type");
   });
 
   it("error interno → 500 sin cache y el log no contiene token ni hash", async () => {
@@ -220,7 +243,7 @@ describe("calendarPublicFeed · métodos, CORS y errores", () => {
     store.listAreas = async () => {
       throw Object.assign(new Error(`fallo leyendo con ${TOKEN} y ${hash}`), { code: 14 });
     };
-    const r = await call(createPublicFeedHandler({ store, clock: CLOCK }), fakeReq("GET", { t: TOKEN }));
+    const r = await call(createPublicFeedHandler({ store, clock: CLOCK }), post(TOKEN));
     expect(r.status).toBe(500);
     expect(r.body).toEqual({ ok: false, error: "internal" });
     expect(r.headers).toEqual({ ...SAFE_HEADERS, "cache-control": "no-store" });
@@ -229,7 +252,7 @@ describe("calendarPublicFeed · métodos, CORS y errores", () => {
   });
 
   it("logs de éxito: solo { ok, count }", async () => {
-    await call(createPublicFeedHandler({ store: seededStore(), clock: CLOCK }), fakeReq("GET", { t: TOKEN }));
+    await call(createPublicFeedHandler({ store: seededStore(), clock: CLOCK }), post(TOKEN));
     expect(logs).toHaveLength(1);
     expect(logs[0][0]).toBe("calendarPublicFeed");
     expect(Object.keys(logs[0][1] as object).sort()).toEqual(["count", "ok"]);

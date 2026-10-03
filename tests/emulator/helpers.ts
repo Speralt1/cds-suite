@@ -41,9 +41,12 @@ export interface FeedResponse {
   headers: Record<string, string | null>;
 }
 
-export async function fetchFeed(token: string | null): Promise<FeedResponse> {
-  const url = token === null ? FEED_URL : `${FEED_URL}?t=${encodeURIComponent(token)}`;
-  const res = await fetch(url);
+/** POST {token} al feed real del emulador (doc 20 §5). `null` → cuerpo sin token. */
+export async function fetchFeed(token: string | null, init: { method?: string; query?: string; body?: string } = {}): Promise<FeedResponse> {
+  const url = init.query ? `${FEED_URL}?${init.query}` : FEED_URL;
+  const method = init.method ?? "POST";
+  const body = method === "GET" || method === "HEAD" ? undefined : (init.body ?? JSON.stringify(token === null ? {} : { token }));
+  const res = await fetch(url, { method, headers: body === undefined ? {} : { "Content-Type": "application/json" }, body });
   const text = await res.text();
   const pick = (name: string) => res.headers.get(name);
   return {

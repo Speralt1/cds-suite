@@ -684,12 +684,14 @@ function loadAdmin() {
   return getFirestore(app);
 }
 
+/** Enlace público local: el token va en el fragmento (doc 20 §5), nunca en la query. */
 export function publicUrlFor(token) {
-  return `http://localhost:3000/calendario-publico?t=${token}`;
+  return `http://localhost:3000/calendario-publico#${token}`;
 }
 
-export function feedUrlFor(token) {
-  return `${SEED_FUNCTIONS_ORIGIN}/${SEED_PROJECT}/${SEED_REGION}/calendarPublicFeed?t=${encodeURIComponent(token)}`;
+/** URL del feed en el emulador. El token se envía en el cuerpo de un POST, no en la URL. */
+export function feedUrlFor() {
+  return `${SEED_FUNCTIONS_ORIGIN}/${SEED_PROJECT}/${SEED_REGION}/calendarPublicFeed`;
 }
 
 /**
@@ -741,7 +743,7 @@ export async function runSeed({ env = process.env, now = Date.now() } = {}) {
     today,
     token,
     publicUrl: publicUrlFor(token),
-    feedUrl: feedUrlFor(token),
+    feedUrl: feedUrlFor(),
     counts: { users: data.users.length, areas: data.areas.length, events: data.events.length },
     finance,
   };

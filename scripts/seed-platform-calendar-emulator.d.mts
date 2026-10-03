@@ -77,5 +77,5 @@ export declare const SEED_AUDIT_VALUE_FIELDS: readonly string[];
 export declare function assertSeedEnvironment(env?: Record<string, string | undefined>): string;
 export declare function buildSeedData(today: string, nowMs: number): SeedData;
 export declare function publicUrlFor(token: string): string;
-export declare function feedUrlFor(token: string): string;
+export declare function feedUrlFor(): string;
 export declare function runSeed(opts?: { env?: Record<string, string | undefined>; now?: number }): Promise<SeedResult>;

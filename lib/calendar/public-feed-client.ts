@@ -1,8 +1,12 @@
-// Cliente del calendario público (18a §E.1, §E.4, §F). Sin Firebase SDK: un
-// GET same-origin a `/api/calendario-publico?t=` (rewrite de Hosting a la
+// Cliente del calendario público (18a §E.1, §E.4, §F; doc 20 §5). Sin Firebase
+// SDK: un POST same-origin a `/api/calendario-publico` (rewrite de Hosting a la
 // Function `calendarPublicFeed`) o, en desarrollo con emuladores, directo al
 // emulador de Functions. No hay variables de entorno nuevas.
 //
+// - El enlace compartido lleva el token en el FRAGMENTO (`/calendario-publico#<token>`):
+//   el navegador no lo envía al servidor ni en el Referer. La página lo lee de
+//   `location.hash` y lo manda en el cuerpo JSON del POST, nunca en la URL.
+//   No se guarda en localStorage, cookies ni analítica.
 // - Un token mal formado NUNCA se envía: se responde "unavailable" sin red.
 // - 404 → "unavailable" (inexistente, desactivado o mal formado son idénticos).
 // - Error de red, 5xx o respuesta inesperada → lanza PublicFeedError (la
@@ -14,7 +18,6 @@ import type { PublicCalendar } from "@/lib/shared/types";
 export const PUBLIC_FEED_PATH = "/api/calendario-publico";
 export const PUBLIC_FEED_FUNCTION = "calendarPublicFeed";
 export const PUBLIC_FEED_REGION = "southamerica-west1";
-export const SHARE_PATH_PREFIX = "/calendario/compartir/";
 export const PUBLIC_PAGE_PATH = "/calendario-publico";
 
 export interface PublicFeedEnv {
@@ -37,7 +40,7 @@ export function usesFunctionsEmulator(env: PublicFeedEnv = currentFeedEnv()): bo
   return env.nodeEnv === "development" && env.useEmulators === "true" && !!env.projectId?.startsWith("demo-");
 }
 
-/** URL base del feed (sin query). */
+/** URL del feed (sin query: el token va en el cuerpo). */
 export function calendarFeedUrl(env: PublicFeedEnv = currentFeedEnv()): string {
   if (usesFunctionsEmulator(env)) {
     return `http://127.0.0.1:5001/${env.projectId}/${PUBLIC_FEED_REGION}/${PUBLIC_FEED_FUNCTION}`;
@@ -46,33 +49,27 @@ export function calendarFeedUrl(env: PublicFeedEnv = currentFeedEnv()): string {
 }
 
 /**
- * Enlace público para compartir:
- * producción → `${origin}/calendario/compartir/${token}` (rewrite de Hosting);
- * desarrollo (`next dev`, sin rewrites) → `${origin}/calendario-publico?t=${token}`.
+ * Enlace público para compartir, igual en producción y en desarrollo:
+ * `${origin}/calendario-publico#${token}`. El fragmento no viaja al servidor.
  */
-export function publicCalendarUrl(token: string, origin?: string, env: PublicFeedEnv = currentFeedEnv()): string {
+export function publicCalendarUrl(token: string, origin?: string): string {
   const base = (origin ?? (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/+$/, "");
-  const t = encodeURIComponent(token);
-  return env.nodeEnv === "development" ? `${base}${PUBLIC_PAGE_PATH}?t=${t}` : `${base}${SHARE_PATH_PREFIX}${t}`;
+  return `${base}${PUBLIC_PAGE_PATH}#${encodeURIComponent(token)}`;
 }
 
 /**
- * Token presentado en la URL: el último segmento de `/calendario/compartir/<t>`
- * o, si no, `?t=`. Devuelve el texto tal cual (la validación es aparte).
+ * Token presentado en el fragmento de la URL (`#<token>`). Devuelve el texto
+ * tal cual (la validación es aparte). La ruta y la query se ignoran: un token
+ * en `?t=` no se acepta.
  */
-export function shareTokenFromLocation(loc: { pathname: string; search: string }): string | null {
-  const path = loc.pathname.replace(/\/+$/, "");
-  if (path.startsWith(SHARE_PATH_PREFIX)) {
-    const rest = path.slice(SHARE_PATH_PREFIX.length);
-    if (!rest || rest.includes("/")) return null;
-    try {
-      return decodeURIComponent(rest);
-    } catch {
-      return null;
-    }
+export function shareTokenFromLocation(loc: { hash: string }): string | null {
+  const raw = typeof loc.hash === "string" ? loc.hash.replace(/^#/, "") : "";
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
   }
-  const t = new URLSearchParams(loc.search).get("t");
-  return t === null ? null : t;
 }
 
 export class PublicFeedError extends Error {
@@ -109,14 +106,15 @@ export async function fetchPublicCalendar(
 ): Promise<PublicCalendar | "unavailable"> {
   if (!isWellFormedShareToken(token)) return "unavailable";
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
-  const url = `${calendarFeedUrl(options.env)}?t=${encodeURIComponent(token)}`;
   let res: Pick<Response, "status" | "ok" | "json">;
   try {
-    res = await doFetch(url, {
-      method: "GET",
+    res = await doFetch(calendarFeedUrl(options.env), {
+      method: "POST",
       credentials: "omit",
+      cache: "no-store",
       referrerPolicy: "no-referrer",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
     });
   } catch {
     throw new PublicFeedError("network");

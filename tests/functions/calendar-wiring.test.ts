@@ -15,21 +15,22 @@ describe("firebase.json", () => {
   const rewrites: Rewrite[] = firebase.hosting.rewrites;
   const sources = rewrites.map((r) => r.source);
 
-  it("rewrites existentes intactos y los nuevos en orden", () => {
-    expect(sources).toEqual(["/api/sumup-sync", "/api/calendario-publico", "/c/**", "/campanas/**", "/calendario/compartir/**"]);
+  it("rewrites existentes intactos y el del feed; sin rewrite de enlaces en la ruta (doc 20 §5)", () => {
+    expect(sources).toEqual(["/api/sumup-sync", "/api/calendario-publico", "/c/**", "/campanas/**"]);
     expect(rewrites[1]).toEqual({
       source: "/api/calendario-publico",
       function: { functionId: "calendarPublicFeed", region: "southamerica-west1" },
     });
-    expect(rewrites[4]).toEqual({ source: "/calendario/compartir/**", destination: "/calendario-publico.html" });
+    // El token viaja en el fragmento (/calendario-publico#<t>): ninguna ruta con token llega a Hosting.
+    expect(rewrites.some((r) => r.destination === "/calendario-publico.html")).toBe(false);
     expect(firebase.hosting.cleanUrls).toBe(true);
     expect(firebase.hosting.trailingSlash).toBe(false);
   });
 
   it("headers de privacidad para la página pública (y los existentes se conservan)", () => {
     const headers: HeaderRule[] = firebase.hosting.headers;
-    expect(headers.map((h) => h.source)).toEqual(["/sw.js", "/manifest.webmanifest", "/calendario/compartir/**", "/calendario-publico"]);
-    for (const source of ["/calendario/compartir/**", "/calendario-publico"]) {
+    expect(headers.map((h) => h.source)).toEqual(["/sw.js", "/manifest.webmanifest", "/calendario-publico"]);
+    for (const source of ["/calendario-publico"]) {
       const rule = headers.find((h) => h.source === source)!;
       expect(Object.fromEntries(rule.headers.map((h) => [h.key, h.value]))).toEqual({
         "Referrer-Policy": "no-referrer",

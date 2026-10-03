@@ -46,7 +46,7 @@ export const SEED_ENV = Object.freeze({
 
 const EMULATOR_PORTS = [8080, 9099, 5001, 4400, 4500, 9150];
 const NEXT_PORT = 3000;
-const FEED_PROBE = `http://127.0.0.1:5001/${DEMO_PROJECT}/southamerica-west1/calendarPublicFeed?t=probe`;
+const FEED_PROBE = `http://127.0.0.1:5001/${DEMO_PROJECT}/southamerica-west1/calendarPublicFeed`;
 
 function portInUse(port) {
   return new Promise((resolve) => {
@@ -173,7 +173,8 @@ async function main() {
   await waitFor(
     async () => {
       try {
-        const res = await fetch(FEED_PROBE);
+        // Sonda sin token: el feed carga cuando responde el 404 uniforme.
+        const res = await fetch(FEED_PROBE, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         return res.status === 404;
       } catch {
         return false;

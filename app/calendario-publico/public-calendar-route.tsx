@@ -1,8 +1,9 @@
 "use client";
 
-// Contenedor de la página pública: lee el enlace presentado en un efecto
+// Contenedor de la página pública: lee el enlace del fragmento (#) en un efecto
 // (nunca durante el prerender), lo valida ANTES de pedir datos y entrega a
-// components/public-calendar SOLO la proyección pública.
+// components/public-calendar SOLO la proyección pública. El token vive solo en
+// memoria (ref): no se guarda en localStorage, sessionStorage ni cookies.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchPublicCalendar, shareTokenFromLocation } from "@/lib/calendar/public-feed-client";
@@ -41,6 +42,16 @@ export function PublicCalendarRoute() {
       alive = false;
     };
   }, [attempt]);
+
+  // Otro enlace pegado en la misma pestaña cambia solo el fragmento (sin recarga).
+  useEffect(() => {
+    const onHashChange = () => {
+      token.current = shareTokenFromLocation(window.location);
+      setAttempt((n) => n + 1);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const model = useMemo(
