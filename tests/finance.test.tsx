@@ -1,29 +1,35 @@
+import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import DashboardPage from "@/app/(private)/dashboard/page";
 import { FinanceNav, DetailGuard } from "@/components/finance/shared";
+import { TransactionList } from "@/components/finance/transactions/transaction-list";
 import {
   canSeePastoral,
   canSeeDetails,
   isAuthorized,
 } from "@/lib/finance/permissions";
-import type { AccessUser, Role } from "@/lib/finance/types";
-const state = vi.hoisted(() => ({ role: "admin" as Role, path: "/finanzas" }));
+import type { AccessUser, FinanceTransaction, Role } from "@/lib/finance/types";
+const state = vi.hoisted(() => ({
+  role: "admin" as Role,
+  path: "/finanzas",
+  replace: vi.fn(),
+}));
 vi.mock("@/lib/auth/access-provider", () => ({
   useAccess: () => ({ role: state.role, active: true }),
 }));
-vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => state.path,
+  useRouter: () => ({ replace: state.replace }),
+}));
 beforeEach(() => {
   state.role = "admin";
   state.path = "/finanzas";
+  state.replace.mockClear();
 });
-it("mantiene acceso a Finanzas desde el dashboard y módulos futuros sin acciones", () => {
+it("/dashboard ya no tiene contenido propio: redirige a /finanzas", () => {
   render(<DashboardPage />);
-  expect(screen.getByRole("link", { name: "Ingresar" })).toHaveAttribute(
-    "href",
-    "/finanzas",
-  );
-  expect(screen.getAllByText("Próximamente")).toHaveLength(4);
+  expect(state.replace).toHaveBeenCalledWith("/finanzas");
 });
 it.each(["admin", "pastor", "finance"] as Role[])(
   "navegación con rutas reales para %s",
@@ -44,7 +50,9 @@ it.each(["admin", "pastor", "finance"] as Role[])(
       "href",
       "/finanzas/campanas",
     );
-    expect(screen.getByRole("link", { name: "Ofrendas" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Ofrendas y Cafetería" }),
+    ).toHaveAttribute(
       "href",
       "/finanzas/ofrendas",
     );
@@ -69,6 +77,13 @@ it("líder solo ve resumen y no monta componentes de detalle", () => {
   expect(screen.queryByText("Privado")).toBeNull();
   expect(privateRender).not.toHaveBeenCalled();
 });
+it("un rol sin permiso de detalle ve la barra solo con Resumen", () => {
+  state.role = "leader";
+  render(<FinanceNav />);
+  const links = screen.getAllByRole("link");
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveTextContent("Resumen");
+});
 it("permisos explícitos y denegación por defecto", () => {
   for (const role of ["admin", "pastor", "finance", "leader"] as Role[]) {
     expect(canSeeDetails(role)).toBe(role !== "leader");
@@ -81,4 +96,49 @@ it("permisos explícitos y denegación por defecto", () => {
   expect(
     isAuthorized({ role: "inventado", active: true } as unknown as AccessUser),
   ).toBe(false);
+});
+
+function makeTransaction(overrides: Partial<FinanceTransaction>): FinanceTransaction {
+  return {
+    id: "financeTransactions/abc",
+    type: "income",
+    amount: 1000,
+    date: { toDate: () => new Date("2026-09-14") } as never,
+    category: "Ofrendas",
+    paymentMethod: "cash",
+    description: "Movimiento",
+    note: "",
+    status: "active",
+    period: "2026-09",
+    day: "14",
+    source: "general",
+    revision: 1,
+    createdBy: "uid1",
+    ...overrides,
+  } as FinanceTransaction;
+}
+
+it("los movimientos importados de SumUp no muestran Editar ni Anular y sí un badge de solo lectura", () => {
+  const items = [
+    makeTransaction({
+      id: "sumup_offerings_tx1",
+      createdBy: "system:sumup",
+      category: "Ofrendas",
+      paymentMethod: "card",
+    }),
+    makeTransaction({ id: "financeTransactions/manual1", createdBy: "uid1" }),
+  ];
+  render(<TransactionList items={items} />);
+  expect(screen.getByText("SumUp · solo lectura")).toBeInTheDocument();
+  expect(screen.queryAllByRole("button", { name: "Editar" })).toHaveLength(1);
+  expect(screen.queryAllByRole("button", { name: "Anular" })).toHaveLength(1);
+});
+
+it("offerings-page no usa lenguaje engañoso (líquido/conciliado) en las etiquetas de SumUp", () => {
+  const source = readFileSync(
+    "components/finance/offerings/offerings-page.tsx",
+    "utf-8",
+  );
+  expect(source).not.toMatch(/líquid/i);
+  expect(source).not.toMatch(/Conciliado/);
 });

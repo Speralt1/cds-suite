@@ -10,18 +10,25 @@ import type { PeriodSelection } from "@/lib/finance/types";
 export function FinanceNav() {
   const path = usePathname();
   const access = useAccess();
+  const navRef = useRef<HTMLElement>(null);
   const items = canSeeDetails(access.role)
     ? [
         ["/finanzas", "Resumen"],
         ["/finanzas/movimientos", "Movimientos"],
-        ["/finanzas/ofrendas", "Ofrendas"],
+        ["/finanzas/ofrendas", "Ofrendas y Cafetería"],
         ["/finanzas/diezmos", "Diezmos"],
         ["/finanzas/campanas", "Campañas"],
         ["/finanzas/reportes", "Reportes"],
       ]
     : [["/finanzas", "Resumen"]];
+  useEffect(() => {
+    const activeLink = navRef.current?.querySelector<HTMLElement>(
+      'a[aria-current="page"]',
+    );
+    activeLink?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+  }, [path]);
   return (
-    <nav aria-label="Secciones de Finanzas" className="finance-nav">
+    <nav aria-label="Secciones de Finanzas" className="finance-nav" ref={navRef}>
       {items.map(([href, label]) => (
         <Link
           key={href}
@@ -79,11 +86,12 @@ export function PeriodPicker({
               onChange({ ...value, year: Number(e.target.value) })
             }
           >
-            {Array.from({ length: 100 }, (_, i) => 2000 + i)
-              .reverse()
-              .map((y) => (
-                <option key={y}>{y}</option>
-              ))}
+            {Array.from(
+              { length: new Date().getFullYear() + 1 - 2024 + 1 },
+              (_, i) => new Date().getFullYear() + 1 - i,
+            ).map((y) => (
+              <option key={y}>{y}</option>
+            ))}
           </select>
         </label>
       </div>

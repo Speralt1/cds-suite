@@ -10,7 +10,7 @@ export default function Home() {
   const router = useRouter();
   useEffect(() => {
     if (!loading)
-      router.replace(user && !initializationError ? "/dashboard" : "/login");
+      router.replace(user && !initializationError ? "/finanzas" : "/login");
   }, [user, loading, initializationError, router]);
   return <SessionLoading />;
 }

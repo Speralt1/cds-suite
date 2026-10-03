@@ -4,11 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  LayoutDashboard,
   Wallet,
   LogOut,
   LoaderCircle,
-  ArrowUpRight,
   Settings,
 } from "lucide-react";
 import { Brand } from "@/components/layout/brand";
@@ -17,7 +15,6 @@ import { getAuthErrorMessage } from "@/lib/auth/errors";
 import { useOptionalAccess } from "@/lib/auth/access-provider";
 
 const navigation = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/finanzas", label: "Finanzas", icon: Wallet },
   { href: "/configuracion", label: "Configuración", icon: Settings },
 ];
@@ -86,16 +83,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         <div className="mt-4 px-5 pb-4 lg:mt-auto lg:px-6 lg:pb-7">
-          <div className="mb-6 hidden rounded-2xl border border-line bg-canvas p-4 lg:block">
-            <ArrowUpRight
-              className="mb-3 size-5 text-primary"
-              aria-hidden="true"
-            />
-            <p className="text-sm font-medium">Un mismo propósito.</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              Un espacio para organizar y acompañar nuestra comunidad.
-            </p>
-          </div>
           <div className="flex items-center justify-between gap-3 border-t border-line pt-4 lg:block">
             <div className="flex min-w-0 items-center gap-3 lg:mb-4">
               <span
@@ -143,11 +130,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-muted">
             Mi espacio <span className="mx-3 text-line">/</span>
             <span className="font-medium text-ink">
-              {pathname.startsWith("/finanzas")
-                ? "Finanzas"
-                : pathname.startsWith("/configuracion")
-                  ? "Configuración"
-                  : "Dashboard"}
+              {pathname.startsWith("/configuracion")
+                ? "Configuración"
+                : "Finanzas"}
             </span>
           </p>
           <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-medium tracking-wide text-muted">
@@ -161,8 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
         <footer className="mx-auto max-w-7xl px-6 py-7 text-xs text-muted sm:px-8 lg:px-12">
-          Casa de Salvación <span className="mx-2 text-line">/</span> Juntos, al
-          servicio de nuestra comunidad.
+          Casa de Salvación
         </footer>
       </div>
     </div>

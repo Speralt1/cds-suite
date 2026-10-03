@@ -26,11 +26,13 @@ import { Modal, Notice } from "../shared";
 export function TransactionForm({
   existing,
   profile,
+  initialType = "income",
   onClose,
   onSaved,
 }: {
   existing?: FinanceTransaction;
   profile?: TitheProfile;
+  initialType?: TransactionType;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -44,11 +46,14 @@ export function TransactionForm({
     existing
       ? transactionInput(existing)
       : {
-          type: "income",
+          type: tithe ? "income" : initialType,
           amount: 0,
           date: today(),
-          category: tithe ? "Diezmos" : FALLBACK_INCOME_CATEGORIES[0],
-          paymentMethod: "cash",
+          category: tithe
+            ? "Diezmos"
+            : categoriesForTransaction(settings.data, initialType)[0] ||
+              FALLBACK_INCOME_CATEGORIES[0],
+          paymentMethod: tithe ? "transfer" : "cash",
           description: tithe ? "Diezmo" : "",
           note: "",
         },
