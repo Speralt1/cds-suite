@@ -303,3 +303,36 @@ Solo lectura, igual que con Pastor.
 | Monitoring | **PASS** |
 | Rollback requerido | **NO** |
 | **Resultado** | **READY FOR A5** (espera el GO explícito de Salvador). **Etapa A desplegada completa: Rules + Functions + Hosting de `e6b2084`** |
+
+### A5 · Observación: en curso (04-10-2026 → 11-10-2026)
+
+**GO recibido:** "GO A5", que autoriza **solo observación**: sin deploys, sin cambios en Rules, Functions ni Hosting, sin Etapa B, sin migración. Cierre: no antes del domingo 11-10-2026.
+
+**Mecanismo de observación (local, fuera del repo):**
+- `~/cds-ops/a5-check.mjs`: script de **solo lectura**. Imprime cifras agregadas, nunca transacciones individuales. Revisa:
+  - Rules, Hosting y Functions contra lo esperado;
+  - invocaciones del scheduler, a partir de los logs de Cloud Run (no-2xx e intervalo máximo);
+  - `sumupSyncRuns` agregados por cuenta (created/updated/voided/reactivated/unchanged/errores) y estado de las integraciones;
+  - logs `severity>=ERROR` y 5xx;
+  - evaluaciones de reglas (ALLOW/DENY) y estado de la alerta;
+  - resúmenes ene–sep contra el baseline de A0;
+  - el resumen 2026-10: si existe, sus campos y si cuadra con la suma y el conteo agregados de los movimientos activos de octubre.
+- Los reportes locales quedan en `~/cds-ops/a5-reports/`, con permisos 600 y fuera del repo.
+- **Tarea programada `cds-a5-observacion-etapa-a`:** todos los días a las ~22:17 hora local, del 04-10 al 11-10. Corre el script, interpreta las condiciones STOP y reporta. No puede desplegar, escribir, sincronizar ni hacer commits.
+- La bitácora solo registra hitos: domingos, primer resumen de octubre, incidentes, control de mitad de semana y cierre.
+
+**Control inicial A5 (2026-10-04 03:28 UTC; ventana de 24 h que incluye A3 y A4):**
+
+| Control | Resultado |
+|---|---|
+| Rules / Hosting / Functions | `2d9939ab…` / `edb77ffc04532a95` / `-00006`·`-00007`·`-00002`, **iguales a lo esperado** |
+| Scheduler | ENABLED; **24 invocaciones en 24 h, 0 no-2xx, intervalo máximo 60 min** |
+| SumUp Ofrendas (24 h) | 6 runs (manual partial 1, manual completed 1, programados completed 3, barrido 1); **created 0 · updated 0 · voided 0 · errores 0**; integración `ok` |
+| SumUp Cafetería (24 h) | 6 runs (manual partial 2, programados completed 3, barrido 1); **created 0 · updated 0 · voided 0 · errores 0**; integración `ok` |
+| Logs / 5xx | **0 / 0** |
+| Reglas | 1.225 ALLOW · **0 DENY** |
+| Alerta | Habilitada, sin disparos |
+| Montos | Ene–sep **= baseline** (34.589.315 · 6.910.000 · diezmos 3.126.397 · 6.386 movimientos) |
+| Octubre | Sin resumen todavía (sin movimientos de octubre). Se espera el primero en el culto de hoy, domingo 04-10 |
+
+**Resultado del control inicial:** OK. No se detectó ninguna condición STOP. *(La primera versión del script dio un falso positivo de "más de 2 h sin scheduler", porque el código viejo no escribía `sumupSyncRuns`. Se corrigió para medir con los logs de invocación.)*
