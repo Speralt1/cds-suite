@@ -233,3 +233,35 @@ Salvador inició sesión en el navegador de la sesión. El recorrido fue **solo 
 | **Resultado** | **READY FOR A4** (espera el GO explícito de Salvador) |
 
 **Nota operativa:** para los próximos deploys usar el CLI del repo (`./node_modules/.bin/firebase` en `~/cds-deploy`). El binario standalone instalado en `/usr/local/bin` no puede analizar el código de Functions.
+
+### A4 · Hosting: desplegado; falta el smoke Admin
+
+**GO recibido:** "GO A4", solo Hosting.
+
+| Fecha (UTC) | Paso | Comando / método | Resultado |
+|---|---|---|---|
+| 02:31 | Prechecks | APIs + `gcloud` + resúmenes | Árbol `0d1bb0d` = `e6b2084`; ruleset `2d9939ab…`; Functions ACTIVE (`-00006`/`-00007`/`-00002`); scheduler ENABLED (run de las 02:21: Ofrendas 11/11 y Cafetería 1/1 sin cambios); alerta habilitada; 0 errores · 0 5xx desde A3; montos = baseline. **Hosting para rollback: `f4591416f0474b0f`** |
+| 02:32 | Build | `cp .env.local` (configuración web real, ignorada por git) → `rm -rf out && npm run build` en `~/cds-deploy` | ✓ Compilado; **15 rutas estáticas, 131 archivos**. Sin `/preview`, Integrantes ni Calendario; sin datos demo (`demo-cds-suite`, `@cds.test`); sin emuladores en el bundle. La única coincidencia con "payouts" es el texto veraz de Slice 1b ("la comisión se registrará… cuando se conecten los payouts"), no código de Slice 3A |
+| 02:33:02–02:33:14 | **Deploy** | `./node_modules/.bin/firebase deploy --only hosting --project cds-administracion --non-interactive` (CLI del repo 15.28.2) | ✔ Release completo. **Versión nueva `edb77ffc04532a95`**; rewrites `/api/sumup-sync`, `/c/**`, `/campanas/**` |
+| 02:33 | Smoke técnico | `curl` | 200 en `/`, `/login`, `/dashboard`, `/finanzas` y sus subrutas (`movimientos`, `ofrendas`, `diezmos`, `diezmos/perfil`, `reportes`, `campanas`), `/configuracion`, `/campanas`, `/ofrendar`, manifest y `sw.js`. `POST /api/sumup-sync` sin token → 401 (la Function responde y exige autenticación). `/calendario` → 404 (correcto: no es parte de la Etapa A) |
+
+#### Smoke real, sesión **Pastor** (02:34–02:37 UTC; rol verificado: `role: pastor`)
+
+Solo lectura: navegación, filtros de mes y vistas Diario/Mensual/Anual. No se registró, editó, anuló ni sincronizó nada.
+
+| Pantalla | Verificación | Resultado |
+|---|---|---|
+| Resumen | Interfaz nueva visible: acciones rápidas (+ Registrar efectivo, + Diezmo, + Gasto, Otro movimiento, Reporte del mes), **Ingresos por tipo de dinero**, **Ingresos por fuente**, **Días por revisar (0)**, calendario del mes, "Gastos y resultado". Anual 2026: total ingresos **$34.589.315**, gastos **$6.910.000**, resultado **$27.679.315**; fuentes = categorías de A0. "Tarjeta SumUp · bruto", "Comisión SumUp: pendiente de datos de SumUp", **sin "líquido"** | **PASS** |
+| Movimientos | Septiembre carga; grupos "SumUp · Ofrendas" y "SumUp · Cafetería" marcados **"solo lectura"**; **0 botones Editar/Anular en las 14 filas o grupos SumUp**; los 32 Editar/Anular están solo en movimientos manuales | **PASS** |
+| Ofrendas y Cafetería | "Tarjeta SumUp (bruto)"; sin "líquido"; estado **"SumUp Ofrendas: ✓ Conectado"** y **"SumUp Cafetería: ✓ Conectado"** (ya no "Con error") | **PASS** |
+| Diezmos | Lista "Personas y familias" (fichas con "Registrar"); una ficha abierta solo para ver su estructura: registros de 12 meses, **historial de registros**, selector de años y acompañamiento pastoral | **PASS** |
+| Reportes | **Septiembre 2026: ingresos $7.661.647 · egresos $6.860.000 · resultado $801.647 · diezmos $2.926.397 · movimientos 789, idénticos al baseline.** **Anual 2026: $34.589.315 · $6.910.000 · $27.679.315 · diezmos $3.126.397 · 6.386 movimientos, idénticos al baseline.** Secciones de Slice 6: resumen ejecutivo, alertas veraces (SumUp en bruto, histórico sin separar), por tipo de dinero, por fuente, días de culto | **PASS** |
+| Octubre | Sigue sin resumen mensual (`financeMonthlySummaries/2026-10` no existe): **no hay movimientos en octubre**. La app muestra "Aún no hay movimientos en octubre 2026". No se crearon movimientos para forzarlo; se verifica en A5 con el primer movimiento real (domingo de culto) | Documentado |
+| Consola del navegador | Sin mensajes | 0 errores |
+
+**Verificación (02:37 UTC):**
+- Reglas desde A4: 104 ALLOW · **0 DENY**. Errores y 5xx desde A4: **0**. Los 9 resúmenes mensuales siguen = baseline.
+- Rules sin cambios (`2d9939ab…`). Functions sin cambios (`-00006`/`-00007`/`-00002`).
+- Scheduler ENABLED (próximo 03:21). Alerta habilitada y sin disparos.
+
+**Smoke real Admin:** pendiente (Salvador cambia la sesión del navegador a la cuenta admin).
