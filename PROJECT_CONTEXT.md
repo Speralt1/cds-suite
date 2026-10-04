@@ -339,19 +339,23 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 
 <!-- AUTO-STATUS:START -->
 - **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (avanzó desde `42408d6` con el merge del PR #2, Project Control)
-- **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `648afd1`
-- **Rama activa principal (base productiva):** `mission/slice6-usability` @ `e6b2084` (PR #1, abierto, no draft)
+- **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `0d1bb0d` (merge de PR #1; árbol = `e6b2084`)
+- **Rama activa principal (base productiva):** `mission/slice6-usability` @ `e6b2084` (PR #1 **mergeado** el 2026-10-03; la rama se conserva porque es la base de PR #5)
 - **Release Candidate RC1:** `mission/platform-core-calendar-v1` (desde `e6b2084`), Draft PR #5 **[NO DEPLOY] Platform Core V1 + Calendar** contra `mission/slice6-usability`. Runbook y GO/NO-GO en `docs/mission-2026/20-platform-calendar-rc1-readiness.md`. **NOT DEPLOYED**
-- **Producción (`cds-administracion`):** corre `648afd1` (preproducción), deploy del 2026-09-11; reglas de Firestore idénticas a `648afd1` (snapshot de solo lectura del 2026-10-03, doc 20 §4)
+- **Producción (`cds-administracion`):** corre la **Etapa A = Financial Core 2026** (PR #1, mergeado en `feature/preproduccion-mobile-v1` como `0d1bb0d`, árbol = `e6b2084`), desplegada el 2026-10-03/04. Detalle en `docs/mission-2026/21-controlled-rollout-log.md`:
+  - Firestore Rules: ruleset `2d9939ab…`;
+  - Functions: `sumupSyncNow -00006`, `sumupSyncScheduled -00007`, `campaignShare -00002`;
+  - Hosting: `edb77ffc04532a95`.
+  - **Platform Core / Calendar: NOT DEPLOYED** (Etapa B pendiente).
 - **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
-- **Última sincronización de contexto:** 2026-10-03 (RC1)
+- **Última sincronización de contexto:** 2026-10-04 (Etapa A desplegada)
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-1. **Salvador prueba RC1 sobre emuladores** (`npm run dev:platform`) y decide si abre la misión de rollout controlado (doc 20, veredicto **GO FOR CONTROLLED DEPLOYMENT**, que no autoriza a desplegar).
+1. **Rollout controlado en curso** (doc 21): Etapa A desplegada (A0–A4 PASS). Sigue **A5**: observación de 7 días o más, con al menos un domingo de culto. La Etapa B (Platform + Calendar) solo empieza con un GO explícito de Salvador tras "ETAPA A STABLE".
 2. **Estrategia aprobada en el doc 20 §2 (opción A):** Etapa A = PR #1 solo (`e6b2084`) → observación ≥ 7 días → Etapa B = PR #5 (RC1). La Fase A0 exige backup, la consulta `feeAmount > 0` = 0 (la corre Salvador) y decidir la alerta del scheduler.
 3. Confirmar qué parte de Slice 3A se integra después.
 4. Mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esas decisiones sigan abiertas.
@@ -368,6 +372,7 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - `PROJECT_CONTEXT.md` adoptado como contrato de continuidad.
 - 2026-10-02: previews de diseño PR #3 (Financial UX V2) y PR #4 (Calendario + Integrantes/Consolidación), solo fixtures, sin deploy.
 - 2026-10-03: Platform Core V1 + Calendar implementado en código productivo (rama `mission/platform-core-calendar-v1`), validado con Firebase Emulator Suite. **No desplegado.**
+- 2026-10-03/04: **Etapa A desplegada en producción** (PR #1 mergeado; Rules, Functions y Hosting de `e6b2084`). Backup previo, `feeAmount` = 0, alerta del scheduler SumUp, montos idénticos al baseline. Doc 21.
 - 2026-10-03: RC1 / hardening previo al deploy (doc 20). Token del calendario público en el fragmento + POST; `--summary` en la migración; snapshot de producción; runbook por fases; GO FOR CONTROLLED DEPLOYMENT. **No desplegado.**
 
 ## 19. Platform Core V1 + Calendar (RC1, NOT DEPLOYED)

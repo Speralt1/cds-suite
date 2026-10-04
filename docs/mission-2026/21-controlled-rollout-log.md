@@ -234,7 +234,7 @@ Salvador inició sesión en el navegador de la sesión. El recorrido fue **solo 
 
 **Nota operativa:** para los próximos deploys usar el CLI del repo (`./node_modules/.bin/firebase` en `~/cds-deploy`). El binario standalone instalado en `/usr/local/bin` no puede analizar el código de Functions.
 
-### A4 · Hosting: desplegado; falta el smoke Admin
+### A4 · Hosting: completada (2026-10-04)
 
 **GO recibido:** "GO A4", solo Hosting.
 
@@ -264,4 +264,42 @@ Solo lectura: navegación, filtros de mes y vistas Diario/Mensual/Anual. No se r
 - Rules sin cambios (`2d9939ab…`). Functions sin cambios (`-00006`/`-00007`/`-00002`).
 - Scheduler ENABLED (próximo 03:21). Alerta habilitada y sin disparos.
 
-**Smoke real Admin:** pendiente (Salvador cambia la sesión del navegador a la cuenta admin).
+
+#### Smoke real, sesión **Admin** (02:55–03:06 UTC; rol verificado: `role: admin`, `active: true`)
+
+Solo lectura, igual que con Pastor.
+
+| Pantalla | Resultado |
+|---|---|
+| Resumen | **PASS.** Interfaz nueva (acciones rápidas, tipo de dinero, fuentes, días por revisar, calendario con "dom 4 oct · Culto"). Anual: total ingresos **$34.589.315**, gastos **$6.910.000**, resultado **$27.679.315**; "Tarjeta SumUp · bruto"; comisión "pendiente de datos"; sin "líquido" |
+| Movimientos | **PASS.** Septiembre: 14 filas o grupos SumUp "solo lectura", **0 con Editar/Anular**; los 32 botones están solo en movimientos manuales |
+| Ofrendas y Cafetería | **PASS.** "Tarjeta SumUp (bruto)" ×4; sin "líquido"; **"✓ Conectado"** en ambas cuentas; ningún "Con error" |
+| Diezmos | **PASS.** Lista (30 fichas en pantalla) y ficha con registros de 12 meses, historial, selector de años y acompañamiento pastoral |
+| Reportes | **PASS.** Septiembre **$7.661.647 / $6.860.000 / $801.647 / diezmos $2.926.397 / 789** = baseline. Anual **$34.589.315 / $6.910.000 / $27.679.315 / $3.126.397 / 6.386** = baseline |
+| Consola del navegador | Sin mensajes |
+
+**Verificación final (03:06 UTC):**
+- Reglas desde A4: 1.000 ALLOW · **0 DENY**. Errores: **0**. 5xx: **0**. Resúmenes 2026 = baseline (9/9).
+- Último run programado (02:21): Ofrendas 11/11 y Cafetería 1/1 `unchanged`, 0 created/updated. Próximo: 03:21.
+- Rules `2d9939ab…` (sin cambios). Functions `-00006`/`-00007`/`-00002` (sin cambios). Hosting `edb77ffc04532a95`. Alerta habilitada, sin disparos.
+
+#### A4 STATUS FINAL
+
+| Ítem | Estado |
+|---|---|
+| Hosting deploy | **PASS** |
+| Versión anterior | `f4591416f0474b0f` |
+| Versión nueva | `edb77ffc04532a95` |
+| Pastor real / Admin real | **PASS / PASS** |
+| Resumen · Movimientos · Ofrendas · Diezmos · Reportes | **PASS** (ambos roles) |
+| SumUp en solo lectura | **PASS** |
+| UI de estado SumUp | **PASS** ("✓ Conectado") |
+| Septiembre vs baseline | **PASS** |
+| Anual 2026 vs baseline | **PASS** |
+| Octubre | Pendiente del primer movimiento real (aún no existe el resumen 2026-10) |
+| permission-denied inesperados / errores de navegador / 5xx nuevos | **0 / 0 / 0** |
+| Rules / Functions | SIN CAMBIOS |
+| Scheduler | **PASS** |
+| Monitoring | **PASS** |
+| Rollback requerido | **NO** |
+| **Resultado** | **READY FOR A5** (espera el GO explícito de Salvador). **Etapa A desplegada completa: Rules + Functions + Hosting de `e6b2084`** |
