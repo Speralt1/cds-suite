@@ -106,7 +106,7 @@ Fuente: documentos agregados `financeMonthlySummaries`, leídos el 2026-10-03 ~2
 
 **Rollback requerido:** no. Si hiciera falta deshacer el merge sin desplegar, se haría con `git revert -m 1 0d1bb0d` en preproducción, con aprobación previa.
 
-### A2 · Firestore Rules: desplegado; smoke de la UI en curso
+### A2 · Firestore Rules: completada (2026-10-03/04)
 
 **GO recibido:** "GO A2", solo `firebase deploy --only firestore:rules`.
 
@@ -140,4 +140,34 @@ Salvador inició sesión en el navegador de la sesión. El recorrido fue **solo 
 | Reglas desde el deploy | **22 ALLOW · 0 DENY** |
 | Logs `severity>=ERROR` desde el deploy | **0** |
 
-**Smoke real Pastor:** pendiente. Salvador cierra sesión e inicia con una cuenta pastor; la sesión no cierra cuentas del usuario.
+
+#### Smoke real de A2, sesión **Pastor** (2026-10-03 23:55 – 2026-10-04 00:01 UTC)
+
+**Rol verificado:** el perfil de la sesión activa tiene `role: pastor`, `active: true` (lectura con `mask` de esos 2 campos). En un primer intento la sesión del panel seguía siendo la admin; se detectó y no se contó. Los otros 2 pastores no se repitieron: según el dry-run de A0 están activos y con rol pastor, y la simulación de reglas cubrió ese rol.
+
+| Pantalla | Resultado |
+|---|---|
+| Resumen | **PASS.** KPIs; octubre sin movimientos |
+| Movimientos | **PASS.** Septiembre visible (30 filas en pantalla) |
+| Diezmos | **PASS.** KPIs y fichas visibles |
+| Ofrendas | **PASS.** Caja del día, Ofrendas/Cafetería e integración SumUp |
+| Reportes | **PASS.** Anual 2026: $34.589.315 / $6.910.000 / $27.679.315, **idéntico al baseline** |
+| Consola del navegador | Sin mensajes |
+
+#### A2 STATUS FINAL
+
+| Ítem | Estado |
+|---|---|
+| Rules deploy | **PASS**: ruleset `2d9939ab-2a9e-491e-b176-1cafd939e568` (contenido = `e6b2084`) |
+| Ruleset anterior (rollback) | `8d0087d6-b9a3-4c68-8649-d2fb3744c51f` |
+| Admin real | **PASS** |
+| Pastor real | **PASS** |
+| Resumen / Movimientos / Diezmos / Ofrendas / Reportes | **PASS** (en ambos roles) |
+| permission-denied inesperados | **0**. Reglas desde el deploy hasta 00:01 UTC: 229 ALLOW · 0 DENY |
+| Errores nuevos (`severity>=ERROR`) | **0** |
+| Functions | **SIN CAMBIOS** (fechas de 2026-09) |
+| Hosting | **SIN CAMBIOS** (`f4591416f0474b0f`) |
+| Rollback requerido | **NO** |
+| **Resultado** | **READY FOR A3** (espera el GO explícito de Salvador) |
+
+**Recordatorio:** hasta A4, no editar ni anular movimientos SumUp en la app actual (denegación esperada por G3).
