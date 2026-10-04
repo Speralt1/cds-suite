@@ -171,3 +171,65 @@ Salvador inició sesión en el navegador de la sesión. El recorrido fue **solo 
 | **Resultado** | **READY FOR A3** (espera el GO explícito de Salvador) |
 
 **Recordatorio:** hasta A4, no editar ni anular movimientos SumUp en la app actual (denegación esperada por G3).
+
+### A3 · Functions: completada (2026-10-04)
+
+**GO recibido:** "GO A3", solo `firebase deploy --only functions`, más dos syncs manuales controlados.
+
+| Fecha (UTC) | Paso | Comando / método | Resultado |
+|---|---|---|---|
+| 00:27 | Prechecks | APIs + `gcloud` | Ruleset `2d9939ab…`; 445 ALLOW · 0 DENY desde A2; Hosting `f4591416f0474b0f`; Functions en revisiones de 2026-09 (`sumupsyncnow-00005`, `sumupsyncscheduled-00006`, `campaignshare-00001`); secretos `SUMUP_*_CONFIG` versión 1 (solo metadatos); scheduler "every 60 minutes" America/Santiago, ENABLED; 0 errores |
+| 00:28 | Checkout y revalidación | `~/cds-deploy` @ `0d1bb0d` (`reset --hard`, status vacío); `npm ci`; `npm --prefix functions ci`; `npx vitest run tests/functions` y suite completa; `node --check` | Árbol = `e6b2084` (tree de `functions/` `48838198` idéntico). Tests de Functions/SumUp **50/50**, suite **174/174**, `node --check` OK; el árbol sigue limpio después de `ci` |
+| 00:28:22–00:28:32 | Deploy, intento 1 | `firebase deploy --only functions --project cds-administracion` (CLI standalone `/usr/local/bin/firebase` 15.27.0) | **Falló antes de subir nada:** el Node empaquetado en el binario no carga `jose` (ESM), `ERR_REQUIRE_ESM`. Producción verificada sin cambios |
+| 00:29:01–00:30:36 | Deploy, intento 2 | El mismo comando con el CLI fijado por el repo: `./node_modules/.bin/firebase` 15.28.2 (devDependency, sobre Node 24 del sistema) | ✔ **Las 3 Functions actualizadas**: `campaignShare` (west1) → `campaignshare-00002`, `sumupSyncNow` (west1) → `sumupsyncnow-00006`, `sumupSyncScheduled` (east1) → `sumupsyncscheduled-00007`. Runtime nodejs22, mismos timeouts (20/55/540 s), secretos en versión 1. Scheduler sin cambios, próxima ejecución 01:21 |
+| 00:31:20 | **RUN 1** (botón "Sincronizar SumUp", sesión Pastor) | `POST /api/sumup-sync` → 200 en 12 s | Ver tabla abajo |
+| 00:32:47 | **RUN 2** (mismo mecanismo) | → 200 en 8,5 s | Ver tabla abajo |
+| 01:21:08 | Run programado (primero con el código nuevo) | Cloud Scheduler → 200 en 51 s | Ambas cuentas `completed` + barrido diario de 45 días |
+| 01:40 | Verificación final | APIs, `gcloud logging`, resúmenes con `mask` | Ver abajo |
+
+**Runs (solo conteos agregados, de `sumupSyncRuns`):**
+
+| Run | Cuenta | Estado | Páginas | fetched | created | updated | unchanged | rawRefreshed | voided/reactivated | ignored | Duración |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---:|
+| RUN 1 manual | Ofrendas | partial | 1 | 100 | 0 | 0 | 0 | 0 | 0/0 | preSplit 100 | 11,5 s |
+| RUN 1 manual | Cafetería | partial | 1 | 100 | 0 | 0 | 0 | 92 | 0/0 | other 8 | 4,7 s |
+| RUN 2 manual | Ofrendas | **completed** | 5 | 434 | 0 | 0 | 0 | 70 | 0/0 | preSplit 358, other 6 | 5,7 s |
+| RUN 2 manual | Cafetería | partial | 2 | 200 | 0 | 0 | 0 | 184 | 0/0 | other 16 | 8,3 s |
+| Programado | Ofrendas | completed | 1 | 11 | 0 | 0 | **11** | 0 | 0/0 | — | 1,2 s |
+| Programado | Cafetería | completed | 3 | 294 | 0 | 0 | 0 | 235 | 0/0 | other 10, nonPOS 49 | 39,7 s |
+| Barrido 45 días | Ofrendas | completed | 6 | 512 | 0 | 0 | **70** | 0 | 0/0 | preSplit 436, other 6 | 3,8 s |
+| Barrido 45 días | Cafetería | completed | 6 | 594 | 0 | 0 | **511** | 0 | 0/0 | other 34, nonPOS 49 | 3,9 s |
+
+**Cómo se leen:**
+- **`partial`** no es un error. Es el avance por cursor del motor nuevo: el sync manual tiene un presupuesto de 25 s y no empieza otra página si quedan menos de 20 s. Por eso el primer recorrido de la ventana de 45 días (sin watermark previo) avanza de a una o dos páginas. Cafetería terminó en el run programado (540 s).
+- **`rawRefreshed`:** primera pasada del motor nuevo por cada transacción. Guarda el snapshot crudo con su hash y no toca el movimiento contable.
+- **`created = updated = voided = reactivated = 0` en todos los runs:** el libro contable no cambió.
+- **Idempotencia:** el run programado de Ofrendas dio `unchanged == fetched` (11/11). El barrido de 45 días releyó toda la ventana sin ningún cambio: Ofrendas 70 sin cambios + 442 ignorados = 512; Cafetería 511 sin cambios + 83 ignorados = 594.
+- Los ignorados (`preSplit`: cobros anteriores a la separación del 09-09; `nonPOS`; `other`) no se escriben en el libro.
+
+**UI vieja:** la app actual (`648afd1`) muestra "Con error" para cualquier estado que no sea `ok`, incluido `partial`. Es solo de presentación (los runs no tienen `errorClass`) y la corrige la UI de Slice 1b en A4. Desde el run programado de las 01:21, ambas cuentas quedaron `completed`.
+
+**Verificación final (01:40 UTC):**
+- **Montos:** los 9 resúmenes mensuales de 2026 son **idénticos al baseline de A0** (totales y categorías; `updatedAt` sin cambios). Anual: ingresos 34.589.315 · egresos 6.910.000 · diezmos 3.126.397 · 6.386 movimientos. 2026-10 sigue sin resumen.
+- **Errores (`severity>=ERROR`) desde A3:** 0. **5xx desde A3:** 0. Los syncs manuales y el programado respondieron 200.
+- **Scheduler:** ENABLED, "every 60 minutes"; último intento 01:21 (200), próximo 02:21.
+- **Monitoring:** alerta habilitada; no se disparó.
+- **Rules:** sin cambios (`2d9939ab…`; 650 ALLOW · 0 DENY desde A2). **Hosting:** sin cambios (`f4591416f0474b0f`).
+
+#### A3 STATUS
+
+| Ítem | Estado |
+|---|---|
+| Functions deploy | **PASS** (intento 2) |
+| Commit desplegado | `0d1bb0d` (árbol = `e6b2084`) |
+| Functions actualizadas | `campaignShare`, `sumupSyncNow`, `sumupSyncScheduled` |
+| Regiones | **PASS** (west1, west1, east1) |
+| Scheduler | **PASS** |
+| Idempotencia | **PASS** |
+| Baseline financiero consistente | **PASS** |
+| Monitoring | **PASS** |
+| Rules / Hosting | SIN CAMBIOS |
+| Rollback requerido | **NO** |
+| **Resultado** | **READY FOR A4** (espera el GO explícito de Salvador) |
+
+**Nota operativa:** para los próximos deploys usar el CLI del repo (`./node_modules/.bin/firebase` en `~/cds-deploy`). El binario standalone instalado en `/usr/local/bin` no puede analizar el código de Functions.
