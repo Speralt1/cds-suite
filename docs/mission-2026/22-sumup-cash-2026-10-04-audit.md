@@ -475,7 +475,11 @@ No se tocaron:
 | CASH histórico con efecto contable | **0** (sweep Cafetería `preCashStart 49`; legacy Ofrendas: ver nota) |
 | CASH creado | 1 (Cafetería, 04/10, $163.500) |
 
-- **Nota legacy:** el historial completo de Ofrendas (13.749 ítems) se re-simula contra el ledger real. Ver el resultado en §H.4b, más abajo.
+- **§H.4b Legacy completo de Ofrendas contra el ledger real** (13.749 ítems, forzado a re-correr): `preCashStart 4`, **0 escrituras CASH**, 0 updates/voids.
+  - `created 1` es un POS de 2025-05: el hallazgo F9, preexistente.
+  - Hay 12.610 `rawRefresh` en raws legacy antiguos. **No los causa este cambio**: el hash POS es idéntico entre el core de `0d1bb0d` y el actual en las 14.386 transacciones reales, así que el engine viejo decidiría lo mismo.
+  - Además no tiene efecto contable, y en producción el legacy está en cortocircuito (`historyBackfilledAt` + schema v2): no corre.
+  - El sweep de 45 días, que sí corre, da 0 `rawRefresh`.
 
 ---
 
