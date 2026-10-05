@@ -25,7 +25,7 @@
 | **Calendario** | Código productivo en `mission/platform-core-calendar-v1`, validado solo con emuladores. **No desplegado** |
 | **Reportes** | Reportes financieros (PR #1) y reporte de Calendario (misión platform-core-calendar). **No desplegado** |
 | **Configuración** | General y Finanzas (PR #1); Áreas y Usuarios y permisos (misión platform-core-calendar). **No desplegado** |
-| **Integrantes** (futuro) | Solo existe como **preview** (PR #4, `/preview/integrantes/*`, fixtures). Sin backend, sin colección `people` y sin datos reales |
+| **Integrantes › Consolidación V1** | Código productivo en `mission/consolidation-v1-fasttrack` (stacked sobre PR #5), validado con emuladores. **No desplegado.** Sin datos reales. La preview de PR #4 sigue siendo solo referencia de diseño |
 
 El modelo de acceso nuevo es `role` (legacy, se conserva) + `baseRole` + `position` + `permissions[]` + `areaIds[]` + `homeModule` + `active` + `accessSchemaVersion`. Las reglas tienen un fallback exacto al rol legacy mientras dure la migración. Detalle en `docs/mission-2026/18-platform-core-calendar-production-spec.md` §3.
 
@@ -347,6 +347,7 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
   - Functions: `sumupSyncNow -00006`, `sumupSyncScheduled -00007`, `campaignShare -00002`;
   - Hosting: `edb77ffc04532a95`.
   - **Platform Core / Calendar: NOT DEPLOYED** (Etapa B pendiente).
+- **Consolidación V1 (Fast Track):** `mission/consolidation-v1-fasttrack` (desde `73b9040`, stacked sobre PR #5), Draft PR "[NO DEPLOY] Integrantes · Consolidación V1 — Fast Track" con base `mission/platform-core-calendar-v1`. Docs 23/24/25. **NOT DEPLOYED**; ninguna migración aplicada; rollout propuesto para el 7-10-2026 con GO por fase (doc 25)
 - **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
@@ -404,3 +405,12 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
   - el rollback a reglas legacy exige primero el procedimiento del doc 20 §14 (v1 sin finanzas);
   - en producción, PITR está desactivado y no hay backups ni alertas: se resuelven en la Fase 0 del rollout.
 - **Local:** `npm run dev:platform` levanta Auth + Firestore + Functions con el proyecto `demo-cds-suite`, siembra datos ficticios y arranca Next sin tocar Firebase real. **Ojo:** `npm run dev` a secas usa `.env.local`, que apunta al proyecto real.
+
+## 20. Integrantes › Consolidación V1 · Fast Track (NOT DEPLOYED)
+
+- **Rama:** `mission/consolidation-v1-fasttrack`, creada desde PR #5 @ `73b9040` (stacked). Draft PR con base `mission/platform-core-calendar-v1`. **No mergear ni desplegar** sin el GO por fase del doc 25.
+- **Docs:** `docs/mission-2026/23-consolidation-v1-production-spec.md` (spec y matriz preview → producción), `24-consolidation-v1-security-review.md` (+ anexos 24a/24b de Atlas), `25-consolidation-v1-rollout.md` (runbook C-A0…C-A12 y rollback).
+- **Qué incluye:** permisos `members.consolidation.read/manage` (admin implícito; el fallback legacy no los otorga), módulo Integrantes, 4 colecciones `members*` de solo lectura para el cliente, 6 callables `members*` (escrituras transaccionales, idempotentes y auditadas), 3 índices, UI portada de PR #4 con privacidad reducida (sin datos religiosos, nacimiento ni menores), `check:no-preview`, `--summary` con el bloque de Integrantes.
+- **Qué NO está desplegado:** nada (ni reglas, ni Functions, ni índices, ni Hosting). Ninguna persona real cargada. Ningún permiso otorgado.
+- **Dependencia:** requiere la Etapa B (PR #5) desplegada antes. Empezarla antes del cierre de A5 (11-10) requiere GO explícito de Salvador (doc 25 §1 D1).
+- **Aislado de:** Financial Core (sin cambios en `functions/sumup/**`, `lib/finance/**`, `components/finance/**`) y SumUp CASH (`mission/sumup-cash-intake-v1`, otro carril).
