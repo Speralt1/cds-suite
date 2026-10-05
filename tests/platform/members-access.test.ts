@@ -100,3 +100,28 @@ describe("Integrantes: quién NO entra", () => {
     }
   });
 });
+
+describe("regresión financiera: el acceso financiero de cada rol no cambia (#47–#50)", () => {
+  const finance = (doc: UserAccessDoc) => [...effectivePermissions(doc)].filter((p) => p.startsWith("finance.")).sort();
+  const ALL_FINANCE = ["finance.details.read", "finance.pastoral.manage", "finance.records.manage", "finance.summary.read"];
+
+  it("#47 admin (legacy y v1): las 4 de finanzas", () => {
+    expect(finance({ role: "admin", active: true })).toEqual(ALL_FINANCE);
+    expect(finance(v1([], { role: "admin", baseRole: "admin" }))).toEqual(ALL_FINANCE);
+  });
+  it("#48 pastor (legacy y v1 migrado): las 4 de finanzas", () => {
+    expect(finance({ role: "pastor", active: true })).toEqual(ALL_FINANCE);
+    expect(finance(v1([...LEGACY_ROLE_ACCESS.pastor.permissions], { role: "pastor" }))).toEqual(ALL_FINANCE);
+  });
+  it("#49 finance: resumen, detalle y registros (sin pastoral)", () => {
+    expect(finance({ role: "finance", active: true })).toEqual(["finance.details.read", "finance.records.manage", "finance.summary.read"]);
+  });
+  it("#50 leader: solo resumen", () => {
+    expect(finance({ role: "leader", active: true })).toEqual(["finance.summary.read"]);
+  });
+  it("otorgar Integrantes no agrega ni quita nada de finanzas", () => {
+    for (const perms of [[], ["finance.summary.read"], [...LEGACY_ROLE_ACCESS.finance.permissions]]) {
+      expect(finance(v1([...perms, "members.consolidation.manage"]))).toEqual(finance(v1(perms)));
+    }
+  });
+});
