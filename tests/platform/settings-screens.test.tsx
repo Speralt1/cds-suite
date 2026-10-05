@@ -307,7 +307,7 @@ describe("Configuración › Usuarios y permisos", () => {
       expect.objectContaining({ permissions: expect.arrayContaining(["members.consolidation.manage"]) }),
       state.users.data,
     );
-    const saved = vi.mocked(usersClient.updateManagedUserAccess).mock.calls[0][3] as { permissions: string[] };
+    const saved = (vi.mocked(usersClient.updateManagedUserAccess).mock.calls[0] as unknown[])[3] as { permissions: string[] };
     expect(saved.permissions).not.toContain("members.consolidation.read"); // implícito, no se guarda
   });
 
