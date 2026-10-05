@@ -16,11 +16,11 @@
  *   - SumUp: only `GET /v2.1/merchants/{mc}/transactions/history`.
  *   - Secrets are read into memory (env var, else gcloud) and never printed.
  *
- * There is deliberately NO --apply. The apply step is the deployed engine:
- * once Functions are deployed, the next hourly incremental run (or the daily
- * 45-day sweep, or "Sincronizar ahora") imports exactly what this dry-run
- * shows, with the real lease, run record and transactions. See
- * docs/mission-2026/22-sumup-cash-2026-10-04-audit.md §C4.
+ * There is deliberately NO --apply: DEPLOYING THE FUNCTIONS IS THE APPLY.
+ * The first sync after the deploy (hourly run, daily sweep or "Sincronizar
+ * ahora") imports exactly what this dry-run shows. So the decisive dry-run
+ * must run IMMEDIATELY BEFORE the Functions deploy (rollout CASH-A3,
+ * docs/mission-2026/22-sumup-cash-2026-10-04-audit.md §R), never after.
  *
  * Usage:
  *   node scripts/sumup-cash-backfill.mjs [--account offerings|cafeteria|both]
@@ -266,7 +266,7 @@ async function main() {
   }
   if (args.apply) {
     console.error(
-      "--apply no existe en este script (V1). El apply es el engine desplegado: tras el deploy de Functions, la siguiente corrida horaria, el sweep diario o 'Sincronizar ahora' importan lo que muestra este dry-run. Ver doc 22 §C4.",
+      "--apply no existe. El deploy de Functions ES el apply: la primera sincronización posterior importa lo que muestra este dry-run. Ejecuta este dry-run INMEDIATAMENTE ANTES del deploy (doc 22 §R, CASH-A3).",
     );
     process.exit(2);
   }

@@ -1,6 +1,6 @@
 # 22 — SumUp CASH Intake V1 + auditoría financiera del domingo 04/10/2026
 
-> **Estado: NO DEPLOY · NO BACKFILL APPLY · NO MERGE.** Rama `mission/sumup-cash-intake-v1`, base `feature/preproduccion-mobile-v1` @ `0d1bb0d` (árbol `55b29f6`, idéntico al de `e6b2084`). Producción no fue modificada: toda la auditoría fue de solo lectura.
+> **Estado: NO DEPLOY · NO BACKFILL APPLY · NO MERGE.** Rama `mission/sumup-cash-intake-v1`, base `feature/preproduccion-mobile-v1` @ `0d1bb0d` (árbol `55b29f6`, idéntico al de `e6b2084`). Producción no fue modificada: toda la auditoría fue de solo lectura. Endurecido pre-deploy tras la revisión externa del PR #6: ver **§H** y el rollout **§R (CASH-A0…A9)**, que reemplazan cualquier checklist anterior de este documento.
 
 ## 0. Resumen ejecutivo
 
@@ -237,13 +237,13 @@ Reglas operativas (cajero SumUp + tesorería):
 - **Una cuenta por área:** el efectivo de Ofrendas se registra solo en la cuenta SumUp de Ofrendas y el de Cafetería solo en la de Cafetería. Nunca consolidar ambas áreas en un mismo CASH (la categoría la decide la cuenta).
 - **Mismo día:** el ledger usa la fecha/hora en que se registra el CASH en SumUp. Registrarlo el mismo día del servicio (antes de las 23:59 hora Santiago); si se pasó el día, usar "Caja del día" con la fecha correcta.
 - **Sin fondo de caja:** el CASH consolidado excluye el sencillo inicial.
-- **Error de cuenta o monto:** reembolsar en SumUp y volver a registrar correctamente (o vía Caja del día). Pendiente confirmar que SumUp permite reembolsar un CASH (condición previa al deploy).
+- **Error de cuenta o monto:** si SumUp permite reembolsar ese CASH, reembolsarlo y volver a registrar correctamente (o vía Caja del día). La reembolsabilidad de CASH **no está confirmada** (§H.2): si no se puede, usar el rollback administrativo (`scripts/sumup-cash-rollback.mjs`, dry-run por defecto, con GO).
 
 Procedimiento manual seguro (para tesorería):
 1. Si el efectivo se registró en SumUp como CASH: **no** usar "Caja del día" para ese mismo efectivo.
 2. Solo si NO se registró en SumUp (máquina sin batería, olvido): registrar en "Caja del día" con nota "No registrado en SumUp".
 3. Si se registró en ambos por error: anular el **manual** con motivo "Duplicado de SumUp CASH" (el doc SumUp es solo lectura y se corrige en SumUp).
-4. Si el CASH en SumUp tiene un monto errado: corregir/reembolsar en SumUp; el sistema actualiza o anula solo.
+4. Si el CASH en SumUp tiene un monto errado: corregir/reembolsar en SumUp si el proveedor lo permite (el sistema actualiza o anula solo); si no, rollback administrativo de ese único movimiento (§H.2) y registro correcto.
 
 ---
 
@@ -298,7 +298,9 @@ Gates: `npm run lint` ✅ · `npm run typecheck` ✅ · `npm test` ✅ **208/208
 
 ## C4 — Backfill controlado del 04/10
 
-**Mecanismo:** el backfill **es el engine productivo**. Tras desplegar Functions, la siguiente corrida horaria de Cafetería (su watermark está anclado justo en el CASH, F5), el sweep diario (ventana 45 días) o "Sincronizar ahora" importan el CASH del 04/10 con lease, run record y transacciones reales. No hay un segundo camino de escritura.
+**Mecanismo — EL DEPLOY DE FUNCTIONS ES EL APPLY.** No existe la secuencia "deploy de Functions → dry-run → apply". Desplegar `sumupSyncScheduled` + `sumupSyncNow` habilita CASH de inmediato y el CASH pendiente del 04/10 entra en la **primera** ejecución posterior: la corrida horaria de las :21 (el watermark de Cafetería está anclado justo en ese CASH, F5), el sweep diario o cualquier "Sincronizar ahora" desde la UI. No hay un segundo camino de escritura ni un paso intermedio donde detenerse.
+
+Por lo tanto **el dry-run final y la revisión de duplicados ocurren ANTES del deploy de Functions** (fase CASH-A3), lo más cerca posible de él. El dry-run del 05/10 que aparece abajo es evidencia de diseño, no el dry-run de GO.
 
 **Dry-run:** `scripts/sumup-cash-backfill.mjs` corre `engine.runAccountSync` sobre un store de dry-run (lecturas a producción, escrituras en memoria). Solo lectura por construcción, rechaza `--since` anterior al 04/10 y no tiene `--apply`.
 
@@ -323,17 +325,20 @@ Simulaciones adicionales del guard con el engine real sobre el historial real de
 - Sweep de 45 días de Cafetería (691 ítems) → `created 1` (el CASH del 04/10), `preCashStart 49`, `rawRefreshed 0`, `updated 0`.
 - Legacy de Ofrendas forzado a re-correr sobre todo el historial (13.749 ítems) → `preCashStart 4`, **0 escrituras `cash`**. (También reporta 1 POS histórico anterior al 09/09 sin doc en el ledger: preexistente e independiente de CASH; ver F9.)
 
-**Plazo:** el sweep cubre 45 días; si el deploy ocurre después del **2026-11-17**, el 04/10 sale de la ventana y el CASH solo entraría vía incremental si el watermark sigue anclado. En ese caso, preparar un apply explícito antes de desplegar.
+**Plazo:** el sweep cubre 45 días; si el deploy ocurre después del **2026-11-17**, el 04/10 sale de la ventana y el CASH solo entraría vía incremental si el watermark sigue anclado (cualquier venta nueva en Cafetería lo mueve). Pasada esa fecha este plan no aplica tal cual: hay que replanificar antes de desplegar.
 
 ---
 
 ## Rollback conceptual
 
-- **Datos primero, Functions después.** Los docs `sumup_*` son de propiedad del proveedor: `firestore.rules` (`providerOwnedFinanceTransaction`) bloquea su edición/anulación desde el cliente y la UI los muestra en solo lectura. Para revertir un CASH importado: **reembolsarlo en SumUp mientras las Functions nuevas siguen activas** (el engine lo anula y ajusta el summary, trazable), o un script Admin revisado. Nunca borrar.
-- **Functions:** redeploy de `0d1bb0d` (Etapa A). CASH vuelve a `nonPOS`. Los docs CASH ya creados quedan en el ledger y el engine viejo **deja de seguirlos**: un reembolso posterior en SumUp ya no llegaría al ledger. Por eso el orden anterior.
-- **Hosting:** redeploy del build anterior. Efecto visual (el efectivo SumUp vuelve al grupo "pagos con tarjeta") **y** se pierden los avisos de doble registro: sube el riesgo de duplicado, no solo la estética.
-- **Orden recomendado del deploy:** Hosting primero (sin docs CASH se ve igual que hoy), luego Functions. Así nunca se muestra "90 pagos con tarjeta".
-- **Alcance del deploy:** `firebase deploy --only hosting` y `--only functions:sumupSyncScheduled,functions:sumupSyncNow` (nunca `--only functions` a secas). Antes, verificar que el Hosting vivo corresponde a `0d1bb0d`; si no, el deploy de Hosting arrastraría cambios intermedios.
+Ver §H.2 para el detalle y la evidencia. Resumen:
+
+- **Datos:** dos vías, ninguna borra documentos.
+  1. *Proveedor* (si existe y funciona): reembolsar el CASH en SumUp con las Functions nuevas activas → el engine lo anula (`void`, `system:sumup`) y ajusta el summary. **NOT CONFIRMED** que SumUp permita reembolsar CASH.
+  2. *Administrativa* (no depende de SumUp): `scripts/sumup-cash-rollback.mjs` anula exactamente ese movimiento dentro de `runLedgerTransaction`, revierte el summary con `core.summaryDelta`, agrega una versión `admin_rollback`. Dry-run por defecto; apply solo con `--apply --confirm <id exacto>` y GO.
+- **Functions:** redeploy de `0d1bb0d`. El engine viejo ignora todo CASH (`nonPOS`). Con la vía administrativa ya aplicada, el orden datos→Functions deja de importar: la anulación administrativa es estable bajo ambos engines. Con la vía proveedor, el reembolso debe procesarse **antes** de volver al engine viejo (después ya no llegaría al ledger).
+- **Hosting:** redeploy del build anterior: el efectivo SumUp vuelve al grupo "pagos con tarjeta" y se pierden los avisos de doble registro (sube el riesgo de duplicado).
+- **Alcance del deploy:** `firebase deploy --only hosting` y `firebase deploy --only functions:sumupSyncScheduled,functions:sumupSyncNow` (nunca `--only functions` a secas, nunca Rules).
 
 ---
 
@@ -344,12 +349,13 @@ Simulaciones adicionales del guard con el engine real sobre el historial real de
 | Rules | NO |
 | Functions | SÍ (`sumupSyncScheduled`, `sumupSyncNow`: cambia `functions/sumup/*`) |
 | Hosting | SÍ, recomendado (sub-slice UI, independiente) |
-| Backfill requerido | SÍ, implícito en el deploy de Functions (sin script de escritura) |
+| Backfill requerido | SÍ — **el deploy de Functions ES el apply** (primera corrida posterior). Dry-run final y revisión de duplicados ANTES del deploy (CASH-A3) |
+| Seguridad del paquete | `functions.ignore` agregado; `.secret.local` excluido (PASS, §H.1) |
 | CASH 04/10 a crear | 1 |
 | Delta financiero esperado | +CLP 163.500 (Cafetería, 04/10) |
 | Manuales a revisar antes del apply | 0 |
 | Confirmación humana previa | 1 (F4: composición de los $163.500) |
-| Gates operativos previos | Avisar a tesorería que **no** registre a mano el efectivo de Cafetería del 04/10 (la UI hoy muestra "Falta efectivo" y lo invita); re-ejecutar el dry-run justo antes del deploy y exigir 0 días manuales en conflicto; confirmar que SumUp permite reembolsar CASH; comunicar reglas operativas a cajeros |
+| Gates operativos previos | Avisar a tesorería que **no** registre a mano el efectivo de Cafetería del 04/10 (la UI hoy muestra "Falta efectivo" y lo invita); re-ejecutar el dry-run justo antes del deploy y exigir 0 días manuales en conflicto; comunicar reglas operativas a cajeros. Ver §R |
 | Contadores | `ignored.preCashStart` nuevo; `nonPOS` deja de contar CASH. Ninguna UI muestra estos contadores |
 
 ---
@@ -368,7 +374,7 @@ Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ �
 
 **Veredicto integrado (Conductor): READY FOR CONTROLLED CASH DEPLOY.** Sin BLOCKER ni MAJOR de código abiertos. Riesgo residual aceptado → V1.1: aviso en `TransactionForm` y flag de revisión en el engine para "manual primero". El deploy queda condicionado al GO explícito de Salvador y a estos gates:
 
-**Gates previos al deploy (humanos/operativos)**
+**Gates previos al deploy (humanos/operativos)** — *histórico; reemplazado por el rollout §R. Los puntos 3 y 6 quedaron resueltos en §H (rollback sin dependencia de SumUp; `.secret.local` excluido del paquete).*
 1. F4: el cajero confirma que los $163.500 son solo Cafetería (si incluyen Ofrendas, corregir primero en SumUp).
 2. Avisar a tesorería que NO registre a mano el efectivo de Cafetería del 04/10 (la UI muestra "Falta efectivo" hasta que salgan las Functions).
 3. Confirmar que SumUp permite reembolsar un CASH (el rollback de datos depende de eso).
@@ -386,3 +392,103 @@ Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ �
 4. Movimientos muestra el grupo "SumUp · Cafetería · Efectivo"; la tarjeta de Cafetería dice "Incluye $163.500 registrado en SumUp" y desaparece "Falta efectivo".
 5. No existe `cash_cafeteria_2026-10-04` manual.
 6. Scheduler HTTP 200 y 0 errores/5xx en 24 h.
+
+---
+
+## H — Hardening pre-deploy (revisión externa del PR #6, HEAD revisado `b8dd850`)
+
+### H.1 Gate de seguridad: `functions/.secret.local`
+
+- El archivo es local y preexistente (03/10 09:02). Contiene overrides de emulador para `SUMUP_OFFERINGS_CONFIG` y `SUMUP_CAFETERIA_CONFIG` (solo se listaron los nombres de las claves, nunca los valores).
+- **Causa:** `firebase-tools` 15.28.2 (el fijado por el repo) empaqueta `functions/` ignorando solo `["node_modules", ".git"]` + `firebase-debug*.log` cuando `functions.ignore` no existe (`node_modules/firebase-tools/lib/deploy/functions/prepareFunctionsUpload.js:77-78`). Rules de `.gitignore` no aplican al empaquetado.
+- **Fix:** `firebase.json` → `functions.ignore = ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local", ".secret.local"]`. Es la lista oficial de `firebase init` para Node (`lib/init/features/functions/index.js:167-180`) más `.secret.local` explícito. No excluye ningún archivo necesario.
+- **Prueba sin deploy:** `scripts/verify-functions-package.mjs` arma el archivo **con el mismo código del CLI**: `normalizeAndValidate` → `configForCodebase` → `requireLocal` → `prepareFunctionsUpload`. Es un paso local del deploy, sin llamadas a Google. Lista solo nombres de archivo y borra el zip temporal. Queda fijado por `tests/functions/functions-package.test.ts`.
+
+| | `functions.ignore` | Entradas del paquete | Resultado |
+|---|---|---|---|
+| Antes (`b8dd850`) | ausente → default CLI | `.secret.local`, index.js, package-lock.json, package.json, sumup/core.js, sumup/engine.js, sumup/firestore-store.js | **FAIL** |
+| Después | lista oficial + `.secret.local` | index.js, package-lock.json, package.json, sumup/core.js, sumup/engine.js, sumup/firestore-store.js | **PASS** |
+
+- **Producción actual (solo lectura):** se listaron los nombres de archivo de los zips desplegados el 04/10 00:30Z (`gcf-v2-sources-…/{sumupSyncScheduled,sumupSyncNow,campaignShare}/function-source.zip`). Los tres contienen exactamente los 6 archivos de arriba, **sin `.secret.local`**: el deploy de la Etapa A no lo expuso. Los zips se descargaron al scratch, se listaron y se borraron.
+
+### H.2 Rollback sin dependencias no verificadas
+
+**Reembolso de CASH en SumUp: NOT CONFIRMED.** La documentación pública (refunds de la API v1.0 `POST /merchants/{mc}/payments/{id}/refunds`, guías de reembolso, centro de ayuda) describe reembolsos de pagos con tarjeta y un `409` para transacciones "not refundable in its current state", pero no menciona CASH. Probarlo exigiría una escritura en producción. Si SumUp lo permitiera y devolviera `status: REFUNDED` + `refunded_amount`, el engine ya lo procesa (tests "8. reembolso total de CASH" y "7. parcial"). Aun así, no se usa como garantía.
+
+**Alternativa administrativa** (`scripts/sumup-cash-rollback.mjs` + `scripts/lib/sumup-cash-rollback-core.mjs`):
+
+- Acotada a **un** movimiento: `--finance-id` explícito, o el único CASH SumUp activo que calce `--account` + `--date` + `--amount`. Aborta si hay 0 o más de 1.
+  - Escenario esperado: `node scripts/sumup-cash-rollback.mjs --account cafeteria --date 2026-10-04 --amount 163500`
+- **Dry-run por defecto**: lector de solo lectura (REST GET/runQuery) y escrituras en memoria. El apply exige `--apply --confirm <id exacto>`, usa `functions/sumup/firestore-store.js` y **no se ejecutó**.
+- Reutiliza las primitivas del Financial Core: `store.runLedgerTransaction`, `core.summaryDelta` y `core.applySummaryDelta`. No hay un segundo motor contable.
+- Dentro de la transacción re-lee y **aborta** si cambió cualquiera de estos: tipo, método `cash`, origen `system:sumup`, categoría, fecha, monto, estado, edición humana o cobertura del summary (nunca deja montos negativos).
+- **Efecto**, sin borrar nada:
+  - el doc queda `voided`, con `revision+1` y `voidedBy`/`updatedBy` = `admin:sumup-cash-rollback`;
+  - el summary se revierte exactamente;
+  - se agrega una versión `void/admin_rollback` con el `before` completo.
+- **Idempotente:** una segunda ejecución responde "ya revertido" sin escribir.
+- **Estable:** como `voidedBy` no es `system:sumup`, el engine nuevo lo deja en `review/human_voided` en cada sync, sweep o reembolso posterior. Nunca lo reactiva ni lo resta dos veces. El engine viejo ignora CASH.
+- **Tests:** `tests/functions/sumup-cash-rollback.test.ts`, 11 casos.
+  - Rollback exacto al estado previo al import.
+  - Idempotencia.
+  - Syncs, sweep y reembolso posteriores sin efecto.
+  - Abortos sin escritura: monto, fecha, cuenta, id no SumUp, id inexistente, tarjeta, editado por humano, ya anulado por SumUp y summary insuficiente.
+  - Dry-run sin tocar el origen.
+- **Prueba en producción (solo lectura):** hoy aborta con "hay 0", porque el CASH aún no está importado (correcto).
+
+**Si SumUp está inaccesible durante un rollback:**
+
+- La vía administrativa no depende de SumUp: solo usa Firestore.
+- Con las Functions nuevas activas, los syncs fallan como `provider_unavailable`, sin efecto contable (contrato existente del engine).
+- El doc revertido sigue anulado. Cuando SumUp vuelve, el CASH aparece `SUCCESSFUL` y el engine lo marca `review/human_voided`, sin reactivarlo.
+- Revertir Functions a `0d1bb0d` no requiere SumUp.
+- La vía proveedor es la única que sí requiere SumUp, y por eso no es la vía garantizada.
+
+### H.3 Alcance funcional (sin cambios)
+
+POS → `card` · CASH ≥ 2026-10-04 → `cash` · CASH < 2026-10-04 → `preCashStart`, sin efecto contable.
+
+No se tocaron:
+- `functions/sumup/*` (en este hardening);
+- Rules, Slice 3A, Consolidación ni Calendar.
+
+### H.4 Revalidación
+
+- **Gates:**
+  - tests **221/221**: 208 previos + 2 de paquete + 11 de rollback;
+  - lint, typecheck y build: OK;
+  - `node --check` de `functions/**` y `scripts/**`: OK.
+- **Snapshot del historial real del proveedor (05/10, 14.386 POS y 54 CASH)** con el engine real sobre el **ledger real** (store de dry-run, sin escrituras):
+
+| Métrica | Resultado |
+|---|---|
+| POS hash changes (core `0d1bb0d` vs actual) | **0 / 14.386** |
+| Cambio POS↔CASH visible en el hash | 54 / 54 |
+| POS finance changes (sweep 45 días, ambas cuentas, ledger real) | **0** (0 create/update/void POS; 0 rawRefresh) |
+| CASH histórico con efecto contable | **0** (sweep Cafetería `preCashStart 49`; legacy Ofrendas: ver nota) |
+| CASH creado | 1 (Cafetería, 04/10, $163.500) |
+
+- **Nota legacy:** el historial completo de Ofrendas (13.749 ítems) se re-simula contra el ledger real. Ver el resultado en §H.4b, más abajo.
+
+---
+
+## R — Rollout final CASH (cada fase: acción → evidencia → HARD STOP)
+
+| Fase | Acción | Evidencia exigida | Stop |
+|---|---|---|---|
+| **CASH-A0** | A5 saludable; backup/export de Firestore (`financeTransactions`, `financeMonthlySummaries`, `sumupIntegrations`); gates humanos resueltos (F4, tesorería avisada, cajeros informados). | A5 verde; ruta del export; confirmaciones por escrito. | HARD STOP |
+| **CASH-A1** | Merge controlado del PR #6 a `feature/preproduccion-mobile-v1`. | SHA del merge, árbol = HEAD aprobado; gates verdes en el merge. | HARD STOP |
+| **CASH-A2** | Deploy **solo Hosting** (`firebase deploy --only hosting`), tras confirmar que el Hosting vivo = build de `0d1bb0d`. | Movimientos/Ofrendas/Reportes sin regresiones (sin docs CASH se ven igual que hoy); columnas "tarjeta"; 0 errores de consola. | HARD STOP |
+| **CASH-A3** | Confirmar: $163.500 = 100% Cafetería; tesorería NO creó `cash_cafeteria_2026-10-04`. Ejecutar dry-run productivo **fresco**: `node scripts/sumup-cash-backfill.mjs`. Ejecutar `node scripts/verify-functions-package.mjs`. | CASH a crear = **1**; delta = **+163.500**; POS changes = **0**; manual conflicts = **0**; paquete PASS. Cualquier otro valor → NO GO. | HARD STOP · **esperar GO explícito** |
+| **CASH-A4** | `firebase deploy --only functions:sumupSyncScheduled,functions:sumupSyncNow`. **Este paso ES el apply.** | Deploy OK de exactamente esas 2 funciones. | HARD STOP |
+| **CASH-A5** | Controlar la primera sincronización (la horaria de las :21 o "Sincronizar ahora"). | Exactamente 1 CASH nuevo: Cafetería · $163.500 · `paymentMethod: cash` · `createdBy: system:sumup` · día 4. Run `completed`. | HARD STOP |
+| **CASH-A6** | Verificar `financeMonthlySummaries/2026-10`. | incomeTotal = 968.860 · result = 968.860 · transactionCount = 104 · Cafetería = 903.860 · Ofrendas = 65.000 · dailyIncome.4 = 968.860 · 9/9 campos vs ledger. | HARD STOP |
+| **CASH-A7** | Segunda sincronización. | created 0 · updated 0 · delta 0 (summary idéntico). | HARD STOP |
+| **CASH-A8** | Verificar el sweep diario. | CASH de septiembre = `preCashStart`; ningún movimiento histórico creado; 0 cambios POS. | HARD STOP |
+| **CASH-A9** | Reiniciar/extender A5 desde este deploy. | A5 con nueva línea base. | Cierre |
+
+**Rollback por fase:**
+- **A2:** redeploy del Hosting anterior.
+- **A4–A8:**
+  1. rollback administrativo dry-run → GO → `--apply --confirm`;
+  2. luego, si hace falta, redeploy de Functions `0d1bb0d`.
