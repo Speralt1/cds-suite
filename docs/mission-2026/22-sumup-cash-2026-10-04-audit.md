@@ -188,7 +188,7 @@ La categoría no cambia (`Ofrendas` / `Cafetería`): Reportes, Insights y la pá
 
 ### C1.3 Raw / provider snapshot
 
-Se agregan `providerSnapshot.simplePaymentType` y, en el raw, `simplePaymentType` y `paymentMethod` (lo que el ledger reserva). Se preservan `paymentType`, bruto, reembolsado, status, id, timestamp, `entryMode`, `feeAmount`/`feeStatus` tal como los entrega el proveedor: CASH sin `fee_amount` queda `feeAmount: null, feeStatus: "unknown"`. El ledger nunca descuenta comisión.
+Se agregan `providerSnapshot.simplePaymentType` y, en el raw, `simplePaymentType` y `mappedPaymentMethod` (el método de ledger al que mapea el `payment_type` del proveedor; en rutas de revisión puede diferir del ledger hasta que un humano resuelva). Se preservan `paymentType`, bruto, reembolsado, status, id, timestamp, `entryMode`, `feeAmount`/`feeStatus` tal como los entrega el proveedor: CASH sin `fee_amount` queda `feeAmount: null, feeStatus: "unknown"`. El ledger nunca descuenta comisión.
 
 ### C1.4 Hash / idempotencia
 
@@ -351,3 +351,38 @@ Simulaciones adicionales del guard con el engine real sobre el historial real de
 | Confirmación humana previa | 1 (F4: composición de los $163.500) |
 | Gates operativos previos | Avisar a tesorería que **no** registre a mano el efectivo de Cafetería del 04/10 (la UI hoy muestra "Falta efectivo" y lo invita); re-ejecutar el dry-run justo antes del deploy y exigir 0 días manuales en conflicto; confirmar que SumUp permite reembolsar CASH; comunicar reglas operativas a cajeros |
 | Contadores | `ignored.preCashStart` nuevo; `nonPOS` deja de contar CASH. Ninguna UI muestra estos contadores |
+
+---
+
+## C5 — Revisión multiagente
+
+| Rol | Veredicto | Hallazgos y resolución |
+|---|---|---|
+| **Atlas** (general-purpose con shell; probes en scratch con el engine real) | PASS WITH FINDINGS · 0 BLOCKER | **MAJOR-1** rollback vía UI imposible (Rules + UI solo lectura) y Functions viejas dejan huérfanos los CASH ya creados → corregido en "Rollback conceptual" (`31d826c`). **MINOR-1** raw `paymentMethod` contradecía al ledger en revisión → renombrado `mappedPaymentMethod` (`fix(sumup)`). **MINOR-2** secreto malformado se filtraba por el mensaje de `JSON.parse` → mensaje genérico. **MINOR-3** dry-run contaba doble un ítem repetido → dedupe por id. INFO: footer "pagos SumUp agrupados" → "registros". |
+| **Navigator** | APPROVE WITH CONDITIONS | Doble registro "manual primero → SumUp después" sin señal → aviso por origen en la tarjeta de área (`accbed9`). Rollback corregido. Reglas operativas (una cuenta por área, mismo día, sin fondo de caja) y gates previos al deploy agregados. `TransactionForm` y flag del engine → V1.1. |
+| **Designer** | PASS WITH NITS | "Ver 1 pagos" → "Ver 1 registro / pago"; icono + `aria-describedby` en el aviso; columnas solo-tarjeta renombradas "Ofrendas/Cafetería tarjeta" (`f52ee09`). Pendiente fuera de alcance: contraste de `.notice-warning` (~4,2:1, preexistente). |
+
+Evidencia de Atlas (resumen): idempotencia (reruns, sweep, mismo ítem en 2 páginas, corte por deadline) sin dobles conteos; summary exacto en create/refund parcial/total/reactivación y delta 0 sin reescritura en cambio de método; estados CASH (PENDING, FAILED, CANCELLED, CHARGE_BACK, REFUND, USD) con guards intactos; corte exacto a medianoche local (`02:59:59.999Z` → 03/10, `03:00:00.000Z` → 04/10) en los 3 modos, incluso con `splitStartDate` alterado; **0 diferencias de hash en 300 variantes POS** entre el core viejo y el nuevo; el dry-run no puede escribir y su resultado es idéntico al store real; ninguna vista reporta el CASH SumUp como tarjeta.
+
+Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ · `node --check` ✅ · dry-run re-ejecutado tras los fixes: idéntico (1 CASH, +$163.500, 0 cambios POS, 0 manuales).
+
+**Veredicto integrado (Conductor): READY FOR CONTROLLED CASH DEPLOY.** Sin BLOCKER ni MAJOR de código abiertos. Riesgo residual aceptado → V1.1: aviso en `TransactionForm` y flag de revisión en el engine para "manual primero". El deploy queda condicionado al GO explícito de Salvador y a estos gates:
+
+**Gates previos al deploy (humanos/operativos)**
+1. F4: el cajero confirma que los $163.500 son solo Cafetería (si incluyen Ofrendas, corregir primero en SumUp).
+2. Avisar a tesorería que NO registre a mano el efectivo de Cafetería del 04/10 (la UI muestra "Falta efectivo" hasta que salgan las Functions).
+3. Confirmar que SumUp permite reembolsar un CASH (el rollback de datos depende de eso).
+4. Re-ejecutar el dry-run justo antes del deploy: exigir 1 CASH / +$163.500, 0 cambios POS, 0 días manuales en conflicto.
+5. Confirmar que el Hosting vivo corresponde a `0d1bb0d`.
+6. `functions/.secret.local` (preexistente, local) no debe subirse: ya está en `.gitignore` de esta rama; confirmar que el CLI no lo empaqueta (o agregar `functions.ignore` con `*.local`) antes del deploy de Functions.
+7. Comunicar a cajeros las reglas operativas (una cuenta por área, mismo día, sin fondo de caja).
+8. Hosting primero; luego `--only functions:sumupSyncScheduled,functions:sumupSyncNow`. Antes del 2026-11-17.
+9. GO explícito de Salvador.
+
+**Verificación post-deploy**
+1. Exactamente un doc nuevo `sumup_cafeteria_…edce28`: `cash`, `system:sumup`, $163.500, día 4.
+2. `financeMonthlySummaries/2026-10` = 968.860 / 104 / Cafetería 903.860 / día 4 968.860, 9/9 campos vs ledger.
+3. Contadores: 0 updates/rawRefresh POS; primer sweep de Cafetería con `preCashStart 49` y nada de septiembre escrito.
+4. Movimientos muestra el grupo "SumUp · Cafetería · Efectivo"; la tarjeta de Cafetería dice "Incluye $163.500 registrado en SumUp" y desaparece "Falta efectivo".
+5. No existe `cash_cafeteria_2026-10-04` manual.
+6. Scheduler HTTP 200 y 0 errores/5xx en 24 h.
