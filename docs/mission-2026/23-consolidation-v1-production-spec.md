@@ -54,7 +54,7 @@ Campos permitidos en `membersPeople` (F3). Cualquier otro campo está prohibido 
 | | `followUpOwnerUid` | uid \| null | validado en el servidor |
 | | `doNotContact` | bool | |
 | Sistema | `createdAt`, `createdBy`, `updatedAt`, `updatedBy`, `revision` | | timestamps del servidor |
-| **Proyección** (justificada, §5.1) | `visitCount`, `lastVisitDate`, `followUpCount`, `lastFollowUpDate`, `firstContactDate`, `nextAction`, `nextActionDate`, `nextActionOwnerUid` | | derivados del historial, sin PII nueva |
+| **Proyección** (justificada, §5.1) | `visitCount`, `firstVisitDate`, `lastVisitDate`, `followUpCount`, `lastFollowUpDate`, `firstContactDate`, `nextAction`, `nextActionDate`, `nextActionOwnerUid` | | derivados del historial, sin PII nueva. `firstVisitDate` = visita más antigua registrada (puede diferir de `firstVisitAt` si luego se registra una visita anterior) |
 
 **Campos agregados respecto de F3 y su justificación:**
 - `closedReason` (enum, sin texto libre en la persona): F10 exige motivo para "Sin continuidad"; el texto opcional del motivo vive solo en `membersPersonChanges`.
@@ -111,8 +111,14 @@ Requisitos comunes:
 - **Calendario:** `calendarEventId` solo si quien escribe tiene `calendar.read`; el evento debe existir y no estar archivado. Nunca se copia el título ni datos de la persona al evento.
 - Errores sanitizados: `HttpsError` con clave `members/*`; el log no incluye nombres, teléfonos ni correos.
 
+### 5.0 Detalles de implementación
+- Cada visita y cada seguimiento suben la `revision` de la persona (la UI siempre usa la del snapshot vigente).
+- `membersFollowUpCreate` sin `ownerUid` usa el responsable actual de la persona (no se revalida: es el ya asignado; si perdió el acceso, la alerta "Sin responsable" lo muestra).
+- Los cambios `status_changed`/`stage_changed`/`do_not_contact_changed` producidos por un seguimiento llevan `refId` = id del seguimiento; `person_created` lleva `refId` = id de la primera visita.
+- La búsqueda de posibles duplicados corre después de confirmar la transacción (solo advierte; nunca bloquea).
+
 ### 5.1 Proyección del resumen
-`projectVisit` / `projectFollowUp` (`lib/shared/members.ts`) recalculan `visitCount`, `lastVisitDate`, `followUpCount`, `lastFollowUpDate`, `firstContactDate` y la próxima acción vigente (la del seguimiento registrado más recientemente).
+`projectVisit` / `projectFollowUp` (`lib/shared/members.ts`) recalculan `visitCount`, `firstVisitDate`, `lastVisitDate`, `followUpCount`, `lastFollowUpDate`, `firstContactDate` y la próxima acción vigente (la del seguimiento registrado más recientemente).
 
 ## 6. Pipeline
 
