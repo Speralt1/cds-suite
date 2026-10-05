@@ -34,7 +34,17 @@ import { duplicateCandidates, type DuplicateBy } from "@/lib/members/consolidati
 import type { Person } from "@/lib/members/types";
 import { useMembers } from "@/lib/members/use-members";
 import { PEOPLE_HREF, PRIVACY_NOTE, dateEcho, firstName, personHref, shortDate } from "./model";
-import { ActivityField, FormError, MemberActions, NoteField, OfflineNotice, SubmitButton, useMemberActions, useWrite } from "./sheets";
+import {
+  ActivityField,
+  FormError,
+  LOCAL_CONFLICT,
+  MemberActions,
+  NoteField,
+  OfflineNotice,
+  SubmitButton,
+  useMemberActions,
+  useWrite,
+} from "./sheets";
 
 // ---------- Posible duplicado ----------
 
@@ -435,34 +445,57 @@ export function NewPersonScreen() {
 
 // ---------- Editar datos ----------
 
+type ProfileFields = Pick<Person, "fullName" | "phoneE164" | "email" | "arrivalSource" | "invitedBy">;
+
+const profileOf = (p: Person): ProfileFields => ({
+  fullName: p.fullName,
+  phoneE164: p.phoneE164,
+  email: p.email,
+  arrivalSource: p.arrivalSource,
+  invitedBy: p.invitedBy,
+});
+
+const PROFILE_KEYS: readonly (keyof ProfileFields)[] = ["fullName", "phoneE164", "email", "arrivalSource", "invitedBy"];
+
+/** Algún dato de perfil en vivo difiere de la base congelada al abrir. */
+function profileDrifted(base: ProfileFields, live: Person): boolean {
+  return PROFILE_KEYS.some((k) => base[k] !== live[k]);
+}
+
 /** Edición de datos operacionales (nombre, teléfono, correo, cómo llegó, invitado por). */
 export function EditPersonSheet({ person, onClose }: { person: Person; onClose: () => void }) {
   const m = useMembers();
   const { toast } = useToast();
   const uid = useId();
   const formId = `mem-edit-form${uid}`;
-  const [name, setName] = useState(person.fullName);
-  const [phone, setPhone] = useState(person.phoneE164 ? formatPhone(person.phoneE164) : "");
-  const [email, setEmail] = useState(person.email ?? "");
-  const [arrival, setArrival] = useState<ArrivalSource | "">(person.arrivalSource ?? "");
-  const [invitedBy, setInvitedBy] = useState(person.invitedBy ?? "");
+  // Base congelada al abrir: el diff se calcula contra ella (no contra la
+  // persona en vivo) para no revertir en silencio el cambio de otra persona.
+  const [base] = useState(() => ({ ...profileOf(person), revision: person.revision }));
+  const [name, setName] = useState(base.fullName);
+  const [phone, setPhone] = useState(base.phoneE164 ? formatPhone(base.phoneE164) : "");
+  const [email, setEmail] = useState(base.email ?? "");
+  const [arrival, setArrival] = useState<ArrivalSource | "">(base.arrivalSource ?? "");
+  const [invitedBy, setInvitedBy] = useState(base.invitedBy ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const write = useWrite();
+  // Visitas y seguimientos suben la revisión sin tocar el perfil: no son conflicto.
+  const drifted = profileDrifted(base, person);
 
   const matches = useMemo(() => duplicateCandidates({ phone, email }, m.persons, person.id), [phone, email, m.persons, person.id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (drifted) return;
     const req: PersonUpdateRequest = { personId: person.id, expectedRevision: person.revision };
     const cleanName = name.replace(/\s+/g, " ").trim();
-    if (cleanName !== person.fullName) req.fullName = name;
+    if (cleanName !== base.fullName) req.fullName = name;
     const ph = normalizePhone(phone);
-    if (!ph.ok || ph.e164 !== person.phoneE164) req.phone = phone;
+    if (!ph.ok || ph.e164 !== base.phoneE164) req.phone = phone;
     const em = email.trim() ? normalizeEmail(email) : null;
-    if (em === null ? person.email !== null : !em.ok || em.value !== person.email) req.email = email.trim() ? email : null;
-    if ((arrival || null) !== person.arrivalSource) req.arrivalSource = arrival || null;
+    if (em === null ? base.email !== null : !em.ok || em.value !== base.email) req.email = email.trim() ? email : null;
+    if ((arrival || null) !== base.arrivalSource) req.arrivalSource = arrival || null;
     const cleanInvited = invitedBy.replace(/\s+/g, " ").trim() || null;
-    if (cleanInvited !== person.invitedBy) req.invitedBy = cleanInvited;
+    if (cleanInvited !== base.invitedBy) req.invitedBy = cleanInvited;
     if (Object.keys(req).length === 2) return onClose();
     const parsed = parsePersonUpdate(req);
     if (!parsed.ok) {
@@ -489,7 +522,7 @@ export function EditPersonSheet({ person, onClose }: { person: Person; onClose: 
           <button type="button" className="button-secondary" onClick={onClose} disabled={write.submitting}>
             Cancelar
           </button>
-          <SubmitButton form={formId} submitting={write.submitting} disabled={!m.online} label="Guardar cambios" />
+          <SubmitButton form={formId} submitting={write.submitting} disabled={!m.online || drifted} label="Guardar cambios" />
         </div>
       }
     >
@@ -578,7 +611,7 @@ export function EditPersonSheet({ person, onClose }: { person: Person; onClose: 
         </div>
         <p className="mem-help">El responsable y «No contactar» se cambian desde la ficha.</p>
         {!m.online && <OfflineNotice />}
-        <FormError error={write.error} />
+        <FormError error={drifted ? LOCAL_CONFLICT : write.error} />
       </form>
     </CalDialog>
   );

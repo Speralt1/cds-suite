@@ -31,7 +31,7 @@ import type { AlertType } from "@/lib/members/types";
 import { useMembers, type MembersState } from "@/lib/members/use-members";
 import { NEW_PERSON_HREF, PRIVACY_NOTE, agoText, alertReason, fold, personHref, plural, relDay, shortDate, shortName } from "./model";
 import { MemberActions, useMemberActions } from "./sheets";
-import { LoadErrorState } from "./status";
+import { LoadErrorState, TruncatedPeopleNotice } from "./status";
 import { ALERT_VIS, DerivedBadges, PersonStatusBadge, STATUS_VIS } from "./vocab";
 
 // ---------- Filtros ----------
@@ -658,6 +658,7 @@ function PeopleContent() {
   return (
     <>
       <PageHeader title="Personas" subtitle="Quienes visitan la iglesia y su acompañamiento." />
+      <TruncatedPeopleNotice />
       <section className="panel mem-panel is-flush mem-people-panel" aria-label="Lista de personas">
         <div className="mem-toolbar mem-people-toolbar">
           <label className="mem-search mem-people-search">

@@ -3,7 +3,7 @@
 // Estados transversales del módulo: error de carga (red / sin permiso),
 // sin conexión y lista de responsables que no cargó.
 
-import { RefreshCw, TriangleAlert, WifiOff } from "lucide-react";
+import { Info, RefreshCw, TriangleAlert, WifiOff } from "lucide-react";
 import { ErrorState, InlineNotice } from "@/components/calendar/ui";
 import { useMembers } from "@/lib/members/use-members";
 
@@ -27,6 +27,21 @@ export function LoadErrorState() {
       />
     );
   return <ErrorState title={LOAD_ERROR_TEXT.networkTitle} body={LOAD_ERROR_TEXT.networkBody} onRetry={m.retry} />;
+}
+
+export const TRUNCATED_PEOPLE_TEXT = "Mostrando las 1.000 personas más recientes.";
+
+/** Aviso (no bloquea) cuando la suscripción llegó al límite de personas. */
+export function TruncatedPeopleNotice() {
+  const m = useMembers();
+  if (!m.truncated) return null;
+  return (
+    <div className="mem-truncated">
+      <InlineNotice tone="info" icon={Info} role="status">
+        {TRUNCATED_PEOPLE_TEXT}
+      </InlineNotice>
+    </div>
+  );
 }
 
 /** Avisos del módulo bajo la subnav: sin conexión y responsables no disponibles. */

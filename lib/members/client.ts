@@ -179,6 +179,20 @@ export function subscribePeople(onNext: (persons: Person[]) => void, onError: (k
   );
 }
 
+/**
+ * Lectura puntual de `membersPeople/{id}` (reglas: `get` con members.read).
+ * Respaldo de la ficha cuando la persona queda fuera de las PEOPLE_LIMIT
+ * cargadas. null si no existe; lanza ReadErrorKind si la lectura falla.
+ */
+export async function fetchPerson(id: string): Promise<Person | null> {
+  try {
+    const snap = await getDoc(doc(getFirebaseServices().db, MEMBERS_COLLECTIONS.people, id));
+    return snap.exists() ? toPerson(snap.id, snap.data() as DocumentData) : null;
+  } catch (error) {
+    throw readErrorKind(error);
+  }
+}
+
 // ---------- Historial de una persona (en vivo) ----------
 
 export interface PersonHistory {
@@ -187,6 +201,11 @@ export interface PersonHistory {
   changes: PersonChange[];
   loading: boolean;
   error: ReadErrorKind | null;
+}
+
+/** Algún listener del historial llegó a HISTORY_LIMIT (puede haber registros más antiguos). */
+export function historyTruncated(h: Pick<PersonHistory, "visits" | "followUps" | "changes">): boolean {
+  return h.visits.length >= HISTORY_LIMIT || h.followUps.length >= HISTORY_LIMIT || h.changes.length >= HISTORY_LIMIT;
 }
 
 const EMPTY_HISTORY: PersonHistory = { visits: [], followUps: [], changes: [], loading: true, error: null };

@@ -11,7 +11,7 @@ import { useAccessModel } from "@/lib/access/model";
 import { useOnlineStatus } from "@/lib/browser/online";
 import { useSantiagoNow } from "@/lib/calendar/use-now";
 import { fetchOwnerOptions } from "./api";
-import { subscribePeople, type ReadErrorKind } from "./client";
+import { PEOPLE_LIMIT, fetchPerson, subscribePeople, type ReadErrorKind } from "./client";
 import { buildPersonView, computeAlerts, type PersonView } from "./consolidation";
 import type { Alert, LocalDateTime, OwnerOption, Person, Ymd } from "./types";
 
@@ -22,6 +22,14 @@ export interface MembersState {
   /** Error de lectura de personas (null si no hay). */
   error: ReadErrorKind | null;
   retry: () => void;
+  /** La suscripción devolvió exactamente PEOPLE_LIMIT: hay personas más antiguas sin cargar. */
+  truncated: boolean;
+  /**
+   * Lectura puntual de una persona fuera de la lista cargada (ficha por ?id=).
+   * Si existe, queda disponible en `viewOf` (no en `persons` ni `views`, que
+   * alimentan listas e indicadores). Resuelve false si no existe; rechaza con ReadErrorKind.
+   */
+  loadPerson: (id: string) => Promise<boolean>;
   /** Responsables válidos (null mientras cargan o si fallaron). */
   owners: OwnerOption[] | null;
   ownersLoading: boolean;
@@ -29,7 +37,10 @@ export interface MembersState {
   retryOwners: () => void;
   ownerName: (uid: string | null | undefined) => string | null;
   alerts: Alert[];
+  /** Vistas de las personas cargadas por la suscripción (listas, indicadores). */
   views: ReadonlyMap<string, PersonView>;
+  /** Vista de una persona: cargada o leída aparte con loadPerson (ficha y hojas de acción). */
+  viewOf: (id: string) => PersonView | undefined;
   today: Ymd;
   now: LocalDateTime;
   online: boolean;
@@ -66,6 +77,15 @@ export function MembersProvider({ children }: { children: React.ReactNode }) {
   const fresh = people.key === peopleKey;
   const persons = useMemo(() => (fresh ? people.persons : []), [fresh, people.persons]);
   const retry = useCallback(() => setPeopleKey((k) => k + 1), []);
+  const truncated = fresh && people.loaded && !people.error && people.persons.length >= PEOPLE_LIMIT;
+
+  // Personas leídas una a una (fuera del límite). No se suman a `persons`.
+  const [extras, setExtras] = useState<ReadonlyMap<string, Person>>(() => new Map());
+  const loadPerson = useCallback(async (id: string) => {
+    const p = await fetchPerson(id);
+    if (p) setExtras((m) => new Map(m).set(p.id, p));
+    return !!p;
+  }, []);
 
   // Responsables válidos (una vez; reintento manual).
   const [ownersKey, setOwnersKey] = useState(0);
@@ -98,6 +118,17 @@ export function MembersProvider({ children }: { children: React.ReactNode }) {
     for (const p of persons) map.set(p.id, buildPersonView(p, alerts, ownerMap, today));
     return map;
   }, [persons, alerts, ownerMap, today]);
+  const extraViews = useMemo(() => {
+    const map = new Map<string, PersonView>();
+    const outside = [...extras.values()].filter((p) => !views.has(p.id));
+    if (!outside.length) return map;
+    // Alertas propias (incluidos duplicados contra la lista cargada); no entran a `alerts`.
+    const ids = new Set(outside.map((p) => p.id));
+    const own = computeAlerts([...persons, ...outside], ownerSet, now).filter((a) => ids.has(a.personId));
+    for (const p of outside) map.set(p.id, buildPersonView(p, own, ownerMap, today));
+    return map;
+  }, [extras, views, persons, ownerSet, now, ownerMap, today]);
+  const viewOf = useCallback((id: string) => views.get(id) ?? extraViews.get(id), [views, extraViews]);
   const ownerName = useCallback((uid: string | null | undefined) => (uid ? (ownerMap?.get(uid) ?? null) : null), [ownerMap]);
 
   const value = useMemo<MembersState>(
@@ -106,6 +137,8 @@ export function MembersProvider({ children }: { children: React.ReactNode }) {
       loading: canRead && (!fresh || !people.loaded),
       error: fresh ? people.error : null,
       retry,
+      truncated,
+      loadPerson,
       owners,
       ownersLoading: canRead && !ownersFresh,
       ownersError: ownersFresh && ownersState.error,
@@ -113,6 +146,7 @@ export function MembersProvider({ children }: { children: React.ReactNode }) {
       ownerName,
       alerts,
       views,
+      viewOf,
       today,
       now,
       online,
@@ -126,6 +160,8 @@ export function MembersProvider({ children }: { children: React.ReactNode }) {
       people.loaded,
       people.error,
       retry,
+      truncated,
+      loadPerson,
       owners,
       ownersFresh,
       ownersState.error,
@@ -133,6 +169,7 @@ export function MembersProvider({ children }: { children: React.ReactNode }) {
       ownerName,
       alerts,
       views,
+      viewOf,
       today,
       now,
       online,

@@ -13,10 +13,12 @@ import { httpsCallable } from "firebase/functions";
 import { getFirebaseFunctions } from "@/lib/firebase";
 import { errorCode, errorKey } from "@/lib/calendar/errors";
 import {
+  CONSOLIDATION_STATUSES,
   FIELD_ERROR_TEXT,
   MEMBERS_CALLABLES,
   MEMBERS_ERROR_KEYS,
   REQUEST_ID_PATTERN,
+  type ConsolidationStatus,
   type FieldErrorCode,
   type FollowUpCreateRequest,
   type PersonCreateRequest,
@@ -203,9 +205,32 @@ export interface WriteResult {
   revision: number | null;
 }
 
+/** Lo que el servidor dice haber aplicado de la sugerencia (null si no lo informa). */
+export interface FollowUpApplied {
+  status: ConsolidationStatus | null;
+  doNotContact: boolean;
+}
+
+export interface FollowUpCreateResult extends WriteResult {
+  followUpId: string;
+  /**
+   * Sugerencia aplicada según la respuesta. En `replay` el servidor repite el
+   * payload del reintento, no lo que se guardó: la UI no debe afirmar cambios.
+   */
+  applied: FollowUpApplied | null;
+}
+
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});
 const revisionOf = (d: Obj) => (typeof d.revision === "number" && Number.isInteger(d.revision) ? d.revision : null);
+
+function parseApplied(v: unknown): FollowUpApplied | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const d = v as Obj;
+  const status =
+    typeof d.status === "string" && (CONSOLIDATION_STATUSES as readonly string[]).includes(d.status) ? (d.status as ConsolidationStatus) : null;
+  return { status, doNotContact: d.doNotContact === true };
+}
 
 function parseDuplicates(v: unknown): DuplicateRef[] {
   if (!Array.isArray(v)) return [];
@@ -275,9 +300,14 @@ export async function createVisit(req: VisitCreateRequest): Promise<VisitCreateR
   };
 }
 
-export async function createFollowUp(req: FollowUpCreateRequest): Promise<WriteResult & { followUpId: string }> {
+export async function createFollowUp(req: FollowUpCreateRequest): Promise<FollowUpCreateResult> {
   const d = await call(MEMBERS_CALLABLES.followUpCreate, clean(req));
-  return { followUpId: typeof d.followUpId === "string" ? d.followUpId : "", replay: d.replay === true, revision: revisionOf(d) };
+  return {
+    followUpId: typeof d.followUpId === "string" ? d.followUpId : "",
+    replay: d.replay === true,
+    revision: revisionOf(d),
+    applied: parseApplied(d.applied),
+  };
 }
 
 /** Usuarios activos con members.consolidation.manage: `{uid, displayName}` (sin correos). */

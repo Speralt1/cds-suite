@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   createVisit: vi.fn(),
   createFollowUp: vi.fn(),
   fetchOwnerOptions: vi.fn(),
+  fetchPerson: vi.fn(),
 }));
 
 vi.mock("@/lib/access/model", async (importOriginal) => {
@@ -36,6 +37,7 @@ vi.mock("@/lib/members/client", async (importOriginal) => {
       return () => {};
     },
     usePersonHistory: () => h.history,
+    fetchPerson: h.fetchPerson,
     useCalendarTitles: (ids: readonly string[], enabled: boolean) => {
       h.titlesCalls.push({ ids, enabled });
       return enabled ? Object.fromEntries(ids.map((id) => [id, "Culto dominical"])) : {};
@@ -146,6 +148,7 @@ beforeEach(() => {
   h.createVisit.mockReset();
   h.createFollowUp.mockReset();
   h.fetchOwnerOptions.mockReset().mockResolvedValue([{ uid: "u-owner", displayName: "Carolina Vidal" }]);
+  h.fetchPerson.mockReset().mockResolvedValue(null);
   window.history.replaceState(null, "", "/integrantes/consolidacion");
 });
 
@@ -294,6 +297,8 @@ describe("Ficha", () => {
     window.history.replaceState(null, "", "/integrantes/consolidacion/persona?id=nadie");
     renderWith(<PersonScreen />);
     expect(await screen.findByText("No encontramos esta persona.")).toBeInTheDocument();
+    // Antes de concluir, se intentó la lectura puntual del documento.
+    expect(h.fetchPerson).toHaveBeenCalledWith("nadie");
   });
 });
 

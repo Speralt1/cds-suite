@@ -14,7 +14,7 @@ import { useMembers } from "@/lib/members/use-members";
 import { AttentionQueueList } from "./attention";
 import { NEW_PERSON_HREF, PRIVACY_NOTE, agoText, peopleHref, personHref, relDay, shortDate, shortName, visitOrdinal } from "./model";
 import { MemberActions, useMemberActions } from "./sheets";
-import { LoadErrorState } from "./status";
+import { LoadErrorState, TruncatedPeopleNotice } from "./status";
 import { PersonStatusBadge } from "./vocab";
 
 const MAX_ROWS = 5;
@@ -195,6 +195,7 @@ function DashboardContent() {
   return (
     <>
       {header}
+      <TruncatedPeopleNotice />
       <div className="mem-dash">
         <CountTiles tiles={tiles} />
 

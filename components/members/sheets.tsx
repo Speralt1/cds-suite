@@ -10,10 +10,13 @@
 // - sin actualizaciones optimistas: el toast aparece cuando el callable
 //   resuelve y onSnapshot refresca los datos;
 // - un requestId por formulario abierto, reutilizado en cada reintento;
-// - expectedRevision = revisión de la persona (conflicto → pedir recargar).
+// - expectedRevision = revisión de la persona (conflicto → pedir recargar);
+// - la intención de cada diálogo (valor objetivo, estado de origen) se congela
+//   al abrir: si otra persona cambia ese dato mientras está abierto, se muestra
+//   el conflicto en vez de invertir la acción.
 
 import Link from "next/link";
-import { createContext, useCallback, useContext, useId, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   BellOff,
   CalendarPlus,
@@ -40,6 +43,7 @@ import {
   FOLLOW_UP_RESULT_LABEL,
   FOLLOW_UP_TYPES,
   FOLLOW_UP_TYPE_LABEL,
+  MEMBERS_ERROR_KEYS,
   MEMBERS_LIMITS,
   SENSITIVE_NOTE_WARNING,
   STATUS_LABEL,
@@ -59,6 +63,8 @@ import {
   type VisitCreateRequest,
 } from "@/lib/shared/members";
 import {
+  MEMBERS_CONFLICT_TEXT,
+  MembersApiError,
   changeStatus,
   createFollowUp,
   createVisit,
@@ -66,7 +72,6 @@ import {
   newRequestId,
   toMembersError,
   updatePerson,
-  type MembersApiError,
 } from "@/lib/members/api";
 import { useMembers } from "@/lib/members/use-members";
 import type { LocalDateTime, Person, Ymd } from "@/lib/members/types";
@@ -106,8 +111,9 @@ export function MemberActions({ children }: { children: React.ReactNode }) {
   }, []);
   const close = useCallback(() => setReq(null), []);
   const value = useMemo(() => ({ open }), [open]);
-  // La persona se lee en vivo: revisión y proyección actuales.
-  const person = req ? (m.persons.find((p) => p.id === req.personId) ?? null) : null;
+  // La persona se lee en vivo: revisión y proyección actuales (también si se
+  // leyó aparte, fuera del límite de la lista).
+  const person = req ? (m.viewOf(req.personId)?.person ?? null) : null;
   const manageable = m.canManage && !!person;
   return (
     <Ctx.Provider value={value}>
@@ -135,21 +141,25 @@ interface SheetProps {
 
 // ---------- Piezas compartidas de formulario ----------
 
-/** Envío único: bloquea el doble submit y traduce el error del callable. */
+/**
+ * Envío único: bloquea el doble submit y traduce el error del callable.
+ * `error` es null solo si se ignoró el envío por haber otro en curso.
+ */
 export function useWrite() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<MembersApiError | null>(null);
   const busy = useRef(false);
-  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false }> => {
-    if (busy.current) return { ok: false };
+  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: MembersApiError | null }> => {
+    if (busy.current) return { ok: false, error: null };
     busy.current = true;
     setSubmitting(true);
     setError(null);
     try {
       return { ok: true, value: await fn() };
     } catch (e) {
-      setError(toMembersError(e));
-      return { ok: false };
+      const error = toMembersError(e);
+      setError(error);
+      return { ok: false, error };
     } finally {
       busy.current = false;
       setSubmitting(false);
@@ -162,6 +172,9 @@ export function useWrite() {
 export function reloadPage() {
   window.location.reload();
 }
+
+/** Conflicto detectado en el cliente: el dato que el diálogo iba a cambiar ya cambió en vivo. */
+export const LOCAL_CONFLICT = new MembersApiError(MEMBERS_ERROR_KEYS.conflict, "conflict", MEMBERS_CONFLICT_TEXT);
 
 /** Error general del formulario; el conflicto ofrece recargar. */
 export function FormError({ error }: { error: MembersApiError | null }) {
@@ -352,6 +365,13 @@ export function ActivityField({
     () => (valid ? occurrencesInRange(events, date, date, now).filter((o) => o.status !== "cancelled") : []),
     [events, date, now, valid],
   );
+  const available = occurrences.some((o) => o.eventId === value);
+  // Un id que ya no está entre las opciones (actividad cancelada, otra fecha)
+  // se limpia: con «Sin actividad» a la vista nunca se envía un id oculto.
+  const stale = !!value && !(valid && loading) && !available;
+  useEffect(() => {
+    if (stale) onChange("");
+  }, [stale, onChange]);
   const help = `${id}-help`;
   return (
     <div className="mem-field">
@@ -359,7 +379,7 @@ export function ActivityField({
       <select
         id={id}
         className="mem-select"
-        value={occurrences.some((o) => o.eventId === value) ? value : ""}
+        value={available ? value : ""}
         aria-describedby={help}
         aria-invalid={!!error || undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -567,8 +587,12 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
   const { toast } = useToast();
   const uid = useId();
   const formId = `mem-followup-form${uid}`;
-  const v = m.views.get(person.id);
-  const [requestId] = useState(newRequestId);
+  const v = m.viewOf(person.id);
+  // Se renueva solo tras `suggestion-mismatch` (el servidor no escribió nada).
+  const [requestId, setRequestId] = useState(newRequestId);
+  // Tras un intento con este requestId, un reintento puede ser un replay de una
+  // escritura ya confirmada: las casillas de la sugerencia quedan fijas.
+  const [attempted, setAttempted] = useState(false);
   const [date, setDate] = useState(m.today);
   const [type, setType] = useState<FollowUpType>("whatsapp");
   const [result, setResult] = useState<FollowUpResult | null>(null);
@@ -578,6 +602,8 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
   const currentOwner = person.followUpOwnerUid;
   const ownerLost = !!currentOwner && !!m.owners && !m.owners.some((o) => o.uid === currentOwner);
   const [owner, setOwner] = useState(currentOwner && !ownerLost ? currentOwner : "");
+  // Solo un responsable de la lista; vacío = no se envía y el servidor usa el de la persona.
+  const ownerValue = owner && m.owners?.some((o) => o.uid === owner) ? owner : "";
   const [chkStatus, setChkStatus] = useState(true);
   const [chkDnc, setChkDnc] = useState(true);
   const [chkClose, setChkClose] = useState(true);
@@ -612,8 +638,8 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
       note: note.trim() ? note : null,
       nextAction: nextAction.trim() ? nextAction : null,
       nextActionDate: nextDate || null,
-      // Sin lista de responsables (no cargó) no se envía: el servidor usa el de la persona.
-      ...(m.owners ? { ownerUid: owner || null } : {}),
+      // Sin elección (o sin lista de responsables) no se envía: el servidor usa el de la persona.
+      ...(m.owners && ownerValue ? { ownerUid: ownerValue } : {}),
       ...(applyStatus ? { applyStatus } : {}),
       ...(suggestsDnc && chkDnc ? { applyDoNotContact: true } : {}),
     };
@@ -623,15 +649,30 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
       return;
     }
     setErrors({});
+    setAttempted(true);
     const res = await write.run(() => createFollowUp(payload));
     if (!res.ok) {
-      // La sugerencia se recalcula sola desde la persona en vivo; se vuelve a proponer marcada.
-      setChkStatus(true);
-      setChkDnc(true);
-      setChkClose(true);
+      if (res.error?.kind === "suggestion_mismatch") {
+        // Nada se escribió: la sugerencia se recalcula sola desde la persona en
+        // vivo y se vuelve a proponer marcada, con un requestId nuevo.
+        setChkStatus(true);
+        setChkDnc(true);
+        setChkClose(true);
+        setRequestId(newRequestId());
+        setAttempted(false);
+      }
+      // Cualquier otro error: las casillas quedan exactamente como estaban.
       return;
     }
-    toast(applyStatus ? `Seguimiento registrado · estado: ${STATUS_LABEL[applyStatus]}` : "Seguimiento registrado");
+    const { replay, applied } = res.value;
+    if (replay) toast("Seguimiento registrado.");
+    else {
+      // Solo se informa lo que el servidor confirma haber aplicado.
+      const parts = ["Seguimiento registrado"];
+      if (applied?.status) parts.push(`estado: ${STATUS_LABEL[applied.status]}`);
+      if (applied?.doNotContact) parts.push("No contactar");
+      toast(parts.join(" · "));
+    }
     onClose();
   };
 
@@ -691,9 +732,11 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
                   checked={result === r}
                   onChange={() => {
                     setResult(r);
-                    setChkStatus(true);
-                    setChkDnc(true);
-                    setChkClose(true);
+                    if (!attempted) {
+                      setChkStatus(true);
+                      setChkDnc(true);
+                      setChkClose(true);
+                    }
                     setErrors((x) => ({ ...x, result: "" }));
                   }}
                 />
@@ -711,7 +754,13 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
             </p>
             {suggestsFollow && (
               <label className="mem-check">
-                <input type="checkbox" checked={chkStatus} onChange={(e) => setChkStatus(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={chkStatus}
+                  disabled={attempted}
+                  aria-describedby={attempted ? "mem-fu-suggest-lock" : undefined}
+                  onChange={(e) => setChkStatus(e.target.checked)}
+                />
                 <span>
                   Cambiar estado a <strong>En seguimiento</strong>
                 </span>
@@ -719,7 +768,13 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
             )}
             {suggestsDnc && (
               <label className="mem-check">
-                <input type="checkbox" checked={chkDnc} onChange={(e) => setChkDnc(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={chkDnc}
+                  disabled={attempted}
+                  aria-describedby={attempted ? "mem-fu-suggest-lock" : undefined}
+                  onChange={(e) => setChkDnc(e.target.checked)}
+                />
                 <span>
                   Marcar <strong>No contactar</strong>
                 </span>
@@ -727,13 +782,25 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
             )}
             {suggestsClose && (
               <label className="mem-check">
-                <input type="checkbox" checked={chkClose} onChange={(e) => setChkClose(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={chkClose}
+                  disabled={attempted}
+                  aria-describedby={attempted ? "mem-fu-suggest-lock" : undefined}
+                  onChange={(e) => setChkClose(e.target.checked)}
+                />
                 <span>
                   Cerrar como <strong>Sin continuidad</strong> (motivo: no desea contacto)
                 </span>
               </label>
             )}
-            <p className="mem-help">Puedes desmarcarlo. Ningún estado cambia sin tu confirmación.</p>
+            {attempted ? (
+              <p className="mem-help" id="mem-fu-suggest-lock">
+                Para cambiar esta opción, cierra y vuelve a abrir el formulario.
+              </p>
+            ) : (
+              <p className="mem-help">Puedes desmarcarlo. Ningún estado cambia sin tu confirmación.</p>
+            )}
           </div>
         )}
 
@@ -747,9 +814,15 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
             maxLength={MEMBERS_LIMITS.nextAction}
             placeholder="Ej.: Llamar de nuevo"
             aria-invalid={!!fieldError("nextAction") || undefined}
-            aria-describedby={fieldError("nextAction") ? "mem-fu-next-error" : undefined}
+            aria-describedby={`mem-fu-next-help${fieldError("nextAction") ? " mem-fu-next-error" : ""}`}
             onChange={(e) => setNextAction(e.target.value)}
           />
+          <p className="mem-note-help" id="mem-fu-next-help">
+            <span>Opcional.</span>
+            <span className="mem-counter" aria-live="polite">
+              {nextAction.length}/{MEMBERS_LIMITS.nextAction}
+            </span>
+          </p>
           <div className="mem-chips" role="group" aria-label="Sugerencias de próxima acción">
             {NEXT_SUGGESTIONS.map((s) => (
               <button key={s} type="button" className="mem-chip" aria-pressed={nextAction === s} onClick={() => setNextAction(s)}>
@@ -790,13 +863,14 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
             <select
               id="mem-fu-owner"
               className="mem-select"
-              value={owner}
+              value={ownerValue}
               disabled={!m.owners}
               aria-describedby={ownerLost || !m.owners ? "mem-fu-owner-help" : undefined}
               aria-invalid={!!fieldError("ownerUid") || undefined}
               onChange={(e) => setOwner(e.target.value)}
             >
-              <option value="">{ownerLost ? "Elige un responsable" : "Sin responsable"}</option>
+              {/* Sin «Sin responsable»: el servidor usa el responsable de la persona. */}
+              {!ownerValue && <option value="">Elige un responsable</option>}
               {(m.owners ?? []).map((u) => (
                 <option key={u.uid} value={u.uid}>
                   {u.displayName}
@@ -839,9 +913,13 @@ function StatusSheet({ person, onClose }: SheetProps) {
   const { toast } = useToast();
   const uid = useId();
   const formId = `mem-status-form${uid}`;
-  const current = person.consolidationStatus;
+  // Estado de origen congelado al abrir: las opciones y la intención no cambian
+  // si otra persona cambia el estado mientras el diálogo está abierto.
+  const [base] = useState(() => ({ consolidationStatus: person.consolidationStatus, lifecycleStage: person.lifecycleStage }));
+  const current = base.consolidationStatus;
+  const drifted = person.consolidationStatus !== base.consolidationStatus || person.lifecycleStage !== base.lifecycleStage;
   const reopening = current === "sin_continuidad";
-  const options = CONSOLIDATION_STATUSES.filter((s) => s === current || checkTransition(person, s).ok);
+  const options = CONSOLIDATION_STATUSES.filter((s) => s === current || checkTransition(base, s).ok);
   const [to, setTo] = useState<ConsolidationStatus | null>(reopening ? "en_seguimiento" : null);
   const [reason, setReason] = useState<ClosedReason | "">("");
   const [reasonNote, setReasonNote] = useState("");
@@ -862,6 +940,10 @@ function StatusSheet({ person, onClose }: SheetProps) {
   };
 
   const send = async (req: StatusChangeRequest) => {
+    if (drifted) {
+      setConfirming(false);
+      return;
+    }
     const res = await write.run(() => changeStatus(req));
     if (!res.ok) {
       setConfirming(false);
@@ -884,6 +966,7 @@ function StatusSheet({ person, onClose }: SheetProps) {
       return;
     }
     setErrors({});
+    if (drifted) return;
     // Integrado: confirmación explícita en un diálogo aparte.
     if (req.status === "integrado") {
       setConfirming(true);
@@ -906,7 +989,14 @@ function StatusSheet({ person, onClose }: SheetProps) {
       onClose={onClose}
       busy={write.submitting}
       footer={
-        <Foot onCancel={onClose} cancelLabel="Volver" form={formId} submitLabel="Guardar cambio" submitting={write.submitting} disabled={!m.online} />
+        <Foot
+          onCancel={onClose}
+          cancelLabel="Volver"
+          form={formId}
+          submitLabel="Guardar cambio"
+          submitting={write.submitting}
+          disabled={!m.online || drifted}
+        />
       }
     >
       <form id={formId} className="mem-form" onSubmit={submit} noValidate>
@@ -989,7 +1079,7 @@ function StatusSheet({ person, onClose }: SheetProps) {
           </InlineNotice>
         )}
         {!m.online && <OfflineNotice />}
-        <FormError error={write.error} />
+        <FormError error={drifted ? LOCAL_CONFLICT : write.error} />
       </form>
       {confirming && (
         <CalDialog
@@ -1005,7 +1095,7 @@ function StatusSheet({ person, onClose }: SheetProps) {
               <button
                 type="button"
                 className="button-primary mem-submit"
-                disabled={write.submitting || !m.online}
+                disabled={write.submitting || !m.online || drifted}
                 aria-busy={write.submitting || undefined}
                 onClick={() => {
                   const req = request();
@@ -1036,14 +1126,18 @@ function AssignSheet({ person, onClose }: SheetProps) {
   const uid = useId();
   const formId = `mem-assign-form${uid}`;
   const owners = m.owners;
-  const valid = !!person.followUpOwnerUid && !!owners?.some((u) => u.uid === person.followUpOwnerUid);
-  const [owner, setOwner] = useState(valid ? (person.followUpOwnerUid as string) : "");
+  // Responsable de origen congelado al abrir: si cambia en vivo, conflicto.
+  const [baseOwner] = useState(person.followUpOwnerUid);
+  const drifted = person.followUpOwnerUid !== baseOwner;
+  const valid = !!baseOwner && !!owners?.some((u) => u.uid === baseOwner);
+  const [owner, setOwner] = useState(valid ? (baseOwner as string) : "");
   const write = useWrite();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (drifted) return;
     const target = owner || null;
-    if (target === person.followUpOwnerUid) return onClose();
+    if (target === baseOwner) return onClose();
     const res = await write.run(() =>
       updatePerson({ personId: person.id, expectedRevision: person.revision, followUpOwnerUid: target }),
     );
@@ -1059,7 +1153,13 @@ function AssignSheet({ person, onClose }: SheetProps) {
       onClose={onClose}
       busy={write.submitting}
       footer={
-        <Foot onCancel={onClose} submitLabel="Guardar responsable" form={formId} submitting={write.submitting} disabled={!m.online || !owners} />
+        <Foot
+          onCancel={onClose}
+          submitLabel="Guardar responsable"
+          form={formId}
+          submitting={write.submitting}
+          disabled={!m.online || !owners || drifted}
+        />
       }
     >
       <form id={formId} className="mem-form" onSubmit={submit} noValidate>
@@ -1100,7 +1200,7 @@ function AssignSheet({ person, onClose }: SheetProps) {
           </InlineNotice>
         )}
         {!m.online && <OfflineNotice />}
-        <FormError error={write.error} />
+        <FormError error={drifted ? LOCAL_CONFLICT : write.error} />
       </form>
     </CalDialog>
   );
@@ -1113,11 +1213,15 @@ function DoNotContactSheet({ person, onClose }: SheetProps) {
   const { toast } = useToast();
   const uid = useId();
   const formId = `mem-dnc-form${uid}`;
-  const marking = !person.doNotContact;
+  // Intención congelada al abrir: si «No contactar» cambia en vivo, conflicto
+  // (nunca se invierte la acción que eligió quien abrió el diálogo).
+  const [marking] = useState(!person.doNotContact);
+  const drifted = person.doNotContact === marking;
   const write = useWrite();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (drifted) return;
     const res = await write.run(() => updatePerson({ personId: person.id, expectedRevision: person.revision, doNotContact: marking }));
     if (!res.ok) return;
     toast(marking ? "Marcada como No contactar" : "Se quitó No contactar");
@@ -1136,7 +1240,7 @@ function DoNotContactSheet({ person, onClose }: SheetProps) {
           submitLabel={marking ? "Marcar No contactar" : "Quitar No contactar"}
           form={formId}
           submitting={write.submitting}
-          disabled={!m.online}
+          disabled={!m.online || drifted}
         />
       }
     >
@@ -1147,7 +1251,7 @@ function DoNotContactSheet({ person, onClose }: SheetProps) {
             : "Volverán a mostrarse WhatsApp y las alertas de seguimiento."}
         </p>
         {!m.online && <OfflineNotice />}
-        <FormError error={write.error} />
+        <FormError error={drifted ? LOCAL_CONFLICT : write.error} />
       </form>
     </CalDialog>
   );
@@ -1157,7 +1261,7 @@ function DoNotContactSheet({ person, onClose }: SheetProps) {
 
 function RowActionsSheet({ person, onClose, onPick }: SheetProps & { onPick: (k: SheetKind) => void }) {
   const m = useMembers();
-  const v = m.views.get(person.id);
+  const v = m.viewOf(person.id);
   const integrated = person.lifecycleStage === "integrante";
   return (
     <CalDialog title={`Acciones para ${person.fullName}`} onClose={onClose}>

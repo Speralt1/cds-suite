@@ -58,23 +58,39 @@
 
 ## 6. Aislamiento financiero (BLOCKER de la misión)
 
-### 6.1 Clasificación de los archivos compartidos con PR #5
+### 6.1 Clasificación de los archivos compartidos con PR #5 (`git diff --name-status 73b9040..HEAD`)
 
-*(Se completa con el diff final: §10.)*
+| Archivo (compartido) | Cambio | Clase | Efecto en Finanzas |
+|---|---|---|---|
+| `functions/sumup/**`, `functions/auth/**`, `lib/finance/**`, `components/finance/**`, `storage.rules`, `firebase.json` | **ninguno** (`git diff --stat` vacío) | financiero | ninguno |
+| `firestore.rules` | +28/−2: `implicants()` y `membersRead()`, catálogo v1 (+2, máx. 10), 4 bloques `members*` | compartido | ninguno: los gates financieros no cambian; `tests/rules/finance.test.ts` 17/17 e `integrations.test.ts` 5/5 (los 22 históricos) siguen verdes |
+| `functions/index.js` | +37/−0, solo al final | compartido | ninguno: SumUp, campañas y calendario idénticos; deploy por nombre |
+| `lib/shared/access.ts`, `lib/shared/types.ts` (+ `functions/shared/access.js`, `types.js` generados) | +2 permisos, `IMPLIES` manage→read, módulo `members` | compartido | ninguno: Atlas comparó `can()` de `73b9040` vs HEAD en 16.403 perfiles (147.627 comprobaciones): **0 diferencias fuera de `members.*`** |
+| `lib/access/*`, `lib/settings/users.ts`, `components/layout/app-shell.tsx` | etiquetas, grupo "Integrantes", ruta, ícono, barra móvil con 5 módulos | compartido (navegación/permisos) | ninguno: admin/pastor/finance/leader conservan exactamente sus módulos financieros (tests #47–#50) |
+| `scripts/migrate-access-v1.mjs` (+ `.d.mts`) | bloque Integrantes en `--summary` | compartido (ops) | ninguno: el plan de migración no cambia |
+| `scripts/build-shared.mjs`, `package.json` | +`members` en `SHARED_FILES`; script `check:no-preview` | build | ninguno |
+| `scripts/seed-*`, `tests/**` | seeds de emulador y tests | test | — |
+| `firestore.indexes.json` | +3 índices `members*` | aditivo | ninguno |
+| Resto (`lib/members`, `components/members`, `app/(private)/integrantes`, `functions/members`, docs) | nuevo | solo Integrantes | — |
 
 ### 6.2 Reglas
 
-*(Se completa con el diff final: §10.)*
+Diff completo de `firestore.rules`: 2 entradas en `implicants()`, el helper `membersRead()`, 2 permisos en `permissionCatalogNoSettings()`, `size() <= 10` y los 4 bloques `members*`. Ningún helper financiero ni de calendario cambia.
 
 ## 7. SumUp CASH
 
 - Esta rama nace de PR #5 (`73b9040`) y **no** contiene commits de `mission/sumup-cash-intake-v1`; no se leyó esa rama ni se hizo cherry-pick.
 - `functions/sumup/**`, el sync, `paymentMethod`, la fecha de inicio de CASH y el backfill no se tocan.
 
-## 8. Revisión de Atlas
+## 8. Revisiones independientes
 
-*(Pendiente.)*
+| Revisión | Resultado | Detalle |
+|---|---|---|
+| Navigator (alcance, flujo, pipeline, IA) | FIXES_REQUIRED → **corregido** | M1 "Volvió" por fecha posterior + aviso de visita del mismo día; M2 procedimiento de corrección (doc 23 §7b; la excepción de borrado para menores/solicitud de eliminación **requiere decisión de Salvador**); M3 Integrado irreversible explícito; M4 este doc. Menores aplicados (KPI +48 h, No contactar en formularios, responsable preseleccionado, notas con contador, origen "evangelismo") |
+| Atlas backend ([24a](24a-atlas-review.md)) | **PASS** (0 BLOCKER, 0 MAJOR) | A-01/A-02 (runbook) corregidos; A-05 (caracteres de control/bidi) corregido; NITs A-03/A-04/A-06…A-10 aceptados para después |
+| Atlas cliente ([24b](24b-atlas-client-review.md)) | FIXES_REQUIRED → ver §9 | F1 sugerencias re-marcadas tras error; F2 edición con base congelada; F3/F4/F6/F9/F10 menores; F5 alineado en el doc 23 |
+| Designer (estático, sin navegador) | FIXES_REQUIRED → **corregido** | M1 encabezados de Atención; M2 footer sticky alineado al padding del shell; ritmo vertical, foco del menú, CTA en /nueva, 44 px táctiles, reduced motion. m5 (orden DOM del dashboard en móvil) aceptado. **Falta la verificación visual en navegador** a 1440/1024/390/375 (no se pudo levantar el entorno local en esta sesión) |
 
 ## 9. Veredicto
 
-*(Pendiente.)*
+*(Se completa con los gates finales.)*

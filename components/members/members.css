@@ -53,6 +53,9 @@
   gap: 8px;
   margin-top: 16px;
 }
+.cds-members .mem-truncated {
+  margin-bottom: 16px;
+}
 .cds-members .mem-sr {
   position: absolute !important;
   width: 1px;

@@ -6,7 +6,7 @@
 // El título de una actividad del calendario solo se lee con calendar.read.
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   AlarmClock,
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   CircleCheck,
   CircleSlash,
   Ellipsis,
+  Info,
   MapPin,
   MessageCircle,
   MessageSquarePlus,
@@ -40,7 +41,7 @@ import {
   type ConsolidationStatus,
   type FollowUpType,
 } from "@/lib/shared/members";
-import { useCalendarTitles, usePersonHistory } from "@/lib/members/client";
+import { HISTORY_LIMIT, historyTruncated, useCalendarTitles, usePersonHistory } from "@/lib/members/client";
 import { timeline, type PersonView } from "@/lib/members/consolidation";
 import type { PersonChange, TimelineItem } from "@/lib/members/types";
 import { useMembers, type MembersState } from "@/lib/members/use-members";
@@ -268,11 +269,18 @@ function PersonTimeline({
           <Skeleton h={44} />
         </div>
       ) : shown.length ? (
-        <ol className="mem-tl" aria-label="Historial, del más nuevo al más antiguo">
-          {shown.map((i) => (
-            <TimelineEntry key={i.id} item={i} m={m} titles={titles} flash={!!seen && !seen.has(i.id)} />
-          ))}
-        </ol>
+        <>
+          {historyTruncated(history) && (
+            <InlineNotice tone="info" icon={Info} role="status">
+              Mostrando los {HISTORY_LIMIT} registros más recientes.
+            </InlineNotice>
+          )}
+          <ol className="mem-tl" aria-label="Historial, del más nuevo al más antiguo">
+            {shown.map((i) => (
+              <TimelineEntry key={i.id} item={i} m={m} titles={titles} flash={!!seen && !seen.has(i.id)} />
+            ))}
+          </ol>
+        </>
       ) : (
         <p className="mem-mini-empty">Sin registros de este tipo.</p>
       )}
@@ -575,7 +583,30 @@ function PersonContent() {
   const m = useMembers();
   const hydrated = useHydrated();
   const id = useQueryParam("id");
-  const v = id ? m.views.get(id) : undefined;
+  const v = id ? m.viewOf(id) : undefined;
+
+  // Respaldo: una persona fuera de las cargadas (límite de la lista) se lee
+  // con un get puntual antes de concluir que no existe.
+  const { loadPerson } = m;
+  const [lookupSeq, setLookupSeq] = useState(0);
+  const [lookup, setLookup] = useState<{ id: string; seq: number; state: "missing" | "error" } | null>(null);
+  const needLookup = !!id && hydrated && !m.loading && !m.error && !v;
+  useEffect(() => {
+    if (!needLookup || !id) return;
+    let alive = true;
+    loadPerson(id).then(
+      (found) => {
+        if (alive && !found) setLookup({ id, seq: lookupSeq, state: "missing" });
+      },
+      () => {
+        if (alive) setLookup({ id, seq: lookupSeq, state: "error" });
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [needLookup, id, loadPerson, lookupSeq]);
+  const lookupState = lookup && lookup.id === id && lookup.seq === lookupSeq ? lookup.state : "loading";
 
   if (m.error)
     return (
@@ -586,7 +617,7 @@ function PersonContent() {
         </section>
       </>
     );
-  if (!hydrated || m.loading)
+  if (!hydrated || m.loading || (!v && !!id && lookupState === "loading"))
     return (
       <div aria-busy="true" aria-label="Cargando">
         <BackLink />
@@ -597,6 +628,19 @@ function PersonContent() {
           <Skeleton h={220} />
         </div>
       </div>
+    );
+  if (!v && lookupState === "error")
+    return (
+      <>
+        <BackLink />
+        <section className="panel mem-panel mem-mt">
+          <ErrorState
+            title="No pudimos cargar esta persona"
+            body="Revisa tu conexión e inténtalo de nuevo."
+            onRetry={() => setLookupSeq((k) => k + 1)}
+          />
+        </section>
+      </>
     );
   if (!v)
     return (
