@@ -198,3 +198,24 @@ Al registrar una visita en una fecha que ya tiene visita, el formulario advierte
 | `membersPersonChanges` | `personId ASC, at DESC` | historial de cambios de la ficha |
 
 `membersPeople` se lee con `orderBy(entryDate desc)` (+ `limit`) y las búsquedas de duplicados del servidor son igualdades de un campo: índices automáticos.
+
+## 11. Matriz PREVIEW (PR #4) → PRODUCCIÓN
+
+| Pieza de la preview | Decisión | Producción | Notas |
+|---|---|---|---|
+| `lib/suite-preview/phone.ts` | **Reutilizar** (endurecida) | `lib/shared/members.ts` | Mismas reglas; además rechaza `+56` con nacional que no empieza en 2–9 y no-strings. Compartida con Functions |
+| `lib/suite-preview/consolidation.ts` | **Adaptar** | `lib/members/consolidation.ts` + `lib/shared/members.ts` | Alertas/dashboard/atención desde la **proyección** de la persona (no desde arrays en memoria). Sin edad, cumpleaños, menor, tri-estado ni ajustes. Pipeline y sugerencias pasan a lo compartido (servidor = autoridad) |
+| `lib/suite-preview/types.ts` (Integrantes) | **Reescribir** | `lib/shared/members.ts`, `lib/members/types.ts` | Modelo del §3–§4 |
+| `components/suite-preview/members/use-members.ts` | **Reescribir** | `lib/members/use-members.ts`, `client.ts`, `api.ts` | Firestore en vivo + callables; estados reales (carga, error, sin permiso, offline) |
+| `model.ts`, `vocab.tsx` | **Adaptar** | `components/members/model.ts`, `vocab.tsx` | Rutas `/integrantes/...`; sin badges Menor/Cumpleaños/TriState |
+| `dashboard.tsx` | **Adaptar** | `components/members/dashboard.tsx` | Sin bloque de cumpleaños; estados reales; KPI "Sin primer contacto (+48 h)" |
+| `attention.tsx` | **Adaptar** | `components/members/attention.tsx` | Sin nota de "Ajustes" simulados |
+| `people.tsx` | **Adaptar** | `components/members/people.tsx` | Sin columna Edad ni filtro Menores; etiqueta "No contactar"; WhatsApp real |
+| `person.tsx` | **Adaptar** | `components/members/person.tsx` | Sin nacimiento, fe, bautismo, notas iniciales ni área de integración; con origen, invitado por, "Llegó a", "Editar datos"; historial en vivo |
+| `person-form.tsx` | **Reescribir** | `components/members/person-form.tsx` | Campos del §3; aviso solo adultos; nota ≤280 con contador y advertencia |
+| `sheets.tsx` | **Adaptar** | `components/members/sheets.tsx` | Callables reales; hoja "No contactar"; Reabrir como banner tras la visita; confirmación de Integrado aparte ("no se puede deshacer") |
+| `settings.tsx` (Ajustes de umbrales) | **Excluir** | — | Umbrales fijos 48 h / 21 d / 14 d / 7 d |
+| "Ver como", toasts demo, WhatsApp simulado, fixtures, `DEMO_NOW`, store en memoria, provider de la preview | **Excluir** | — | `check:no-preview` lo verifica en la build |
+| `members.css` | **Portar** | `components/members/members.css` | Prefijo `mem-`, scope `.cds-members`; sin reglas de cumpleaños/menor/tri-estado/visitas anuladas |
+| `tests/suite-preview/consolidation.test.ts`, `phone.test.ts`, `members-screens.test.tsx` | **Adaptar** | `tests/members/*`, `tests/platform/shared-members.test.ts` | + tests de Functions, reglas y e2e con emuladores |
+| Docs 16 / 16a / 16b / 16c / 17 | Referencia | Este doc manda para producción | — |
