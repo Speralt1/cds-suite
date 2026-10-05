@@ -44,8 +44,8 @@ Campos permitidos en `membersPeople` (F3). Cualquier otro campo está prohibido 
 | | `phoneE164` | string E.164 | normalizado en el servidor |
 | | `email` | string ≤160 \| null | trim + minúsculas |
 | Ingreso | `entryDate` | "YYYY-MM-DD" | fecha local de registro (Santiago), la pone el servidor, inmutable |
-| | `firstVisitAt` | "YYYY-MM-DD" | fecha de la primera visita (≤ hoy) |
-| | `arrivalSource` | enum \| null | invitación · redes sociales · pasaba por el lugar · actividad · otro |
+| | `firstVisitAt` | "YYYY-MM-DD" | fecha de la primera visita declarada al registrar (≤ hoy; en el request se llama `firstVisitDate`) |
+| | `arrivalSource` | enum \| null | invitación · redes sociales o transmisión en vivo · evangelismo o campaña · pasaba por el lugar · actividad · otro (nunca "otra iglesia": sería afiliación religiosa) |
 | | `calendarEventId` | string \| null | actividad de llegada (solo el id) |
 | | `invitedBy` | string ≤80 \| null | texto operacional breve |
 | Consolidación | `lifecycleStage` | enum | |
@@ -129,8 +129,11 @@ Requisitos comunes:
 | activo | Integrándose | manual |
 | activo | Integrado | manual + `confirmIntegrated: true`; `lifecycleStage = integrante` |
 | activo | Sin continuidad | motivo (enum) obligatorio; texto si el motivo es "Otro" |
-| Sin continuidad | En seguimiento | "Reabrir" manual; se **sugiere** al registrar una visita |
-| Integrado | — | no se reabre en V1 |
+| Sin continuidad | En seguimiento | "Reabrir" manual; se **sugiere** al registrar una visita (botón, nunca premarcado) |
+| Integrado | — | **no se reabre en V1**: el diálogo de confirmación dice "En esta versión no se puede deshacer." |
+
+- Sugerencias del seguimiento: aparecen **premarcadas** y quien guarda puede desmarcarlas (aceptación parcial permitida: solo estado o solo "No contactar"). El servidor recalcula la sugerencia; si no coincide (`members/suggestion-mismatch`, la persona cambió entre medio), la UI avisa, recalcula desde el snapshot vigente y pide guardar de nuevo.
+- Persona **integrante**: la ficha no ofrece "Cambiar estado" (el servidor lo rechaza) y deja de aparecer en alertas. Registrar visitas (asistencia) y editar datos siguen permitidos; el servidor también acepta seguimientos para no perder historial.
 
 "No desea contacto" en un seguimiento sugiere "No contactar" + "Sin continuidad" (motivo `no_desea_contacto`). **Nada cambia en silencio.**
 
@@ -143,9 +146,33 @@ Aplican a personas activas (`en_consolidacion`, ≠ `sin_continuidad`, sin "No c
 | Sin responsable | `followUpOwnerUid` vacío o no está en `membersOwnerOptions` (inactivo o sin permiso) |
 | Sin primer contacto | sin `firstContactDate` y > 48 h desde `createdAt` |
 | Seguimiento vencido | `nextActionDate` < hoy |
-| Volvió | `visitCount ≥ 2`, `lastVisitDate` en los últimos 7 días y sin seguimiento posterior (`lastFollowUpDate < lastVisitDate`) |
+| Volvió | `lastVisitDate > firstVisitDate` (una visita en una **fecha posterior** a la primera; dos visitas el mismo día no cuentan), `lastVisitDate` en los últimos 7 días y sin seguimiento posterior (`lastFollowUpDate < lastVisitDate`) |
 | Varios días sin volver | > 21 días desde `lastVisitDate` |
 | Posible duplicado | mismo `phoneE164` o mismo `email` en otra persona |
+
+**Fórmulas de indicadores y bloques** (fecha local de Santiago):
+- Nuevos del mes: personas con `entryDate` en el mes actual.
+- Sin primer contacto (+48 h): cantidad de alertas "Sin primer contacto".
+- Seguimientos vencidos: cantidad de alertas "Seguimiento vencido".
+- Nuevos recientes: `en_consolidacion` con `entryDate` en los últimos 14 días.
+- Seguimientos pendientes: activas con `nextActionDate` entre hoy y hoy + 7.
+- Volvieron: activas que cumplen la regla "Volvió" de arriba.
+- **Regla operativa V1:** no cargar visitantes históricos (contarían como nuevos del mes).
+
+Al registrar una visita en una fecha que ya tiene visita, el formulario advierte sin bloquear: "Ya hay una visita registrada el {fecha}. ¿Registrar otra?".
+
+## 7b. Operación y corrección de errores (V1 no tiene borrar, anular ni fusionar)
+
+| Situación | Qué hacer en V1 |
+|---|---|
+| Dato mal escrito (nombre, teléfono, correo, origen) | **Editar** (queda auditado: qué campos cambiaron, sin valores) |
+| Persona registrada dos veces / por error | Cerrar el registro sobrante como **Sin continuidad**, motivo "Otro", nota "Registro duplicado/erróneo". Sigue contando en "Nuevos del mes" de ese mes y la alerta "Posible duplicado" persiste (descartarla es LATER) |
+| Familias que comparten WhatsApp | Es normal: "Posible duplicado" es una advertencia, no un error (se explica en la capacitación) |
+| Visitante sin teléfono | **Nunca inventar un número** (un número inventado abre WhatsApp hacia un tercero real). Sin teléfono, no se registra en V1 |
+| **Menor registrado por error** o **persona que pide borrar sus datos** | No se corrige en la app. **Propuesta (requiere decisión de Salvador):** única excepción a "nunca se borran datos": Salvador elimina manualmente (consola/Admin SDK) la persona y sus visitas, seguimientos y cambios, y lo anota en el doc 21 **sin PII** (fecha, motivo, cantidad de documentos) |
+
+- Aviso verbal sugerido al registrar: "Usaremos tu teléfono solo para contactarte desde la iglesia." Revisión legal (Ley 21.719) antes de ampliar datos: LATER.
+- La auditoría de perfil guarda solo nombres de campos (minimización): un valor sobrescrito por error no se recupera desde el log.
 
 ## 8. Calendario
 

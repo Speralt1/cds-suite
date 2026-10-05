@@ -43,7 +43,7 @@ export const FOLLOW_UP_RESULTS = ["contactado", "sin_respuesta", "numero_invalid
 export type FollowUpResult = (typeof FOLLOW_UP_RESULTS)[number];
 
 /** Cómo llegó (opcional). Decisión V1 del doc 23 §4; se puede ajustar sin migración. */
-export const ARRIVAL_SOURCES = ["invitacion", "redes_sociales", "paso_por_el_lugar", "actividad", "otro"] as const;
+export const ARRIVAL_SOURCES = ["invitacion", "redes_sociales", "evangelismo", "paso_por_el_lugar", "actividad", "otro"] as const;
 export type ArrivalSource = (typeof ARRIVAL_SOURCES)[number];
 
 export const STATUS_LABEL: Readonly<Record<ConsolidationStatus, string>> = {
@@ -79,7 +79,8 @@ export const FOLLOW_UP_RESULT_LABEL: Readonly<Record<FollowUpResult, string>> = 
 };
 export const ARRIVAL_SOURCE_LABEL: Readonly<Record<ArrivalSource, string>> = {
   invitacion: "Lo invitó alguien",
-  redes_sociales: "Redes sociales",
+  redes_sociales: "Redes sociales o transmisión en vivo",
+  evangelismo: "Evangelismo o campaña",
   paso_por_el_lugar: "Pasaba por el lugar",
   actividad: "Actividad o evento",
   otro: "Otro",

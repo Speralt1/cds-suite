@@ -50,7 +50,7 @@ exports.CLOSED_REASONS = ["no_responde", "cambio_iglesia", "se_mudo", "no_desea_
 exports.FOLLOW_UP_TYPES = ["whatsapp", "llamada", "presencial", "otro"];
 exports.FOLLOW_UP_RESULTS = ["contactado", "sin_respuesta", "numero_invalido", "no_desea_contacto", "otro"];
 /** Cómo llegó (opcional). Decisión V1 del doc 23 §4; se puede ajustar sin migración. */
-exports.ARRIVAL_SOURCES = ["invitacion", "redes_sociales", "paso_por_el_lugar", "actividad", "otro"];
+exports.ARRIVAL_SOURCES = ["invitacion", "redes_sociales", "evangelismo", "paso_por_el_lugar", "actividad", "otro"];
 exports.STATUS_LABEL = {
     por_contactar: "Por contactar",
     en_seguimiento: "En seguimiento",
@@ -84,7 +84,8 @@ exports.FOLLOW_UP_RESULT_LABEL = {
 };
 exports.ARRIVAL_SOURCE_LABEL = {
     invitacion: "Lo invitó alguien",
-    redes_sociales: "Redes sociales",
+    redes_sociales: "Redes sociales o transmisión en vivo",
+    evangelismo: "Evangelismo o campaña",
     paso_por_el_lugar: "Pasaba por el lugar",
     actividad: "Actividad o evento",
     otro: "Otro",
