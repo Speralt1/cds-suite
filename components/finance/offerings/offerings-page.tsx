@@ -20,7 +20,7 @@ import { useTransactions } from "@/lib/finance/hooks";
 import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/insights";
 import { WORSHIP_WEEKDAYS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
-import { findActiveDailyCash, type CashArea } from "@/lib/offerings/cash";
+import { findActiveDailyCash, sumUpCashForDay, type CashArea } from "@/lib/offerings/cash";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -221,7 +221,7 @@ function GivingSettingsModal({ current, onClose }: { current: GivingSettings | n
   );
 }
 
-function AreaCard({
+export function AreaCard({
   title,
   dayLabel,
   monthLabel,
@@ -231,6 +231,7 @@ function AreaCard({
   cardMonth,
   cashMonth,
   existingCash,
+  sumUpCashDay,
   onCash,
 }: {
   title: string;
@@ -242,9 +243,14 @@ function AreaCard({
   cardMonth: number;
   cashMonth: number;
   existingCash?: FinanceTransaction;
+  // Efectivo del día registrado en SumUp (CASH importado), ya incluido en cashDay.
+  sumUpCashDay: number;
   onCash: () => void;
 }) {
   const missingDayCash = cardDay > 0 && cashDay === 0;
+  // Ambos orígenes activos el mismo día: puede ser legítimo, pero se avisa
+  // para revisar que no sea el mismo dinero (nunca se bloquea ni se fusiona).
+  const bothCashOrigins = sumUpCashDay > 0 && !!existingCash;
   return (
     <div className="panel offering-area-card">
       <h3>{title}</h3>
@@ -266,6 +272,18 @@ function AreaCard({
             <strong className="tabular-nums">{clp(cashDay)}</strong>
           )}
         </div>
+        {sumUpCashDay > 0 && (
+          <p className="field-help">
+            Incluye {clp(sumUpCashDay)} registrado en SumUp
+          </p>
+        )}
+        {bothCashOrigins && (
+          <p className="notice-warning" role="status">
+            <TriangleAlert size={15} aria-hidden="true" />
+            Hay efectivo en SumUp y en Caja del día. Revisa que no sea el
+            mismo dinero.
+          </p>
+        )}
         <div className="offering-area-line offering-area-total">
           <span>Total del día</span>
           <strong className="tabular-nums">{clp(cardDay + cashDay)}</strong>
@@ -293,7 +311,7 @@ function AreaCard({
 
       <button
         type="button"
-        className={existingCash ? "button-secondary" : "button-primary"}
+        className={existingCash || sumUpCashDay > 0 ? "button-secondary" : "button-primary"}
         onClick={onCash}
       >
         <Banknote size={16} aria-hidden="true" />
@@ -473,6 +491,7 @@ export function OfferingsPage() {
               cardMonth={offeringCardMonth}
               cashMonth={offeringCashMonth}
               existingCash={offeringCash}
+              sumUpCashDay={sumUpCashForDay(financeTransactions.data, "offerings", selectedDate).amount}
               onCash={() => setCashArea("offerings")}
             />
             <AreaCard
@@ -485,6 +504,7 @@ export function OfferingsPage() {
               cardMonth={cafeCardMonth}
               cashMonth={cafeCashMonth}
               existingCash={cafeCash}
+              sumUpCashDay={sumUpCashForDay(financeTransactions.data, "cafeteria", selectedDate).amount}
               onCash={() => setCashArea("cafeteria")}
             />
           </div>
@@ -526,9 +546,9 @@ export function OfferingsPage() {
               <thead>
                 <tr>
                   <th scope="col">Fecha</th>
-                  <th scope="col">Ofrendas SumUp</th>
+                  <th scope="col">Ofrendas tarjeta</th>
                   <th scope="col">Ofrendas efectivo</th>
-                  <th scope="col">Cafetería SumUp</th>
+                  <th scope="col">Cafetería tarjeta</th>
                   <th scope="col">Cafetería efectivo</th>
                   <th scope="col">Estado</th>
                 </tr>

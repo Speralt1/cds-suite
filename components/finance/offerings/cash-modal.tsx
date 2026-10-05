@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
-import { errorMessage } from "@/lib/finance/formatters";
+import { clp, errorMessage } from "@/lib/finance/formatters";
 import type { FinanceTransaction } from "@/lib/finance/types";
-import { findActiveDailyCash, saveDailyCash, type CashArea } from "@/lib/offerings/cash";
+import {
+  findActiveDailyCash,
+  saveDailyCash,
+  sumUpCashForDay,
+  type CashArea,
+} from "@/lib/offerings/cash";
 import { Modal, Notice } from "@/components/finance/shared";
 
 const SUMUP_SPLIT_START_DATE = "2026-09-09";
@@ -39,6 +45,8 @@ export function CashModal({
 }) {
   const { user } = useAuth();
   const existing = findActiveDailyCash(allTransactionsForDay, area, date);
+  const sumUpCash = sumUpCashForDay(allTransactionsForDay, area, date);
+  const sumUpWarningId = useId();
   const label = AREA_LABELS[area];
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
   const [note, setNote] = useState(existing?.note || "");
@@ -118,11 +126,21 @@ export function CashModal({
             </p>
           </div>
 
+          {sumUpCash.count > 0 && (
+            <p className="notice-warning" role="status" id={sumUpWarningId}>
+              <TriangleAlert size={15} aria-hidden="true" />
+              SumUp ya registró {clp(sumUpCash.amount)} en efectivo de{" "}
+              {label} para este día. Ingresa aquí solo el efectivo que no se
+              registró en SumUp, para no contarlo dos veces.
+            </p>
+          )}
+
           <label>
             Efectivo recaudado
             <input
               required
               data-autofocus
+              aria-describedby={sumUpCash.count > 0 ? sumUpWarningId : undefined}
               inputMode="numeric"
               pattern="[0-9]+"
               value={amount}
