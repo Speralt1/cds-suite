@@ -223,8 +223,21 @@ Arquitectura actual que ya ayuda:
 
 Defensa elegida (menor blast radius, sin deduplicación por monto):
 1. **Functions (V1):** importar con origen trazable; nunca tocar docs manuales.
-2. **Sub-slice UI (Hosting, opcional, commit separado):** el modal "Caja del día" muestra un aviso no bloqueante cuando SumUp ya registró efectivo para esa área/día. No bloquea ni fusiona: dos montos legítimos pueden coincidir.
-3. **Dry-run (C4):** antes de aplicar, por cada día con CASH a crear lista el efectivo manual activo de la misma área/día → "REQUIERE REVISIÓN".
+2. **Sub-slice UI (Hosting, commits separados):**
+   - SumUp primero → manual después: el modal "Caja del día" muestra un aviso no bloqueante cuando SumUp ya registró efectivo para esa área/día (vinculado al campo con `aria-describedby`).
+   - Manual primero → SumUp después (o cualquier orden): la tarjeta del área muestra "Incluye $X registrado en SumUp" y, si además hay una Caja del día activa ese día, un aviso "Hay efectivo en SumUp y en Caja del día. Revisa que no sea el mismo dinero."
+   - Nada se bloquea ni se fusiona: dos montos legítimos pueden coincidir.
+3. **Dry-run (C4):** antes de aplicar, por cada día con CASH a crear lista el efectivo manual activo de la misma área/día → "REQUIERE REVISIÓN". **Debe re-ejecutarse inmediatamente antes del deploy de Functions** (la foto del 05/10 caduca).
+
+Riesgo residual aceptado para V1 (→ V1.1):
+- El formulario genérico de movimientos (`TransactionForm`) también permite crear ingresos Ofrendas/Cafetería en efectivo y no muestra el aviso.
+- El engine no marca `review` cuando importa un CASH en un día/área con Caja del día manual activa (V1.1: flag por origen en el raw, no por monto).
+
+Reglas operativas (cajero SumUp + tesorería):
+- **Una cuenta por área:** el efectivo de Ofrendas se registra solo en la cuenta SumUp de Ofrendas y el de Cafetería solo en la de Cafetería. Nunca consolidar ambas áreas en un mismo CASH (la categoría la decide la cuenta).
+- **Mismo día:** el ledger usa la fecha/hora en que se registra el CASH en SumUp. Registrarlo el mismo día del servicio (antes de las 23:59 hora Santiago); si se pasó el día, usar "Caja del día" con la fecha correcta.
+- **Sin fondo de caja:** el CASH consolidado excluye el sencillo inicial.
+- **Error de cuenta o monto:** reembolsar en SumUp y volver a registrar correctamente (o vía Caja del día). Pendiente confirmar que SumUp permite reembolsar un CASH (condición previa al deploy).
 
 Procedimiento manual seguro (para tesorería):
 1. Si el efectivo se registró en SumUp como CASH: **no** usar "Caja del día" para ese mismo efectivo.
@@ -241,6 +254,8 @@ Procedimiento manual seguro (para tesorería):
 | `f92f628` | **Functions** | `functions/sumup/core.js`, `functions/sumup/engine.js`, `tests/functions/sumup-cash.test.ts` |
 | `fd5b000` | **Hosting** (sub-slice UI) | `lib/finance/movement-groups.ts`, `components/finance/transactions/transaction-list.tsx`, `lib/offerings/cash.ts`, `components/finance/offerings/cash-modal.tsx`, `tests/sumup-cash-ui.test.tsx` |
 | `f7afeae` | Script (no se despliega) | `scripts/sumup-cash-backfill.mjs`, `scripts/lib/sumup-dry-run-store.mjs` |
+| `f52ee09` | Hosting (review Designer) | `transaction-list.tsx` ("Ver 1 registro/pago"), `cash-modal.tsx` (icono + `aria-describedby`), columnas "Ofrendas/Cafetería tarjeta" en `offerings-page.tsx`, `reports-page.tsx`, `lib/finance/report-pdf.ts` |
+| `accbed9` | Hosting (review Navigator) | `offerings-page.tsx`: origen SumUp del efectivo del día + aviso cuando hay SumUp y Caja del día el mismo día |
 
 No se tocó `functions/index.js`, Firestore Rules, índices, scheduler, secretos ni A5.
 
@@ -252,7 +267,7 @@ No se tocó `functions/index.js`, Firestore Rules, índices, scheduler, secretos
 
 ## C3 — Matriz de pruebas
 
-`tests/functions/sumup-cash.test.ts` (25 casos) y `tests/sumup-cash-ui.test.tsx` (6 casos).
+`tests/functions/sumup-cash.test.ts` (25 casos) y `tests/sumup-cash-ui.test.tsx` (9 casos).
 
 | # | Caso | Test |
 |---|---|---|
@@ -277,7 +292,7 @@ No se tocó `functions/index.js`, Firestore Rules, índices, scheduler, secretos
 | 19 | Ambas cuentas | "19…" |
 | 20 | Tests históricos Financial Core | suite completa |
 
-Gates: `npm run lint` ✅ · `npm run typecheck` ✅ · `npm test` ✅ **205/205** (174 previos + 31 nuevos) · `npm run build` ✅ · `node --check` Functions ✅. Rules tests: no aplica (Rules intactas).
+Gates: `npm run lint` ✅ · `npm run typecheck` ✅ · `npm test` ✅ **208/208** (174 previos + 34 nuevos) · `npm run build` ✅ · `node --check` Functions ✅. Rules tests: no aplica (Rules intactas).
 
 ---
 
@@ -314,10 +329,11 @@ Simulaciones adicionales del guard con el engine real sobre el historial real de
 
 ## Rollback conceptual
 
-- **Functions:** redeploy de `0d1bb0d` (Etapa A). Efecto: CASH vuelve a `nonPOS`; los docs CASH ya creados **quedan** en el ledger (el engine viejo los ignora, no los anula), con totales correctos.
-- **Revertir también los datos:** anular cada doc `sumup_*_…` con `paymentMethod: "cash"` vía la UI de anulación (trazable, ajusta el summary). Nunca borrar.
-- **Hosting:** redeploy del build anterior. Efecto solo visual: el efectivo SumUp vuelve a mezclarse en el grupo "pagos con tarjeta".
+- **Datos primero, Functions después.** Los docs `sumup_*` son de propiedad del proveedor: `firestore.rules` (`providerOwnedFinanceTransaction`) bloquea su edición/anulación desde el cliente y la UI los muestra en solo lectura. Para revertir un CASH importado: **reembolsarlo en SumUp mientras las Functions nuevas siguen activas** (el engine lo anula y ajusta el summary, trazable), o un script Admin revisado. Nunca borrar.
+- **Functions:** redeploy de `0d1bb0d` (Etapa A). CASH vuelve a `nonPOS`. Los docs CASH ya creados quedan en el ledger y el engine viejo **deja de seguirlos**: un reembolso posterior en SumUp ya no llegaría al ledger. Por eso el orden anterior.
+- **Hosting:** redeploy del build anterior. Efecto visual (el efectivo SumUp vuelve al grupo "pagos con tarjeta") **y** se pierden los avisos de doble registro: sube el riesgo de duplicado, no solo la estética.
 - **Orden recomendado del deploy:** Hosting primero (sin docs CASH se ve igual que hoy), luego Functions. Así nunca se muestra "90 pagos con tarjeta".
+- **Alcance del deploy:** `firebase deploy --only hosting` y `--only functions:sumupSyncScheduled,functions:sumupSyncNow` (nunca `--only functions` a secas). Antes, verificar que el Hosting vivo corresponde a `0d1bb0d`; si no, el deploy de Hosting arrastraría cambios intermedios.
 
 ---
 
@@ -333,3 +349,5 @@ Simulaciones adicionales del guard con el engine real sobre el historial real de
 | Delta financiero esperado | +CLP 163.500 (Cafetería, 04/10) |
 | Manuales a revisar antes del apply | 0 |
 | Confirmación humana previa | 1 (F4: composición de los $163.500) |
+| Gates operativos previos | Avisar a tesorería que **no** registre a mano el efectivo de Cafetería del 04/10 (la UI hoy muestra "Falta efectivo" y lo invita); re-ejecutar el dry-run justo antes del deploy y exigir 0 días manuales en conflicto; confirmar que SumUp permite reembolsar CASH; comunicar reglas operativas a cajeros |
+| Contadores | `ignored.preCashStart` nuevo; `nonPOS` deja de contar CASH. Ninguna UI muestra estos contadores |
