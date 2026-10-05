@@ -281,6 +281,36 @@ describe("Configuración › Usuarios y permisos", () => {
     );
   });
 
+  it("Integrantes: se otorga y revoca explícitamente; gestionar implica ver; el cargo Pastor no lo incluye", async () => {
+    render(<UsersPermissionsPanel />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);
+    const dialog = openDialog("Luis Líder");
+    expect(within(dialog).getByRole("group", { name: "Integrantes" })).toBeVisible();
+    const view = within(dialog).getByRole("checkbox", { name: /Ver Consolidación/ });
+    const manage = within(dialog).getByRole("checkbox", { name: /Gestionar Consolidación/ });
+    expect(view).not.toBeChecked();
+    expect(manage).not.toBeChecked();
+    // El cargo Pastor (mapeo legacy) no propone Integrantes.
+    fireEvent.change(within(dialog).getByLabelText("Cargo"), { target: { value: "Pastor" } });
+    fireEvent.click(within(within(dialog).getByRole("group", { name: "Permisos sugeridos para Pastor" })).getByRole("button", { name: "Aplicar sugeridos" }));
+    expect(within(dialog).getByRole("checkbox", { name: /Ver Consolidación/ })).not.toBeChecked();
+    // Otorgar gestionar marca (y bloquea) ver.
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Gestionar Consolidación/ }));
+    expect(within(dialog).getByRole("checkbox", { name: /Ver Consolidación/ })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: /Ver Consolidación/ })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(usersClient.updateManagedUserAccess).toHaveBeenCalledTimes(1));
+    expect(usersClient.updateManagedUserAccess).toHaveBeenCalledWith(
+      { kind: "db" },
+      "me",
+      "leader",
+      expect.objectContaining({ permissions: expect.arrayContaining(["members.consolidation.manage"]) }),
+      state.users.data,
+    );
+    const saved = vi.mocked(usersClient.updateManagedUserAccess).mock.calls[0][3] as { permissions: string[] };
+    expect(saved.permissions).not.toContain("members.consolidation.read"); // implícito, no se guarda
+  });
+
   it("«Otro cargo…» nunca escribe el valor interno de la opción en el cargo", async () => {
     render(<UsersPermissionsPanel />);
     fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);

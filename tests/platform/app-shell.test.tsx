@@ -34,7 +34,7 @@ vi.mock("@/lib/calendar/areas-client", () => ({
   useAreas: () => ({ areas: state.areas, loading: false, error: "" }),
 }));
 
-const LABEL = { finance: "Finanzas", calendar: "Calendario", reports: "Reportes", settings: "Configuración" };
+const LABEL = { finance: "Finanzas", calendar: "Calendario", members: "Integrantes", reports: "Reportes", settings: "Configuración" };
 
 beforeEach(() => {
   state.path = "/finanzas";
@@ -74,9 +74,11 @@ describe("AppShell: módulos por perfil", () => {
       const items = [...within(bar).queryAllByRole("link"), ...within(bar).queryAllByRole("button")];
       // Ciclo 1 (C1): sin "Más"; la cuenta vive en el avatar de la top bar.
       expect(items.length).toBe(p.modules.length);
-      expect(items.length).toBeLessThanOrEqual(4);
+      // Admin con Integrantes llega a 5 (doc 23): sigue sin «Más».
+      expect(items.length).toBeLessThanOrEqual(5);
       expect(within(bar).queryByRole("button", { name: "Más" })).toBeNull();
-      expect(screen.queryByText(/Integrantes/i)).toBeNull();
+      // Integrantes solo para quien tiene el módulo (admin o permiso explícito).
+      if (!p.modules.includes("members")) expect(screen.queryByText(/Integrantes/i)).toBeNull();
       expect(screen.getAllByRole("button", { name: "Cerrar sesión" })).toHaveLength(1);
       expect(screen.getByText("Contenido")).toBeVisible();
     });
@@ -168,23 +170,34 @@ describe("AppShell: módulos por perfil", () => {
 });
 
 describe("AppShell · barra móvil sin «Más» (ciclo 1, C1)", () => {
-  it("admin: 4 módulos, sin «Más»; Configuración conserva su nombre accesible completo", () => {
+  it("admin: 5 módulos con Integrantes, sin «Más»; Configuración conserva su nombre accesible completo", () => {
     state.access = { role: "admin", active: true };
     shell();
     const bar = screen.getByRole("navigation", { name: "Barra de módulos" });
     expect(within(bar).getAllByRole("link").map((a) => a.getAttribute("aria-label"))).toEqual([
       "Finanzas",
       "Calendario",
+      "Integrantes",
       "Reportes",
       "Configuración",
     ]);
     expect(within(bar).queryAllByRole("button")).toHaveLength(0);
-    expect(bar.style.gridTemplateColumns).toBe("repeat(4, minmax(0, 1fr))");
+    expect(bar.style.gridTemplateColumns).toBe("repeat(5, minmax(0, 1fr))");
     const settings = within(bar).getByRole("link", { name: "Configuración" });
     expect(settings).toHaveAttribute("href", "/configuracion");
-    // Etiqueta corta solo para pantallas muy angostas.
+    // Con 5 columnas la etiqueta visible es siempre la corta; el nombre accesible, el completo.
     expect(within(settings).getByText("Ajustes")).toBeInTheDocument();
+    expect(within(settings).queryByText("Configuración")).toBeNull();
+    expect(within(bar).getByRole("link", { name: "Integrantes" })).toHaveAttribute("href", "/integrantes");
     expect(screen.queryByText("Más")).toBeNull();
+  });
+
+  it("pastor (4 módulos): Configuración no está y la etiqueta de Reportes es completa", () => {
+    state.access = { role: "pastor", active: true };
+    shell();
+    const bar = screen.getByRole("navigation", { name: "Barra de módulos" });
+    expect(within(bar).getAllByRole("link").map((a) => a.getAttribute("aria-label"))).toEqual(["Finanzas", "Calendario", "Reportes"]);
+    expect(screen.queryByText(/Integrantes/i)).toBeNull();
   });
 
   it("sin AccessProvider: un único «Cerrar sesión», el avatar abre la hoja y hay un solo alert", async () => {
