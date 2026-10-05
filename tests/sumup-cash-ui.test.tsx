@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Timestamp } from "firebase/firestore";
 import { SumUpGroupRow } from "@/components/finance/transactions/transaction-list";
 import { CashModal } from "@/components/finance/offerings/cash-modal";
+import { AreaCard } from "@/components/finance/offerings/offerings-page";
 import { groupMovements } from "@/lib/finance/movement-groups";
 import { parseDate } from "@/lib/finance/formatters";
 import { sumUpCashForDay } from "@/lib/offerings/cash";
@@ -141,5 +142,38 @@ describe("Caja del día — aviso de efectivo ya registrado en SumUp", () => {
     renderModal([manual]);
     expect(screen.queryByText(/SumUp ya registró/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Actualizar efectivo" })).toBeEnabled();
+  });
+});
+
+describe("Tarjeta de área — efectivo SumUp y Caja del día el mismo día", () => {
+  function card(props: { cashDay: number; sumUpCashDay: number; existingCash?: FinanceTransaction }) {
+    return render(
+      <AreaCard
+        title="Cafetería"
+        dayLabel="dom 4 oct"
+        monthLabel="Octubre"
+        monthSuffix=""
+        cardDay={740360}
+        cardMonth={740360}
+        cashMonth={props.cashDay}
+        onCash={() => {}}
+        {...props}
+      />,
+    );
+  }
+
+  it("con solo SumUp: muestra el origen, no alerta de faltante ni de doble registro", () => {
+    card({ cashDay: 163500, sumUpCashDay: 163500 });
+    expect(screen.getByText("Incluye $163.500 registrado en SumUp")).toBeInTheDocument();
+    expect(screen.queryByText("Falta efectivo")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Registrar efectivo/ })).toHaveClass("button-secondary");
+  });
+
+  it("con SumUp y Caja del día activos: aviso de revisión (manual primero o después), sin bloquear", () => {
+    const manual = tx({ id: "cash_cafeteria_2026-10-04", amount: 163500, paymentMethod: "cash", createdBy: "uid-1" });
+    card({ cashDay: 327000, sumUpCashDay: 163500, existingCash: manual });
+    expect(screen.getByRole("status")).toHaveTextContent("Hay efectivo en SumUp y en Caja del día");
+    expect(screen.getByRole("button", { name: /Editar efectivo/ })).toBeEnabled();
   });
 });
