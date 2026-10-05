@@ -1988,12 +1988,16 @@
   .cds-members .mem-dup-actions :is(.button-primary, .button-secondary, .button-ghost) {
     flex: 1 1 100%;
   }
+  .cds-members .mem-form-page {
+    max-width: none;
+  }
+  /* Sangra exactamente el padding de <main> del shell (24 px <640, 32 px 640–767, 16 px ≤360). */
   .cds-members .mem-form-foot {
     position: sticky;
     bottom: calc(64px + env(safe-area-inset-bottom));
     z-index: 5;
-    margin: 16px -16px 0;
-    padding: 12px 16px;
+    margin: 16px -24px 0;
+    padding: 12px 24px;
     border-top: 1px solid var(--mem-line);
     background: var(--mem-surface);
   }
@@ -2158,8 +2162,57 @@
   }
 }
 
+@media (min-width: 640px) and (max-width: 767px) {
+  .cds-members .mem-form-foot {
+    margin-inline: -32px;
+    padding-inline: 32px;
+  }
+}
+@media (max-width: 360px) {
+  .cds-members .mem-form-foot {
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+}
+
+/* Encabezados de grupo de Atención (en la preview venían del CSS base fx). */
+.cds-members .mem-att-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  color: var(--mem-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cds-members .mem-att-group-head svg {
+  flex: none;
+}
+
+/* Un solo ritmo vertical en formularios: el gap del grid manda. */
+.cds-members .mem-form > :is(.mem-fieldset, .mem-suggest, .cal-notice, .mem-form-section, .mem-entry-row, .mem-form-foot) {
+  margin-top: 0;
+}
+
+/* Pantallas táctiles: 44 px mínimos también en tablet. */
+@media (pointer: coarse) {
+  .cds-members .mem-row-more,
+  .cds-members .mem-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .cds-members .mem-chip-select select {
+    height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .cds-members .mem-flash {
+  .cds-members .mem-flash,
+  .cds-members .cal-dialog[open],
+  .cds-members .cal-skeleton {
     animation: none;
   }
 }

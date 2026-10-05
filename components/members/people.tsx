@@ -356,6 +356,7 @@ function RowMenu({ v }: { v: PersonView }) {
                 icon={MessageSquarePlus}
                 onSelect={() => {
                   setPos(null);
+                  btn.current?.focus();
                   open("followup", p.id);
                 }}
               />
@@ -366,6 +367,7 @@ function RowMenu({ v }: { v: PersonView }) {
                 icon={CalendarPlus}
                 onSelect={() => {
                   setPos(null);
+                  btn.current?.focus();
                   open("visit", p.id);
                 }}
               />
