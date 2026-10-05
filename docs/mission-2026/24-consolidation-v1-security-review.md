@@ -88,9 +88,19 @@ Diff completo de `firestore.rules`: 2 entradas en `implicants()`, el helper `mem
 |---|---|---|
 | Navigator (alcance, flujo, pipeline, IA) | FIXES_REQUIRED → **corregido** | M1 "Volvió" por fecha posterior + aviso de visita del mismo día; M2 procedimiento de corrección (doc 23 §7b; la excepción de borrado para menores/solicitud de eliminación **requiere decisión de Salvador**); M3 Integrado irreversible explícito; M4 este doc. Menores aplicados (KPI +48 h, No contactar en formularios, responsable preseleccionado, notas con contador, origen "evangelismo") |
 | Atlas backend ([24a](24a-atlas-review.md)) | **PASS** (0 BLOCKER, 0 MAJOR) | A-01/A-02 (runbook) corregidos; A-05 (caracteres de control/bidi) corregido; NITs A-03/A-04/A-06…A-10 aceptados para después |
-| Atlas cliente ([24b](24b-atlas-client-review.md)) | FIXES_REQUIRED → ver §9 | F1 sugerencias re-marcadas tras error; F2 edición con base congelada; F3/F4/F6/F9/F10 menores; F5 alineado en el doc 23 |
+| Atlas cliente ([24b](24b-atlas-client-review.md)) | FIXES_REQUIRED → **re-verificación PASS** | F1 (MAJOR) y F2 (MAJOR) cerrados; F3/F4/F5/F6/F9/F10 cerrados; N1 (formulario de seguimiento congelado completo tras un intento) corregido en `1b7bd64`. Abiertos aceptados: F7, F8 (NIT), N2 (persona leída fuera del límite de 1000 no es en vivo; el servidor rechaza por revisión), N3 (NIT) |
 | Designer (estático, sin navegador) | FIXES_REQUIRED → **corregido** | M1 encabezados de Atención; M2 footer sticky alineado al padding del shell; ritmo vertical, foco del menú, CTA en /nueva, 44 px táctiles, reduced motion. m5 (orden DOM del dashboard en móvil) aceptado. **Falta la verificación visual en navegador** a 1440/1024/390/375 (no se pudo levantar el entorno local en esta sesión) |
 
 ## 9. Veredicto
 
-*(Se completa con los gates finales.)*
+| Ítem | Estado |
+|---|---|
+| BLOCKER abiertos | **0** |
+| MAJOR abiertos | **0** |
+| Aislamiento financiero | **PASS** (sin cambios financieros; `can()` idéntico fuera de `members.*`; 22 tests financieros de reglas verdes) |
+| SumUp CASH | **PASS** (sin commits ni conceptos de CASH) |
+| Privacidad V1 | **PASS** (campos mínimos; excluidos verificados en código, servidor y build) |
+| Verificación visual en navegador (1440/1024/390/375) | **PENDIENTE**: la revisión del Designer fue estática; levantar el entorno local fue bloqueado por permisos en esta sesión |
+| Decisiones de Salvador | D1 (Etapa B antes del cierre de A5), D2 (ajuste de A5), D3 (piloto), excepción de borrado del doc 23 §7b |
+
+**Conclusión de seguridad:** el código es apto para un rollout controlado. El veredicto operativo depende de la verificación visual pendiente y de las decisiones de la tabla.
