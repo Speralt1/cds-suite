@@ -660,12 +660,16 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
         setChkClose(true);
         setRequestId(newRequestId());
         setAttempted(false);
+      } else if (res.error?.kind === "fields") {
+        // Rechazo de validación antes de escribir: se puede corregir con el mismo requestId.
+        setAttempted(false);
       }
-      // Cualquier otro error: las casillas quedan exactamente como estaban.
+      // Cualquier otro error (red, interno…): el formulario queda congelado para que el
+      // reintento envíe exactamente lo mismo; si el primer envío alcanzó a guardarse, es un replay.
       return;
     }
     const { replay, applied } = res.value;
-    if (replay) toast("Seguimiento registrado.");
+    if (replay) toast("Este seguimiento ya estaba guardado. Revisa el historial.");
     else {
       // Solo se informa lo que el servidor confirma haber aplicado.
       const parts = ["Seguimiento registrado"];
@@ -690,6 +694,8 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
       <form id={formId} className="mem-form" onSubmit={submit} noValidate>
         {person.doNotContact && <DoNotContactNotice />}
         <WhatsAppLink person={person} className="button-secondary mem-btn-block" label="Abrir WhatsApp" />
+        {/* Tras un intento sin respuesta clara, todo queda fijo: el reintento reenvía lo mismo (sin duplicar). */}
+        <fieldset disabled={attempted} className="contents">
         <div className="mem-field">
           <label htmlFor="mem-fu-date">Fecha del contacto</label>
           <input
@@ -891,6 +897,12 @@ function FollowUpSheet({ person, intent, onClose }: SheetProps & { intent?: Foll
             <FieldError id="mem-fu-owner-error" message={fieldError("ownerUid")} />
           </div>
         </div>
+        </fieldset>
+        {attempted && !write.submitting && (
+          <p className="mem-help" id="mem-fu-frozen">
+            Los datos quedaron fijos para reintentar sin duplicar el seguimiento. Para cambiarlos, cierra y vuelve a abrir el formulario.
+          </p>
+        )}
         {!m.online && <OfflineNotice />}
         <FormError error={write.error} />
       </form>

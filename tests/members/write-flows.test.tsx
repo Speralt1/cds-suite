@@ -166,6 +166,10 @@ describe("F1 · sugerencias del seguimiento", () => {
     expect(close).toBeDisabled();
     expect(within(dialog).getByText(LOCK_HELP)).toBeInTheDocument();
     expect(dnc).toHaveAttribute("aria-describedby", "mem-fu-suggest-lock");
+    // N1: todo el formulario queda fijo (resultado, fecha, notas), no solo las casillas.
+    expect(within(dialog).getByRole("radio", { name: "Contactado" })).toBeDisabled();
+    expect(within(dialog).getByLabelText("Fecha del contacto")).toBeDisabled();
+    expect(within(dialog).getByText(/Los datos quedaron fijos para reintentar/)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar seguimiento" }));
     await waitFor(() => expect(h.createFollowUp).toHaveBeenCalledTimes(2));
@@ -175,7 +179,7 @@ describe("F1 · sugerencias del seguimiento", () => {
     expect(retry).toMatchObject({ applyStatus: "sin_continuidad", result: "no_desea_contacto" });
     expect(retry.requestId).toBe(first.requestId);
     // replay: no se afirma ningún cambio de estado ni de No contactar.
-    await waitFor(() => expect(h.toast).toHaveBeenCalledWith("Seguimiento registrado."));
+    await waitFor(() => expect(h.toast).toHaveBeenCalledWith("Este seguimiento ya estaba guardado. Revisa el historial."));
   });
 
   it("suggestion-mismatch: vuelve a marcar, desbloquea y usa un requestId nuevo; el toast refleja `applied`", async () => {

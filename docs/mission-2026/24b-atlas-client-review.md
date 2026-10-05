@@ -140,3 +140,51 @@
 **Tests que faltan (recomendados junto con los arreglos):** F1 (casillas desmarcadas que sobreviven a un error de red), F2 (edición concurrente sin revertir) y F5 (volvió con seguimiento).
 
 ATLAS (cliente): FIXES_REQUIRED
+
+---
+
+## Re-verificación (8f3f6e9)
+
+> **Base:** `8f3f6e9` (sobre `35f24d7`). Solo lectura. Revisé `git show 8f3f6e9 -- components lib tests`, `components/members/{sheets,person-form,person,status}.tsx`, `lib/members/{api,client,use-members}.ts` y `functions/members/service.js` (`followUpCreate`, `personUpdate`).
+
+### Estado por hallazgo
+
+| # | Sev. original | Estado | Evidencia |
+|---|---|---|---|
+| F1 | MAJOR | **CLOSED** | `sheets.tsx` `FollowUpSheet`: las casillas solo se vuelven a marcar con `res.error?.kind === "suggestion_mismatch"`, que además genera un `requestId` nuevo y desbloquea. Con cualquier otro error quedan como estaban y `disabled` (`attempted`). El cambio de resultado ya no las re-marca tras un intento. En `replay` el toast es neutro («Seguimiento registrado.»). Si no hay replay, el toast solo menciona `applied.status` y `applied.doNotContact` de la respuesta (`api.ts` `parseApplied`). **Nunca se genera un requestId nuevo después de una escritura confirmada:** `service.js:438-448` busca el documento `existing` *antes* de evaluar la sugerencia (`:456-465`) dentro de la misma transacción. Por eso un `suggestion-mismatch` con el mismo requestId prueba que ese requestId no tenía nada escrito. Tests: `write-flows.test.tsx:146`, `:181`, `:205`, `:218`. Riesgos residuales en N1 y N3. |
+| F2 | MAJOR | **CLOSED** | `person-form.tsx` `EditPersonSheet`: la base se congela al abrir (`useState(() => profileOf(person))`) y el diff se calcula contra ella para los 5 campos (`fullName`, `phoneE164`, `email`, `arrivalSource`, `invitedBy`, iguales a `PROFILE_FIELDS`). Si un campo vivo cambia, se bloquea sin llamar al servidor (`drifted` → `return`, botón deshabilitado, `LOCAL_CONFLICT` con «Recargar»). `expectedRevision` usa la revisión viva del mismo render que evaluó `drifted`, así que las visitas y los seguimientos no generan conflicto y una escritura que llegue entre el render y el envío la detecta el servidor. **Normalización:** `formatPhone(e164)` → `normalizePhone` vuelve al mismo E.164 en todas las formas válidas (`+56 9…`, `+56 2…`, `+56 xx…`, extranjero). Un valor sin cambios no se envía ni produce un conflicto falso. Si el correo guardado está en mayúsculas (legado), se reenvía en minúsculas, pero es el mismo campo y la base no cambió, así que no sobrescribe a nadie. `PersonLoaded key={v.person.id}` (`person.tsx:663`) evita que una base congelada pase a otra persona. Tests: `:235` y `:251`. |
+| F3 | MINOR | **CLOSED** | No contactar (`marking` congelado; si el valor vivo ya es el objetivo → conflicto sin llamada), Asignar (`baseOwner`) y Estado (`base` con estado y etapa; las opciones salen de `checkTransition(base, …)`; el submit y la confirmación de «Integrado» se bloquean con `drifted`). Tests: `:265-308`. Nota: cuando el valor ya es el objetivo se muestra «conflicto» y no «Ya estaba marcada». Es aceptable porque es seguro. |
+| F4 | MINOR | **CLOSED** (ver N2) | `truncated` con `>= PEOPLE_LIMIT` y aviso en Personas e Inicio. `historyTruncated` muestra el aviso en el historial. La ficha hace `fetchPerson` (getDoc) antes de mostrar «No encontramos»; si falla, muestra un error con reintento. Tests: `:320-389` y `client-fetch.test.ts`. |
+| F5 | MINOR | **CLOSED** | Cerrado en `35f24d7`: el §7 del doc 23 separa el bloque «Volvieron» (con o sin seguimiento) de la alerta «Volvió» (sin seguimiento posterior). |
+| F6 | NIT | **CLOSED** | `ActivityField` limpia (`onChange("")`) un id que no está entre las opciones visibles, salvo mientras carga. Test: `:410`. Nota de UX: si la fecha queda inválida mientras se escribe, también se limpia la selección. No hay riesgo de datos. |
+| F7 | NIT | OPEN (LATER) | Sin cambios; sigue diferido. |
+| F8 | NIT | OPEN (no bloquea) | Sin cambios; RouteGuard y el servidor siguen cubriéndolo. |
+| F9 | NIT | **CLOSED** | Se eliminó «Sin responsable». Si no hay elección, o si la lista no cargó, no se envía `ownerUid` (nunca `null`). Tests: `:435-463`. |
+| F10 | NIT | **CLOSED** | Contador `n/120` en «Próxima acción», con `aria-describedby`. Test: `:476`. |
+
+### Hallazgos nuevos
+
+**N1 · MINOR · Tras un intento fallido, solo las casillas quedan fijas; el resto del seguimiento sigue editable**
+- **Dónde:** `components/members/sheets.tsx`, `FollowUpSheet` (radio de resultado, fecha, tipo, nota, próxima acción y responsable siguen editables con `attempted === true`).
+- **Escenario A (no se puede rechazar):** se guarda con un resultado sin sugerencia, falla la red y el usuario cambia a «No desea contacto». Aparecen «Marcar No contactar» y «Cerrar como Sin continuidad» **marcadas (valor inicial `true`) y deshabilitadas**, sin que se hayan mostrado nunca. El reintento las envía y no se pueden desmarcar. No se reenvía una opción que el usuario haya *rechazado* (esas se conservan), pero se rompe la aceptación parcial (§6) para sugerencias que aparecen después del bloqueo. Pasa lo mismo si la sugerencia viva cambia por un snapshot de otra persona.
+- **Escenario B (replay silencioso):** si el primer envío alcanzó a confirmarse (se perdió la respuesta), el reintento con el resultado cambiado es un `replay`. El servidor no compara el payload (`service.js:446-447`), así que el seguimiento guardado conserva el resultado original y el nuevo «No desea contacto» con su No contactar no se aplica. El toast neutro no afirma nada falso, pero «Seguimiento registrado.» sugiere que se guardó lo que está en pantalla.
+- **Arreglo:** tras un intento, congelar el **payload completo** del intento y reenviarlo tal cual (deshabilitar todo el formulario salvo «Guardar» y «Cancelar», con el texto de bloqueo actual). Otra opción: tratar como desmarcada (`false`) toda sugerencia que no estaba visible en el intento. En `replay`, usar un texto como «Este seguimiento ya estaba guardado. Revisa el historial.». Agregar un test: intento fallido → cambiar resultado → verificar que no se envía `applyDoNotContact` no visto.
+
+**N2 · MINOR · La persona leída con `fetchPerson` (fuera del límite) es una foto fija**
+- **Dónde:** `lib/members/use-members.ts` (`extras` con `getDoc` único, sin listener ni refresco) y `viewOf`, que la usan la ficha y `MemberActions`.
+- **Efecto:** para una persona fuera de las 1000 cargadas, después de una escritura correcta la ficha no se actualiza: la proyección, el estado y la revisión quedan viejos, aunque el historial (listener propio) sí muestra el registro nuevo. La siguiente acción envía la `revision` vieja y recibe `members/conflict` → «Recargar». Las comprobaciones de `drifted` (F2/F3) no ven cambios ajenos sobre esa persona. Además, el enlace de WhatsApp sigue visible si otra persona marca No contactar. No hay pérdida de datos porque el servidor rechaza por revisión, pero la información en pantalla queda desactualizada. Hoy no aplica en la práctica: el volumen de V1 está muy por debajo de 1000.
+- **Arreglo:** cambiar `fetchPerson` por `onSnapshot(doc(membersPeople/{id}))` mientras la ficha esté montada (las reglas ya permiten `get`), o volver a ejecutar `loadPerson(id)` después de cada escritura que resuelva bien sobre una persona de `extras`.
+
+**N3 · NIT · Carrera residual de doble seguimiento con un envío original todavía en curso**
+- Si el primer envío falla en el cliente por timeout pero sigue procesándose en el servidor, y el reintento (mismo requestId) llega antes de su commit con una sugerencia distinta (por ejemplo, por N1-A), el reintento puede recibir `suggestion-mismatch`. Eso genera un requestId nuevo, y el original se confirma igual: quedan dos seguimientos. Requiere un timeout de la callable, una edición posterior y solapamiento en el servidor. Si se aplica el arreglo de N1 (payload congelado), el reintento repite exactamente la sugerencia del original y la carrera desaparece. No requiere otra acción.
+
+### Ejecución
+
+| Comando | Resultado |
+|---|---|
+| `npx vitest run tests/members` | **4 archivos, 69 tests, 69 pasan**, 0 fallan (3,38 s) |
+| `npx tsc --noEmit -p .` | sin errores |
+
+**Conclusión:** los dos MAJOR (F1 y F2) están cerrados con tests que reproducen los escenarios del informe. Lo nuevo es MINOR o NIT (N1 y N2 recomendados antes de crecer el volumen o de la próxima iteración del formulario; N3 desaparece con N1) y no bloquea.
+
+ATLAS (cliente, re-verificación): PASS
