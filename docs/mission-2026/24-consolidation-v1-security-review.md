@@ -100,7 +100,32 @@ Diff completo de `firestore.rules`: 2 entradas en `implicants()`, el helper `mem
 | Aislamiento financiero | **PASS** (sin cambios financieros; `can()` idéntico fuera de `members.*`; 22 tests financieros de reglas verdes) |
 | SumUp CASH | **PASS** (sin commits ni conceptos de CASH) |
 | Privacidad V1 | **PASS** (campos mínimos; excluidos verificados en código, servidor y build) |
-| Verificación visual en navegador (1440/1024/390/375) | **PENDIENTE**: la revisión del Designer fue estática; levantar el entorno local fue bloqueado por permisos en esta sesión |
+| Verificación visual en navegador (1440/1024/390/375) | **PASS** (2026-10-05, `localhost:3000` levantado por Salvador con emuladores y datos ficticios, perfil `consolidacion@cds.test`). 5 pantallas + sheets/diálogos; sin overflow horizontal, sin contenido cortado ni campos excluidos. Correcciones en `07906e2` (doc 24 §10) |
 | Decisiones de Salvador | D1 (Etapa B antes del cierre de A5), D2 (ajuste de A5), D3 (piloto), excepción de borrado del doc 23 §7b |
 
 **Conclusión de seguridad:** el código es apto para un rollout controlado. El veredicto operativo depende de la verificación visual pendiente y de las decisiones de la tabla.
+
+## 10. QA visual en navegador (2026-10-05)
+
+Entorno: `localhost:3000` (proyecto `demo-cds-suite`, emuladores Auth/Firestore/Functions, 14 personas ficticias), perfil `consolidacion@cds.test` (manage + calendar.read, sin finanzas). Solo lectura: ningún formulario se guardó. Método: capturas por breakpoint + sonda DOM (overflow horizontal, elementos fuera del viewport, objetivos táctiles < 44 px, texto excluido).
+
+| Pantalla | 1440 | 1024 | 390 | 375 |
+|---|---|---|---|---|
+| Inicio (dashboard) | PASS | PASS | PASS | PASS |
+| Atención | PASS | — (igual que 1440) | PASS | PASS |
+| Personas (tabla / lista + menú de fila) | PASS | PASS (columnas colapsadas) | PASS | PASS |
+| Ficha (+ Cambiar estado → Integrado anidado, Editar datos) | PASS | PASS | PASS | PASS |
+| Nueva persona (+ aviso de duplicado, footer sticky) | PASS | — | PASS | PASS |
+| Navegación (sidebar / rail / barra inferior / cuenta) | PASS | PASS | PASS | PASS |
+
+Módulos visibles para el perfil: Calendario · Integrantes · Reportes (sin Finanzas), correcto.
+
+**Defectos encontrados y corregidos (`07906e2`):**
+- MAJOR: subnav "Consolidación · Atención · Personas" no cabía a 375–390 ("Personas" cortada o bajo el degradado) → "Inicio · Atención · Personas" (etiqueta de la preview) y pestañas compactas en teléfonos.
+- MAJOR: Nueva persona sin separación entre campos dentro de cada sección (no se había portado el margen base `.fx-field`) → 12 px como la preview; 16 px bajo el aviso de adultos.
+- MINOR: "No desea contacto" desbordaba su opción a 375 → la etiqueta envuelve.
+- MINOR: ritmo vertical duplicado en el seguimiento por el fieldset congelado (`display: contents`) → regla extendida.
+- MINOR: la ficha y el registro activaban "Consolidación" en la subnav → activan "Personas".
+- MINOR: encabezado de la ficha decía "Sin asignar" cuando el responsable existe pero perdió el acceso → "sin acceso".
+
+**Abiertos (aceptados):** m5 del Designer (orden DOM del dashboard en móvil vs. visual), sin impacto visual.
