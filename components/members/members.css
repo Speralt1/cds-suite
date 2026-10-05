@@ -1200,8 +1200,16 @@
   font-size: 12px;
   line-height: 16px;
 }
+/* Dentro de una sección (bloque) los campos se separan con margen, como el .fx-field base de la preview;
+   en el grid de .mem-form manda el gap. */
+.cds-members .mem-form-section .mem-field {
+  margin-top: 12px;
+}
 .cds-members .mem-form .mem-field:first-child {
   margin-top: 0;
+}
+.cds-members .mem-form-page > .cal-notice {
+  margin-bottom: 16px;
 }
 .cds-members .mem-form .mem-field label {
   color: var(--mem-ink-strong);
@@ -2196,8 +2204,17 @@
 }
 
 /* Un solo ritmo vertical en formularios: el gap del grid manda. */
-.cds-members .mem-form > :is(.mem-fieldset, .mem-suggest, .cal-notice, .mem-form-section, .mem-entry-row, .mem-form-foot) {
+.cds-members .mem-form > :is(.mem-fieldset, .mem-suggest, .cal-notice, .mem-form-section, .mem-entry-row, .mem-form-foot),
+.cds-members .mem-form > .contents > :is(.mem-fieldset, .mem-suggest, .cal-notice, .mem-form-section, .mem-entry-row) {
+  /* .contents: el fieldset que congela el seguimiento tras un intento (sus hijos siguen en el grid). */
   margin-top: 0;
+}
+
+/* Opciones (tipo/resultado): a 375 px «No desea contacto» no cabe en una línea; se permite el salto. */
+.cds-members .mem-choice > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Pantallas táctiles: 44 px mínimos también en tablet. */
@@ -2217,5 +2234,15 @@
   .cds-members .cal-dialog[open],
   .cds-members .cal-skeleton {
     animation: none;
+  }
+}
+
+/* Subnav del módulo en teléfonos: las 3 pestañas (Inicio · Atención · Personas) deben caber
+   enteras a 375–390 px, fuera del degradado derecho de 24 px de ModuleSubnav (no se toca el
+   componente compartido). */
+@media (max-width: 420px) {
+  .cds-members > nav a {
+    gap: 6px;
+    padding-inline: 10px;
   }
 }

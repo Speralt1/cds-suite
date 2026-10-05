@@ -125,3 +125,27 @@ describe("regresión financiera: el acceso financiero de cada rol no cambia (#47
     }
   });
 });
+
+describe("subnav de Integrantes: la ficha y el registro activan «Personas»", () => {
+  it("activeSubnavHref respeta matchPaths sin afectar a los demás módulos", async () => {
+    const { activeSubnavHref } = await import("@/components/layout/module-subnav");
+    const items = [
+      { href: "/integrantes/consolidacion", label: "Consolidación" },
+      { href: "/integrantes/consolidacion/atencion", label: "Atención" },
+      {
+        href: "/integrantes/consolidacion/personas",
+        label: "Personas",
+        matchPaths: ["/integrantes/consolidacion/persona", "/integrantes/consolidacion/nueva"],
+      },
+    ];
+    expect(activeSubnavHref("/integrantes/consolidacion", items)).toBe("/integrantes/consolidacion");
+    expect(activeSubnavHref("/integrantes/consolidacion/atencion", items)).toBe("/integrantes/consolidacion/atencion");
+    expect(activeSubnavHref("/integrantes/consolidacion/personas", items)).toBe("/integrantes/consolidacion/personas");
+    expect(activeSubnavHref("/integrantes/consolidacion/persona", items)).toBe("/integrantes/consolidacion/personas");
+    expect(activeSubnavHref("/integrantes/consolidacion/nueva/", items)).toBe("/integrantes/consolidacion/personas");
+    // Sin matchPaths, el comportamiento previo (Calendario/Configuración/Reportes) no cambia.
+    expect(activeSubnavHref("/calendario/compartir", [{ href: "/calendario", label: "C" }, { href: "/calendario/compartir", label: "S" }])).toBe(
+      "/calendario/compartir",
+    );
+  });
+});

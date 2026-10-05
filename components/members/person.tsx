@@ -471,7 +471,7 @@ function PersonHeader({ v }: { v: PersonView }) {
         </div>
         <p className="mem-subtitle">
           Ingresó el {shortDateYear(p.entryDate)} · {plural(p.projection.visitCount, "visita", "visitas")} · Responsable:{" "}
-          {v.ownerValid ? (v.ownerName ?? "Asignado") : "Sin asignar"}
+          {v.ownerValid ? (v.ownerName ?? "Asignado") : p.followUpOwnerUid ? "sin acceso" : "sin asignar"}
         </p>
       </div>
       <div className="mem-ph-actions">

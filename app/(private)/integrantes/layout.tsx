@@ -10,9 +10,16 @@ import { ModuleNotices } from "@/components/members/status";
 import "@/components/members/members.css";
 
 const ITEMS: ModuleSubnavItem[] = [
-  { href: "/integrantes/consolidacion", label: "Consolidación", icon: LayoutDashboard },
+  // "Inicio" como en la preview: con "Consolidación" la tercera pestaña no cabía a 375–390 px.
+  { href: "/integrantes/consolidacion", label: "Inicio", icon: LayoutDashboard },
   { href: "/integrantes/consolidacion/atencion", label: "Atención", icon: Inbox },
-  { href: "/integrantes/consolidacion/personas", label: "Personas", icon: Users },
+  {
+    href: "/integrantes/consolidacion/personas",
+    label: "Personas",
+    icon: Users,
+    // La ficha y el registro pertenecen a Personas (como en la preview).
+    matchPaths: ["/integrantes/consolidacion/persona", "/integrantes/consolidacion/nueva"],
+  },
 ];
 
 export default function MembersLayout({ children }: { children: React.ReactNode }) {
