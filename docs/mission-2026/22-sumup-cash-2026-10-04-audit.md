@@ -1,6 +1,8 @@
 # 22 — SumUp CASH Intake V1 + auditoría financiera del domingo 04/10/2026
 
 > **Estado: NO DEPLOY · NO BACKFILL APPLY · NO MERGE.** Rama `mission/sumup-cash-intake-v1`, base `feature/preproduccion-mobile-v1` @ `0d1bb0d` (árbol `55b29f6`, idéntico al de `e6b2084`). Producción no fue modificada: toda la auditoría fue de solo lectura. Endurecido pre-deploy tras la revisión externa del PR #6: ver **§H** y el rollout **§R (CASH-A0…A9)**, que reemplazan cualquier checklist anterior de este documento.
+>
+> **Gate de tests vigente: `222/222`** (post-hardening, §H.4). Las cifras `205/205` y `208/208` que aparecen más abajo son históricas y corresponden a las revisiones previas al hardening.
 
 ## 0. Resumen ejecutivo
 
@@ -292,7 +294,7 @@ No se tocó `functions/index.js`, Firestore Rules, índices, scheduler, secretos
 | 19 | Ambas cuentas | "19…" |
 | 20 | Tests históricos Financial Core | suite completa |
 
-Gates: `npm run lint` ✅ · `npm run typecheck` ✅ · `npm test` ✅ **208/208** (174 previos + 34 nuevos) · `npm run build` ✅ · `node --check` Functions ✅. Rules tests: no aplica (Rules intactas).
+Gates: `npm run lint` ✅ · `npm run typecheck` ✅ · `npm test` ✅ **208/208** (174 previos + 34 nuevos) *(histórico, pre-hardening; vigente: **222/222**, §H.4)* · `npm run build` ✅ · `node --check` Functions ✅. Rules tests: no aplica (Rules intactas).
 
 ---
 
@@ -370,7 +372,7 @@ Ver §H.2 para el detalle y la evidencia. Resumen:
 
 Evidencia de Atlas (resumen): idempotencia (reruns, sweep, mismo ítem en 2 páginas, corte por deadline) sin dobles conteos; summary exacto en create/refund parcial/total/reactivación y delta 0 sin reescritura en cambio de método; estados CASH (PENDING, FAILED, CANCELLED, CHARGE_BACK, REFUND, USD) con guards intactos; corte exacto a medianoche local (`02:59:59.999Z` → 03/10, `03:00:00.000Z` → 04/10) en los 3 modos, incluso con `splitStartDate` alterado; **0 diferencias de hash en 300 variantes POS** entre el core viejo y el nuevo; el dry-run no puede escribir y su resultado es idéntico al store real; ninguna vista reporta el CASH SumUp como tarjeta.
 
-Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ · `node --check` ✅ · dry-run re-ejecutado tras los fixes: idéntico (1 CASH, +$163.500, 0 cambios POS, 0 manuales).
+Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ *(histórico; vigente: **222/222**)* · `node --check` ✅ · dry-run re-ejecutado tras los fixes: idéntico (1 CASH, +$163.500, 0 cambios POS, 0 manuales).
 
 **Veredicto integrado (Conductor): READY FOR CONTROLLED CASH DEPLOY.** Sin BLOCKER ni MAJOR de código abiertos. Riesgo residual aceptado → V1.1: aviso en `TransactionForm` y flag de revisión en el engine para "manual primero". El deploy queda condicionado al GO explícito de Salvador y a estos gates:
 
@@ -503,3 +505,29 @@ No se tocaron:
 - **A4–A8:**
   1. rollback administrativo dry-run → GO → `--apply --confirm`;
   2. luego, si hace falta, redeploy de Functions `0d1bb0d`.
+
+### CASH-A0 · Línea base y backup: completada (2026-10-05)
+
+**GO recibido:** "CASH-A0 = GO", solo esta fase. Todo fue de solo lectura salvo el export a GCS, que no modifica documentos. HEAD `fb0f853` (Draft PR #6, base `feature/preproduccion-mobile-v1`), sin cambios locales versionables.
+
+| Fecha (UTC) | Paso | Resultado |
+|---|---|---|
+| 12:37 | A0.2 · A5 (`~/cds-ops/a5-check.mjs`, solo lectura) | **OK, sin condiciones STOP.** Rules `2d9939ab…`, Hosting `edb77ffc04532a95` y Functions `-00006`/`-00007`/`-00002`, todos iguales a lo esperado. Scheduler ENABLED: 24 invocaciones en 24 h, 0 no-2xx, intervalo máximo 60 min. Logs ≥ERROR 0 · 5xx 0 · reglas 531 ALLOW / 0 DENY · alerta habilitada. Ene–sep igual al baseline |
+| 12:38 | A0.2 · complementos | **Runs (24 h):** 50 (por cuenta: 24 programados + 1 barrido, todos `completed`), 0 con `errorClass`. **Estado:** 0 runs `running`; leases libres en ambas cuentas. **Mutaciones:** 103 `financeTransactions` con `updatedAt` en 24 h, todas los POS del domingo (`system:sumup`, rev 1). Último write en todo el ledger: 2026-10-04 19:21Z. **0 mutaciones inesperadas** |
+| 12:38 | A0.3 · baseline | `financeMonthlySummaries/2026-10` contra el ledger activo reconstruido: **9/9**. CASH SumUp en el ledger: **0**. Movimientos manuales en octubre: 0 |
+| 12:39 | A0.4 · proveedor | Cafetería CASH 04/10 `…edce28`: **presente**, SUCCESSFUL, PAYMENT, CLP 163.500, `refunded` 0. Finance doc: **no existe**. Siguen fuera del alcance: el CASH histórico de Cafetería (27/09: 48 · $122.701; 30/09: 1 · $2.500) y el de Ofrendas (jun-2025: 4 · $9.002.023). Sin transacciones nuevas en ninguna cuenta |
+| 12:40–12:43 | A0.5 · export completo | `gcloud firestore export gs://cds-administracion-backups/pre-cash-a1-20261005-0940-full` → **SUCCESSFUL**, 48.291 documentos, 32,15 MiB, `overall_export_metadata` presente |
+| 12:43–12:45 | A0.5 · export financiero | `… pre-cash-a1-20261005-0940-finance --collection-ids=financeTransactions,financeMonthlySummaries,sumupIntegrations,sumupSyncRuns,transactions,versions,adjustments,_locks` → **SUCCESSFUL**, 48.173 documentos (= conteo de producción 12:45), con metadata por colección |
+| 12:45–12:47 | A0.5 · prueba de recuperación | Export financiero importado en un **emulador local aislado** (puerto 8187, proyecto demo). **Conteos:** 8/8 colecciones idénticas a producción (48.173). **Huella SHA-256:** idéntica en `financeTransactions` (24.038) y `financeMonthlySummaries` (66). La copia local se borró al terminar |
+| 12:48 | A0.6 · preparación de rollback | `verify-functions-package.mjs` **PASS** (`.secret.local` no se empaqueta). Rollback administrativo en dry-run por defecto: "hay 0" candidatos (esperado, el CASH aún no está importado). No se usó `--apply` |
+
+Backups existentes: `pre-etapa-a-20261003-1835` se conserva. Bucket `southamerica-west1`, acceso uniforme, prevención de acceso público *enforced*. PITR desactivado, así que este export es el punto de recuperación.
+
+**Gates humanos (A0.7):**
+- $163.500 = 100% Cafetería: **PENDING HUMAN CONFIRMATION**
+- Tesorería avisada de no registrar a mano el 04/10: **PENDING HUMAN CONFIRMATION**
+- Regla operativa comunicada: **PENDING HUMAN CONFIRMATION**
+- Históricos fuera del rollout: **PENDING HUMAN CONFIRMATION** (es la decisión documentada de diseño; falta la confirmación explícita)
+
+**Resultado:** CASH-A0 técnicamente **PASS**. **CASH-A1 BLOQUEADO** hasta que se confirmen A, B y C.
+
