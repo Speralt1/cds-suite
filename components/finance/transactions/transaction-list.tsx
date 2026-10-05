@@ -167,6 +167,14 @@ export function SumUpGroupRow({
   const [open, setOpen] = useState(false);
   const detailId = useId();
   const isVoided = group.status === "voided";
+  const isCash = group.paymentMethod === "cash";
+  const countLabel = isCash
+    ? group.count === 1
+      ? "1 registro en efectivo"
+      : `${group.count} registros en efectivo`
+    : group.count === 1
+      ? "1 pago"
+      : `${group.count} pagos con tarjeta`;
   return (
     <>
       <article
@@ -183,16 +191,19 @@ export function SumUpGroupRow({
           </div>
         </div>
         <div className="min-w-0">
-          <p className="break-words">
-            {group.count === 1 ? "1 pago" : `${group.count} pagos con tarjeta`}
+          <p className="break-words">{countLabel}</p>
+          <p className="field-help">
+            {isCash ? "Efectivo · SumUp" : "Tarjeta · SumUp"}
           </p>
-          <p className="field-help">Tarjeta · SumUp</p>
         </div>
         <div>
           <p className="font-semibold tabular-nums">{clp(group.amount)}</p>
-          <span className={`status-pill ${isVoided ? "voided" : ""}`}>
-            {isVoided ? "Anulado" : "Bruto"}
-          </span>
+          {/* "Bruto" alude a la comisión de tarjeta; el efectivo no la tiene. */}
+          {(isVoided || !isCash) && (
+            <span className={`status-pill ${isVoided ? "voided" : ""}`}>
+              {isVoided ? "Anulado" : "Bruto"}
+            </span>
+          )}
         </div>
         <div className="transaction-actions">
           {!isVoided && (

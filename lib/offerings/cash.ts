@@ -51,6 +51,41 @@ export function findActiveDailyCash(
   ) as FinanceTransaction | undefined;
 }
 
+// SumUp CASH Intake V1: cash already recorded in the SumUp app for this
+// area/date (imported as `sumup_*` with paymentMethod "cash"). The manual
+// "Caja del día" record is a separate, legitimate fallback, so this is only
+// used to warn before registering the same cash twice — never to block or
+// merge (two real amounts can coincide).
+export function sumUpCashForDay(
+  transactions: Pick<
+    FinanceTransaction,
+    "id" | "status" | "type" | "category" | "paymentMethod" | "period" | "day" | "amount" | "createdBy"
+  >[],
+  area: CashArea,
+  date: string,
+): { amount: number; count: number } {
+  const category = cashCategory(area);
+  const period = date.slice(0, 7);
+  const day = String(Number(date.slice(8, 10)));
+  let amount = 0;
+  let count = 0;
+  for (const item of transactions) {
+    if (
+      item.status === "active" &&
+      item.type === "income" &&
+      item.paymentMethod === "cash" &&
+      item.category === category &&
+      item.period === period &&
+      item.day === day &&
+      (item.id.startsWith("sumup_") || item.createdBy === "system:sumup")
+    ) {
+      amount += item.amount;
+      count++;
+    }
+  }
+  return { amount, count };
+}
+
 // The id to write to when there is no active record yet for this area/date:
 // the base id if it has never been used, otherwise the next free revision id
 // after the most recent void.

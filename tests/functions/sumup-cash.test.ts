@@ -67,8 +67,17 @@ function sync(store: MemoryStore, clock: ReturnType<typeof makeClock>, items: un
 }
 
 function summary(store: MemoryStore, period = "2026-10") {
-  return store.summaries.get(period) as Record<string, any> | undefined;
+  return store.summaries.get(period) as SummaryDoc | undefined;
 }
+
+type SummaryDoc = {
+  incomeTotal: number;
+  result: number;
+  transactionCount: number;
+  incomeByCategory: Record<string, number>;
+  dailyIncome: Record<string, number>;
+  [key: string]: unknown;
+};
 
 const NINE_FIELDS = [
   "dailyExpense",
@@ -356,7 +365,7 @@ describe("CASH Intake V1 — engine", () => {
     expect(doc).toMatchObject({ paymentMethod: "cash", description: "Venta Cafetería efectivo · SumUp", amount: 5000, revision: 2 });
     // Same object reference: the summary was not even rewritten.
     expect(store.summaries.get("2026-10")).toBe(summaryBefore);
-    const versions = store.versions.get("cafeteria/pm") as Array<Record<string, any>>;
+    const versions = store.versions.get("cafeteria/pm") as Array<{ before: { paymentMethod: string } } & Record<string, unknown>>;
     expect(versions).toHaveLength(1);
     expect(versions[0]).toMatchObject({ action: "update", reason: "payment_method_changed", afterPaymentMethod: "cash" });
     expect(versions[0].before.paymentMethod).toBe("card");
