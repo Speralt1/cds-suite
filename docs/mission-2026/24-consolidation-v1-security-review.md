@@ -101,9 +101,9 @@ Diff completo de `firestore.rules`: 2 entradas en `implicants()`, el helper `mem
 | SumUp CASH | **PASS** (sin commits ni conceptos de CASH) |
 | Privacidad V1 | **PASS** (campos mínimos; excluidos verificados en código, servidor y build) |
 | Verificación visual en navegador (1440/1024/390/375) | **PASS** (2026-10-05, `localhost:3000` levantado por Salvador con emuladores y datos ficticios, perfil `consolidacion@cds.test`). 5 pantallas + sheets/diálogos; sin overflow horizontal, sin contenido cortado ni campos excluidos. Correcciones en `07906e2` (doc 24 §10) |
-| Decisiones de Salvador | D1 (Etapa B antes del cierre de A5), D2 (ajuste de A5), D3 (piloto), excepción de borrado del doc 23 §7b |
+| Decisiones de Salvador | **RESUELTAS (2026-10-05):** D1 aprobado (sin deploy inmediato; GO por fase), D2 aprobado (solo baseline técnico; controles financieros intactos), D3 piloto = Salvador como Admin (0 grants), D4 migración masiva diferida, D5 aprobado con condiciones, excepción de eliminación aprobada con restricción. Doc 25 §1 y §8 |
 
-**Conclusión de seguridad:** el código es apto para un rollout controlado. El veredicto operativo depende de la verificación visual pendiente y de las decisiones de la tabla.
+**Conclusión:** código apto para el rollout controlado; QA visual PASS (§10); decisiones resueltas. **READY TO START C-A0 ON HUMAN GO** (doc 25 §1.1).
 
 ## 10. QA visual en navegador (2026-10-05)
 
