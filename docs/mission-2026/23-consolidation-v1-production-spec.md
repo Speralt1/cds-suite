@@ -156,7 +156,7 @@ Aplican a personas activas (`en_consolidacion`, ≠ `sin_continuidad`, sin "No c
 - Seguimientos vencidos: cantidad de alertas "Seguimiento vencido".
 - Nuevos recientes: `en_consolidacion` con `entryDate` en los últimos 14 días.
 - Seguimientos pendientes: activas con `nextActionDate` entre hoy y hoy + 7.
-- Volvieron: activas que cumplen la regla "Volvió" de arriba.
+- Volvieron (bloque): activas con `lastVisitDate > firstVisitDate` y `lastVisitDate` en los últimos 7 días, **tengan o no seguimiento posterior** (es el registro positivo de quién volvió). La **alerta** "Volvió" de la cola de atención exige además que no haya seguimiento posterior (es la tarea pendiente de agradecer).
 - **Regla operativa V1:** no cargar visitantes históricos (contarían como nuevos del mes).
 
 Al registrar una visita en una fecha que ya tiene visita, el formulario advierte sin bloquear: "Ya hay una visita registrada el {fecha}. ¿Registrar otra?".
