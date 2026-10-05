@@ -526,9 +526,9 @@ export function OfferingsPage() {
               <thead>
                 <tr>
                   <th scope="col">Fecha</th>
-                  <th scope="col">Ofrendas SumUp</th>
+                  <th scope="col">Ofrendas tarjeta</th>
                   <th scope="col">Ofrendas efectivo</th>
-                  <th scope="col">Cafetería SumUp</th>
+                  <th scope="col">Cafetería tarjeta</th>
                   <th scope="col">Cafetería efectivo</th>
                   <th scope="col">Estado</th>
                 </tr>

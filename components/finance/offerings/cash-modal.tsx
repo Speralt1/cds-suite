@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
 import { clp, errorMessage } from "@/lib/finance/formatters";
@@ -45,6 +46,7 @@ export function CashModal({
   const { user } = useAuth();
   const existing = findActiveDailyCash(allTransactionsForDay, area, date);
   const sumUpCash = sumUpCashForDay(allTransactionsForDay, area, date);
+  const sumUpWarningId = useId();
   const label = AREA_LABELS[area];
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
   const [note, setNote] = useState(existing?.note || "");
@@ -125,7 +127,8 @@ export function CashModal({
           </div>
 
           {sumUpCash.count > 0 && (
-            <p className="notice-warning" role="status">
+            <p className="notice-warning" role="status" id={sumUpWarningId}>
+              <TriangleAlert size={15} aria-hidden="true" />
               SumUp ya registró {clp(sumUpCash.amount)} en efectivo de{" "}
               {label} para este día. Ingresa aquí solo el efectivo que no se
               registró en SumUp, para no contarlo dos veces.
@@ -137,6 +140,7 @@ export function CashModal({
             <input
               required
               data-autofocus
+              aria-describedby={sumUpCash.count > 0 ? sumUpWarningId : undefined}
               inputMode="numeric"
               pattern="[0-9]+"
               value={amount}

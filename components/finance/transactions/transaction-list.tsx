@@ -175,6 +175,14 @@ export function SumUpGroupRow({
     : group.count === 1
       ? "1 pago"
       : `${group.count} pagos con tarjeta`;
+  // Unidad del botón: "registro(s)" para efectivo, "pago(s)" para tarjeta.
+  const unit = isCash
+    ? group.count === 1
+      ? "registro"
+      : "registros"
+    : group.count === 1
+      ? "pago"
+      : "pagos";
   return (
     <>
       <article
@@ -231,7 +239,9 @@ export function SumUpGroupRow({
                 transition: "transform 150ms",
               }}
             />
-            {open ? `Ocultar ${group.count} pagos` : `Ver ${group.count} pagos`}
+            {open
+              ? `Ocultar ${group.count} ${unit}`
+              : `Ver ${group.count} ${unit}`}
           </button>
         </div>
       </article>

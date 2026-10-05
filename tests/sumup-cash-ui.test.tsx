@@ -68,6 +68,14 @@ describe("Movimientos — grupos SumUp por método", () => {
     expect(screen.getByText("Efectivo · SumUp")).toBeInTheDocument();
     expect(screen.queryByText(/tarjeta/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Bruto")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver 1 registro" })).toBeInTheDocument();
+  });
+
+  it("el botón del grupo de tarjeta concuerda en singular y plural", () => {
+    const [one] = groupMovements([tx({ amount: 1000 })]);
+    if (one.kind !== "sumup-group") throw new Error("expected group");
+    render(<SumUpGroupRow group={one} />);
+    expect(screen.getByRole("button", { name: "Ver 1 pago" })).toBeInTheDocument();
   });
 
   it("el efectivo SumUp anulado conserva el rótulo de anulado", () => {
@@ -121,6 +129,11 @@ describe("Caja del día — aviso de efectivo ya registrado en SumUp", () => {
   it("muestra el aviso (sin bloquear) cuando SumUp ya registró efectivo ese día", () => {
     renderModal([sumUpCash]);
     expect(screen.getByRole("status")).toHaveTextContent("SumUp ya registró $163.500 en efectivo de Cafetería para este día");
+    // The autofocused amount field announces the warning to screen readers.
+    expect(screen.getByRole("textbox", { name: "Efectivo recaudado" })).toHaveAttribute(
+      "aria-describedby",
+      screen.getByRole("status").id,
+    );
     expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeEnabled();
   });
 
