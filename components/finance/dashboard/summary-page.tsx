@@ -356,6 +356,14 @@ export function SummaryPage() {
   const [cashDate, setCashDate] = useState(today());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
+  const cashTransactions = useTransactions(
+    {
+      year: Number(cashDate.slice(0, 4)),
+      month: Number(cashDate.slice(5, 7)),
+      view: "month",
+    },
+    details && actionModal === "cash",
+  );
 
   const total = combineSummaries(summaries.data);
   const dailyMonth = combineSummaries(dailySummaries.data);
@@ -604,17 +612,15 @@ export function SummaryPage() {
         <Loading />
       ) : summaries.error ? null : (
         <>
-          {!details && (
-            <Kpis
-              summary={total}
-              previous={
-                !previous.error &&
-                previous.data.some((summary) => summary.transactionCount > 0)
-                  ? combineSummaries(previous.data)
-                  : undefined
-              }
-            />
-          )}
+          <Kpis
+            summary={total}
+            previous={
+              !previous.error &&
+              previous.data.some((summary) => summary.transactionCount > 0)
+                ? combineSummaries(previous.data)
+                : undefined
+            }
+          />
 
           {details &&
             (latest.loading ? (
@@ -905,12 +911,9 @@ export function SummaryPage() {
           key={`${cashArea}-${cashDate}`}
           area={cashArea}
           date={cashDate}
-          allTransactionsForDay={
-            cashDate.slice(0, 7) === dailyPeriodId
-              ? dailyTransactions.data
-              : latest.data
-          }
-          loading={dailyTransactions.loading || latest.loading}
+          allTransactionsForDay={cashTransactions.data}
+          loading={cashTransactions.loading}
+          loadError={cashTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setCashDate}
           onClose={() => setActionModal(null)}

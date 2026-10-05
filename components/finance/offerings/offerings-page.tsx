@@ -623,6 +623,7 @@ export function OfferingsPage() {
           date={selectedDate}
           allTransactionsForDay={financeTransactions.data}
           loading={financeTransactions.loading}
+          loadError={financeTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setSelectedDate}
           onClose={() => setCashArea(null)}

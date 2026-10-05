@@ -4,6 +4,7 @@ import {
   cashDailyIdCandidates,
   findActiveDailyCash,
   nextCashWriteId,
+  previousCashServiceDate,
   saveDailyCash,
 } from "@/lib/offerings/cash";
 import type { FinanceTransaction } from "@/lib/finance/types";
@@ -19,6 +20,20 @@ function tx(id: string, status: "active" | "voided"): FinanceTransaction {
 
 beforeEach(() => {
   saveTransactionMock.mockClear();
+});
+
+describe("previousCashServiceDate", () => {
+  it("sugiere el servicio anterior al registrar efectivo días después", () => {
+    expect(previousCashServiceDate("2026-09-28")).toBe("2026-09-27");
+    expect(previousCashServiceDate("2026-10-01")).toBe("2026-09-30");
+    expect(previousCashServiceDate("2026-10-03")).toBe("2026-09-30");
+  });
+
+  it("deja pasar miércoles y domingos y rechaza fechas inválidas", () => {
+    expect(previousCashServiceDate("2026-09-27")).toBeNull();
+    expect(previousCashServiceDate("2026-09-30")).toBeNull();
+    expect(previousCashServiceDate("2026-09-31")).toBeNull();
+  });
 });
 
 describe("cashDailyIdCandidates / findActiveDailyCash", () => {
