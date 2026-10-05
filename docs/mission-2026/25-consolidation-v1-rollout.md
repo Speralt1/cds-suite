@@ -9,7 +9,7 @@
 |---|---|---|---|
 | D1 | **GO para empezar la Etapa B antes del cierre formal de A5** (A5 cierra "no antes del domingo 11-10", doc 21) | El plan aprobado en el doc 20 §2 era Etapa B *después* de A5. El brief de esta misión acepta no esperar otro domingo **si** se demuestra aislamiento financiero (doc 24 §6). Es un cambio del plan aprobado y lo decide Salvador | Salvador |
 | D2 | Ajustar la observación A5 (`~/cds-ops/a5-check.mjs`, tarea `cds-a5-observacion-etapa-a`) | El script compara Rules/Hosting/Functions con los ids de la Etapa A. Cada deploy del miércoles lo hará reportar diferencias **esperadas**. Hay que actualizar los ids esperados tras cada fase (o pausar esas 3 comparaciones y mantener las financieras: montos, scheduler, SumUp, errores) | Salvador (fuera del repo) |
-| D3 | Usuario piloto | Recomendado: **Salvador como admin** (acceso implícito, sin tocar ningún otro usuario). Si el piloto es otra persona, se le otorga el permiso desde Configuración (C-A8), lo que convierte **solo a ese usuario** a v1 | Salvador |
+| D3 | Usuario piloto | Recomendado: **Salvador como admin** (acceso implícito, sin tocar ningún otro usuario). Si el piloto es otra persona, se le otorga el permiso desde Configuración (C-A8), lo que convierte **solo a ese usuario** a v1. Ojo: un piloto sin finanzas suma 1 al riesgo de rollback legacy (§5.1) | Salvador |
 | D4 | La migración masiva de usuarios (`--apply`, doc 20 Fase 7) **no** es necesaria para Consolidación | Admin no la necesita; un piloto no admin se convierte a v1 al editarlo. Recomendación: diferirla para no sumar riesgo el miércoles | Salvador |
 | D5 | PR #5 revisado y listo para mergear; PR de Consolidación revisado | Esta rama está **stacked** sobre PR #5 | Salvador |
 
@@ -70,17 +70,28 @@ Reglas comunes: `--project cds-administracion` explícito; hora de inicio anotad
 
 **Principio:** el rollback **oculta y detiene escrituras**; **nunca** borra datos. Los datos de personas quedan en Firestore, inaccesibles si se revierten las reglas.
 
+Orden **R3 → R1 → R2 → R4** (Atlas A-01): los grants se revocan mientras la UI de Consolidación sigue publicada, porque la UI de C-A1 no tiene el grupo "Integrantes".
+
 | Paso | Acción | Efecto |
 |---|---|---|
+| R3 · Revocar grants (higiene, primero) | Con el Hosting de Consolidación aún publicado: Configuración › Usuarios → quitar "Ver/Gestionar Consolidación" a quien lo tenga, incluidos los inactivos. Verificar con `node scripts/migrate-access-v1.mjs --project cds-administracion --summary` **desde un checkout del commit de Consolidación** (es el único `--summary` con ese bloque): `explicitRead + explicitManage + inactiveWithGrant == 0` | Deja los perfiles limpios para RC1. **No** es el cierre de acceso (eso es R2/R4): con las reglas RC1 esos permisos guardados no dan acceso a nada, y la UI de C-A1 los descartaría al guardar |
 | R1 · Ocultar | Consola › Hosting › historial → **revertir a la versión de C-A1** | Integrantes desaparece del menú y de las rutas. Finanzas y Calendario quedan como en C-A1 |
 | R2 · Detener escrituras | `./node_modules/.bin/firebase functions:delete membersPersonCreate membersPersonUpdate membersStatusChange membersVisitCreate membersFollowUpCreate membersOwnerOptions --region southamerica-west1 --project cds-administracion` | Nadie puede escribir (ni con la consola del navegador). No toca SumUp ni calendario. Los datos no se borran |
-| R3 · Revocar grants (antes de R4) | Configuración › Usuarios: quitar "Ver/Gestionar Consolidación" a quien lo tenga (`--summary` debe dar 0 explícitos) | **Necesario antes de R4**: las reglas de C-A1 solo aceptan ≤ 8 permisos del catálogo sin `members.*`; con un grant guardado, la app no podría editar a ese usuario |
 | R4 · Cerrar lectura | Consola › Reglas › historial → **restaurar el ruleset de C-A1** | Las 4 colecciones caen en el catch-all: nadie las lee desde el cliente. Datos intactos |
 | R5 · Índices | No se tocan | Aditivos e inofensivos |
+
+Si hay urgencia (exposición de datos), R1 + R2 + R4 pueden ir primero y R3 después: el acceso lo cierran las reglas, no los perfiles.
 
 - Cada paso es independiente: ante un problema de UI basta R1; ante un problema de escrituras, R1 + R2.
 - **Nunca** se revierte Financial Core ni se toca SumUp CASH en un rollback de Consolidación.
 - Re-habilitar: C-A4 → C-A5 → C-A6 desde el mismo commit.
+
+### 5.1 Caveat legacy ampliado (Atlas A-02, doc 20 §14)
+
+Un usuario v1 con **solo** permisos de Integrantes guarda `role = "leader"` (rol derivado). Si alguna vez se volviera a las **reglas legacy de la Etapa A** (`e6b2084`), ese rol leería el **resumen financiero** mensual. El doc 20 lo aceptó con conteo 0; cada grant de C-A8/C-A12 a alguien sin finanzas lo sube.
+- El detector existe: `--summary` → "v1 con riesgo de rollback".
+- El rollback de Consolidación (R4) vuelve a **RC1**, no a las reglas legacy: sigue siendo seguro.
+- Si algún día se vuelve a las reglas legacy: aplicar antes el procedimiento del doc 20 §14 (desactivar a esos usuarios) **y** R3.
 
 ## 6. Observación posterior
 

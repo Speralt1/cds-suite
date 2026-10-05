@@ -112,6 +112,13 @@ describe("parsePersonCreate", () => {
     expect(parsePersonCreate({ ...base, firstVisitDate: TODAY }, TODAY).ok).toBe(true);
   });
 
+  it("rechaza caracteres de control e invisibles de dirección de texto (A-05)", () => {
+    for (const bad of ["Ana\u0000", "Ana\u202Eorev", "Ana\u2066x", "x\u007F"])
+      expect(parsePersonCreate({ ...base, fullName: bad }, TODAY)).toMatchObject({ ok: false, errors: { fullName: "invalid" } });
+    expect(parsePersonCreate({ ...base, visitNote: "línea 1\nlínea 2" }, TODAY).ok).toBe(true);
+    expect(parsePersonCreate({ ...base, visitNote: "x\u202Ey" }, TODAY)).toMatchObject({ ok: false, errors: { visitNote: "invalid" } });
+  });
+
   it("no acepta arrays, null ni prototipos raros", () => {
     expect(parsePersonCreate([base], TODAY).ok).toBe(false);
     expect(parsePersonCreate(null, TODAY).ok).toBe(false);

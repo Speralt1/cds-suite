@@ -209,6 +209,8 @@ function payloadTooLarge(raw) {
         return true;
     }
 }
+/** Caracteres de control (salvo \t y \n) e invisibles de dirección de texto: nunca en datos guardados. */
+const UNSAFE_TEXT = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
 class Reader {
     data;
     errors = {};
@@ -234,7 +236,7 @@ class Reader {
         const v = this.data[key];
         if (v === undefined || v === null)
             return this.fail(key, "required");
-        if (typeof v !== "string")
+        if (typeof v !== "string" || UNSAFE_TEXT.test(v))
             return this.fail(key, "invalid");
         const t = v.replace(/\s+/g, " ").trim();
         if (!t)
@@ -248,7 +250,7 @@ class Reader {
         const v = this.data[key];
         if (v === undefined || v === null)
             return null;
-        if (typeof v !== "string")
+        if (typeof v !== "string" || UNSAFE_TEXT.test(v))
             return this.fail(key, "invalid");
         const t = (multiline ? v.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n") : v.replace(/\s+/g, " ")).trim();
         if (!t)

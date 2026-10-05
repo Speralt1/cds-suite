@@ -349,6 +349,9 @@ export function payloadTooLarge(raw: unknown): boolean {
   }
 }
 
+/** Caracteres de control (salvo \t y \n) e invisibles de dirección de texto: nunca en datos guardados. */
+const UNSAFE_TEXT = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
+
 class Reader {
   readonly errors: FieldErrors = {};
   constructor(
@@ -371,7 +374,7 @@ class Reader {
   text(key: string, max: number): string | null {
     const v = this.data[key];
     if (v === undefined || v === null) return this.fail(key, "required");
-    if (typeof v !== "string") return this.fail(key, "invalid");
+    if (typeof v !== "string" || UNSAFE_TEXT.test(v)) return this.fail(key, "invalid");
     const t = v.replace(/\s+/g, " ").trim();
     if (!t) return this.fail(key, "required");
     if (t.length > max) return this.fail(key, "too_long");
@@ -381,7 +384,7 @@ class Reader {
   optText(key: string, max: number, multiline = false): string | null {
     const v = this.data[key];
     if (v === undefined || v === null) return null;
-    if (typeof v !== "string") return this.fail(key, "invalid");
+    if (typeof v !== "string" || UNSAFE_TEXT.test(v)) return this.fail(key, "invalid");
     const t = (multiline ? v.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n") : v.replace(/\s+/g, " ")).trim();
     if (!t) return null;
     if (t.length > max) return this.fail(key, "too_long");
