@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { accessModel } from "@/lib/access/model";
-import { MODULES, MODULE_LABEL, modulesFor } from "@/lib/access/modules";
+import { MODULES, modulesFor } from "@/lib/access/modules";
 import { PERMISSION_DESCRIPTION, PERMISSION_GROUPS, PERMISSION_LABEL, POSITION_PRESETS } from "@/lib/access/labels";
 import { LEGACY_ROLE_ACCESS, PERMISSIONS, effectivePermissions, sortPermissions } from "@/lib/shared/access";
 import { PROFILES, profile, v1 } from "./profiles";
