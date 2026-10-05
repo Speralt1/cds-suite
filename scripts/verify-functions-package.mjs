@@ -52,7 +52,10 @@ try {
   rmSync(packaged.pathToSource, { force: true });
 }
 
-const forbidden = names.filter((n) => /(^|\/)\.secret\.local$/.test(n) || /\.local$/.test(n) || /(^|\/)\.env/.test(n) || n.startsWith("node_modules/"));
+// `.env` / `.env.<project>` are deployed ON PURPOSE by Firebase (params), so
+// only local-only files (*.local, incl. .secret.local / .env.local) and
+// node_modules are forbidden.
+const forbidden = names.filter((n) => /\.local$/.test(n) || n.startsWith("node_modules/"));
 const required = ["index.js", "package.json", "package-lock.json", "sumup/core.js", "sumup/engine.js", "sumup/firestore-store.js"];
 const missing = required.filter((r) => !names.includes(r));
 

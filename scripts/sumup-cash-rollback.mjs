@@ -31,7 +31,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDryRunStore, summaryFieldDelta } from "./lib/sumup-dry-run-store.mjs";
 import { createFirestoreReader } from "./lib/firestore-rest-reader.mjs";
-import { RollbackAbort, rollbackWork } from "./lib/sumup-cash-rollback-core.mjs";
+import { ROLLBACK_ACTOR, RollbackAbort, checkExpect, rollbackWork } from "./lib/sumup-cash-rollback-core.mjs";
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -69,18 +69,19 @@ async function resolveFinanceId(reader, args) {
   const period = args.date.slice(0, 7);
   const day = String(Number(args.date.slice(8, 10)));
   const prefix = `sumup_${args.account}_`;
-  const matches = (await reader.financeForPeriod(period)).filter(
-    (t) =>
-      t.id.startsWith(prefix) &&
-      t.paymentMethod === "cash" &&
-      t.status === "active" &&
-      t.day === day &&
-      Number(t.amount) === args.amount,
-  );
   if (args.financeId) {
-    if (!args.financeId.startsWith(prefix)) throw new RollbackAbort("ABORTADO: --finance-id no pertenece a la cuenta indicada.");
+    // Validated before any I/O; every integrity check still runs in the transaction.
+    checkExpect({ financeId: args.financeId, account: args.account, localDate: args.date, amount: args.amount });
     return args.financeId;
   }
+  const candidates = (await reader.financeForPeriod(period)).filter(
+    (t) => t.id.startsWith(prefix) && t.paymentMethod === "cash" && t.day === day && Number(t.amount) === args.amount,
+  );
+  const matches = candidates.filter((t) => t.status === "active");
+  // A retry after a successful rollback (e.g. after a timeout) resolves to the
+  // doc this tool already voided, so the run reports "already" instead of failing.
+  const alreadyRolledBack = candidates.filter((t) => t.status === "voided" && t.voidedBy === ROLLBACK_ACTOR);
+  if (matches.length === 0 && alreadyRolledBack.length === 1) return alreadyRolledBack[0].id;
   if (matches.length !== 1) {
     throw new RollbackAbort(`ABORTADO: se esperaba exactamente 1 CASH SumUp activo para ${args.account} ${args.date} $${args.amount}; hay ${matches.length}.`);
   }
@@ -108,7 +109,8 @@ async function main() {
     for (const s of dry.summaryChanges()) console.log(`Resumen ${s.period}: ${JSON.stringify(summaryFieldDelta(s.before, s.after))}`);
     console.log(`Versión a agregar: ${JSON.stringify(dry.log.versions[0])}`);
     console.log("Nada fue escrito. Para aplicar (solo con GO explícito):");
-    console.log(`  node scripts/sumup-cash-rollback.mjs --account ${args.account} --date ${args.date} --amount ${args.amount} --apply --confirm <id completo>`);
+    // The full id is a SumUp transaction id (not a secret); apply needs it verbatim.
+    console.log(`  node scripts/sumup-cash-rollback.mjs --account ${args.account} --date ${args.date} --amount ${args.amount} --apply --confirm ${financeId}`);
     return;
   }
 

@@ -402,6 +402,7 @@ Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ �
 - El archivo es local y preexistente (03/10 09:02). Contiene overrides de emulador para `SUMUP_OFFERINGS_CONFIG` y `SUMUP_CAFETERIA_CONFIG` (solo se listaron los nombres de las claves, nunca los valores).
 - **Causa:** `firebase-tools` 15.28.2 (el fijado por el repo) empaqueta `functions/` ignorando solo `["node_modules", ".git"]` + `firebase-debug*.log` cuando `functions.ignore` no existe (`node_modules/firebase-tools/lib/deploy/functions/prepareFunctionsUpload.js:77-78`). Rules de `.gitignore` no aplican al empaquetado.
 - **Fix:** `firebase.json` → `functions.ignore = ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local", ".secret.local"]`. Es la lista oficial de `firebase init` para Node (`lib/init/features/functions/index.js:167-180`) más `.secret.local` explícito. No excluye ningún archivo necesario.
+- El verificador prohíbe `*.local` y `node_modules`; no prohíbe `.env`/`.env.<proyecto>`, que Firebase despliega a propósito (params). Requiere `unzip` en el PATH.
 - **Prueba sin deploy:** `scripts/verify-functions-package.mjs` arma el archivo **con el mismo código del CLI**: `normalizeAndValidate` → `configForCodebase` → `requireLocal` → `prepareFunctionsUpload`. Es un paso local del deploy, sin llamadas a Google. Lista solo nombres de archivo y borra el zip temporal. Queda fijado por `tests/functions/functions-package.test.ts`.
 
 | | `functions.ignore` | Entradas del paquete | Resultado |
@@ -426,7 +427,9 @@ Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ �
   - el doc queda `voided`, con `revision+1` y `voidedBy`/`updatedBy` = `admin:sumup-cash-rollback`;
   - el summary se revierte exactamente;
   - se agrega una versión `void/admin_rollback` con el `before` completo.
-- **Idempotente:** una segunda ejecución responde "ya revertido" sin escribir.
+- **Idempotente:** una segunda ejecución (con `--finance-id`, o con el comando por cuenta/fecha/monto, que resuelve al doc ya anulado por esta herramienta) responde "ya revertido" sin escribir. Un id malformado aborta antes de cualquier lectura. El dry-run imprime el comando de apply con el id completo (es un id de transacción SumUp, no un secreto).
+- **Precondición del apply:** reconciliar summary vs ledger (9/9) inmediatamente antes; la herramienta verifica que el summary *cubre* el monto, no que ese doc lo haya aportado.
+- **Ruido esperado tras un rollback:** cada sync dentro de la ventana de 45 días deja el raw en `review/human_voided` (`counts.review = 1`). No es un fallo.
 - **Estable:** como `voidedBy` no es `system:sumup`, el engine nuevo lo deja en `review/human_voided` en cada sync, sweep o reembolso posterior. Nunca lo reactiva ni lo resta dos veces. El engine viejo ignora CASH.
 - **Tests:** `tests/functions/sumup-cash-rollback.test.ts`, 11 casos.
   - Rollback exacto al estado previo al import.
@@ -444,6 +447,10 @@ Gates finales: lint ✅ · typecheck ✅ · build ✅ · tests **208/208** ✅ �
 - Revertir Functions a `0d1bb0d` no requiere SumUp.
 - La vía proveedor es la única que sí requiere SumUp, y por eso no es la vía garantizada.
 
+### H.2b Revisión adversarial del hardening (Atlas)
+
+PASS WITH FINDINGS, 0 BLOCKER/MAJOR. Paquete: el script reproduce el camino gcfv2 de `prepare.js:282-303`; control negativo sin `ignore` → FAIL con `.secret.local`. Rollback probado con el `firestore-store.js` real sobre una db falsa con reintentos de transacción (sin escrituras parciales; aborta si el monto cambia entre intentos), engines nuevo y viejo frente a REFUNDED/CANCELLED/FAILED/CHARGE_BACK/cambio de método/monto/fecha (doc y summary byte-idénticos). MINOR corregidos: id completo en el comando de apply; reintento por cuenta/fecha/monto responde "ya revertido"; validación del id antes de cualquier I/O. INFO incorporados (ruido `review`, reconciliación previa, `.env`).
+
 ### H.3 Alcance funcional (sin cambios)
 
 POS → `card` · CASH ≥ 2026-10-04 → `cash` · CASH < 2026-10-04 → `preCashStart`, sin efecto contable.
@@ -455,7 +462,7 @@ No se tocaron:
 ### H.4 Revalidación
 
 - **Gates:**
-  - tests **221/221**: 208 previos + 2 de paquete + 11 de rollback;
+  - tests **222/222**: 208 previos + 2 de paquete + 12 de rollback;
   - lint, typecheck y build: OK;
   - `node --check` de `functions/**` y `scripts/**`: OK.
 - **Snapshot del historial real del proveedor (05/10, 14.386 POS y 54 CASH)** con el engine real sobre el **ledger real** (store de dry-run, sin escrituras):
@@ -480,7 +487,7 @@ No se tocaron:
 | **CASH-A1** | Merge controlado del PR #6 a `feature/preproduccion-mobile-v1`. | SHA del merge, árbol = HEAD aprobado; gates verdes en el merge. | HARD STOP |
 | **CASH-A2** | Deploy **solo Hosting** (`firebase deploy --only hosting`), tras confirmar que el Hosting vivo = build de `0d1bb0d`. | Movimientos/Ofrendas/Reportes sin regresiones (sin docs CASH se ven igual que hoy); columnas "tarjeta"; 0 errores de consola. | HARD STOP |
 | **CASH-A3** | Confirmar: $163.500 = 100% Cafetería; tesorería NO creó `cash_cafeteria_2026-10-04`. Ejecutar dry-run productivo **fresco**: `node scripts/sumup-cash-backfill.mjs`. Ejecutar `node scripts/verify-functions-package.mjs`. | CASH a crear = **1**; delta = **+163.500**; POS changes = **0**; manual conflicts = **0**; paquete PASS. Cualquier otro valor → NO GO. | HARD STOP · **esperar GO explícito** |
-| **CASH-A4** | `firebase deploy --only functions:sumupSyncScheduled,functions:sumupSyncNow`. **Este paso ES el apply.** | Deploy OK de exactamente esas 2 funciones. | HARD STOP |
+| **CASH-A4** | `firebase deploy --only functions:sumupSyncScheduled,functions:sumupSyncNow` (re-correr `node scripts/verify-functions-package.mjs` en el mismo checkout justo antes). **Este paso ES el apply.** | Deploy OK de exactamente esas 2 funciones. | HARD STOP |
 | **CASH-A5** | Controlar la primera sincronización (la horaria de las :21 o "Sincronizar ahora"). | Exactamente 1 CASH nuevo: Cafetería · $163.500 · `paymentMethod: cash` · `createdBy: system:sumup` · día 4. Run `completed`. | HARD STOP |
 | **CASH-A6** | Verificar `financeMonthlySummaries/2026-10`. | incomeTotal = 968.860 · result = 968.860 · transactionCount = 104 · Cafetería = 903.860 · Ofrendas = 65.000 · dailyIncome.4 = 968.860 · 9/9 campos vs ledger. | HARD STOP |
 | **CASH-A7** | Segunda sincronización. | created 0 · updated 0 · delta 0 (summary idéntico). | HARD STOP |

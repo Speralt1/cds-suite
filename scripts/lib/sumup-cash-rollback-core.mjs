@@ -40,12 +40,16 @@ function abort(message) {
  * @param {object|null} finance  current financeTransactions doc
  * @param {{financeId: string, account: string, localDate: string, amount: number}} expect
  */
-export function checkTarget(finance, expect) {
+export function checkExpect(expect) {
   const match = FINANCE_ID.exec(expect.financeId || "");
   if (!match) abort("el id no es un doc SumUp (sumup_{offerings|cafeteria}_…).");
   if (match[1] !== expect.account) abort("el id no pertenece a la cuenta indicada.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(expect.localDate || "")) abort("fecha esperada inválida.");
   if (!Number.isInteger(expect.amount) || expect.amount <= 0) abort("monto esperado inválido.");
+}
+
+export function checkTarget(finance, expect) {
+  checkExpect(expect);
   if (!finance) abort("el movimiento no existe.");
 
   const period = expect.localDate.slice(0, 7);
@@ -86,6 +90,8 @@ export function checkSummary(summary, finance) {
  * @returns {(tx) => Promise<{outcome: "rolledBack"|"already", summaryBefore?: object, summaryAfter?: object}>}
  */
 export function rollbackWork({ core, expect, now }) {
+  // Cheap, I/O-free validation first: a malformed id never reaches Firestore.
+  checkExpect(expect);
   return async (tx) => {
     const finance = await tx.getFinance();
     const state = checkTarget(finance, expect);

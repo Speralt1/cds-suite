@@ -56,7 +56,8 @@ function sync(store: MemoryStore, clock: ReturnType<typeof makeClock>, items: un
   });
 }
 
-function rollback(store: MemoryStore, expectOverrides: Partial<typeof EXPECT> = {}, now = 1) {
+// async: an id rejected by the I/O-free pre-check surfaces as a rejection too.
+async function rollback(store: MemoryStore, expectOverrides: Partial<typeof EXPECT> = {}, now = 1) {
   const expectArg = { ...EXPECT, ...expectOverrides };
   return store.runLedgerTransaction(
     { account: "cafeteria", rawId: expectArg.financeId.replace("sumup_cafeteria_", ""), financeId: expectArg.financeId },
@@ -184,6 +185,11 @@ describe("rollback administrativo de un CASH SumUp", () => {
     expect(summaryNoMeta(dry.summaryChanges()[0].after)).toEqual(summaryNoMeta(summaryWithoutCash));
     expect(dry.log.versions).toEqual([{ account: "cafeteria", rawId: "cash-1", action: "void", reason: ROLLBACK_REASON }]);
     expect(JSON.stringify({ f: [...store.finance], s: [...store.summaries], v: [...store.versions] })).toBe(frozen);
+  });
+
+  it("un id malformado aborta antes de cualquier lectura (al construir el trabajo, sin transacción)", () => {
+    expect(() => rollbackWork({ core, expect: { ...EXPECT, financeId: "sumup_cafeteria_../../x" }, now: 1 })).toThrow(RollbackAbort);
+    expect(() => rollbackWork({ core, expect: { ...EXPECT, financeId: "sumup_offerings_cash-1" }, now: 1 })).toThrow(/cuenta/);
   });
 
   it("aborta si el resumen no contiene el monto (nunca deja montos negativos)", async () => {

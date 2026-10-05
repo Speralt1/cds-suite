@@ -9,6 +9,7 @@ export interface RollbackExpect {
   localDate: string;
   amount: number;
 }
+export function checkExpect(expect: RollbackExpect): void;
 export function checkTarget(finance: Record<string, unknown> | null, expect: RollbackExpect): "rollback" | "already";
 export function checkSummary(summary: Record<string, unknown> | null, finance: Record<string, unknown>): void;
 export function rollbackWork(args: {
