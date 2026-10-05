@@ -156,7 +156,7 @@ function Movements() {
           </TransactionTable>
           <p className="mt-4 text-sm text-muted">
             Mostrando {Math.min(count, entries.length)} de {entries.length}{" "}
-            filas · {items.length} registros del período ({sumUpCount} pagos
+            filas · {items.length} registros del período ({sumUpCount} registros
             SumUp agrupados)
           </p>
           {count < entries.length && (

@@ -79,8 +79,10 @@ function buildRawDoc(normalized, previousRaw, extra) {
     status: normalized.status,
     paymentType: normalized.paymentType,
     simplePaymentType: normalized.simplePaymentType,
-    // What the ledger books for this provider payment_type (card | cash).
-    paymentMethod: normalized.paymentMethod,
+    // Ledger method this provider payment_type maps to (card | cash). On a
+    // review path the ledger doc may still hold another value until a human
+    // resolves it, so this is provider truth, not a mirror of the ledger.
+    mappedPaymentMethod: normalized.paymentMethod,
     cardType: normalized.providerSnapshot.cardType,
     entryMode: normalized.providerSnapshot.entryMode,
     user: normalized.providerSnapshot.user,

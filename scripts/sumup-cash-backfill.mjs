@@ -110,7 +110,13 @@ function gcloud(args) {
 function loadConfig(account) {
   const name = SECRET_NAME[account];
   const raw = process.env[name] || gcloud(["secrets", "versions", "access", "latest", "--secret", name, "--project", PROJECT_ID]);
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Never echo the input: JSON.parse errors quote it, and it is a secret.
+    throw new Error(`El secreto ${name} no es JSON válido.`);
+  }
   if (!parsed?.apiKey || !parsed?.merchantCode) throw new Error(`El secreto ${name} no tiene apiKey/merchantCode.`);
   return { apiKey: parsed.apiKey, merchantCode: parsed.merchantCode };
 }
@@ -233,11 +239,19 @@ async function dryRunAccount({ account, config, otherMerchantCode, reader, since
   }
 
   // Classify what the engine did, per provider item, from the overlay log.
-  const writesById = new Map(dry.log.financeWrites.map((w) => [w.financeId, w]));
+  // One entry per financeId: `before` from its FIRST write (did it exist in
+  // production?) and `after` from its LAST write (final simulated state), so
+  // an item the provider returns twice in the window is counted once.
+  const writesById = new Map();
+  for (const w of dry.log.financeWrites) {
+    const prev = writesById.get(w.financeId);
+    writesById.set(w.financeId, { before: prev ? prev.before : w.before, after: w.after });
+  }
+  const uniqueSeen = [...new Map(seen.map((item) => [String(item?.transaction_id || item?.id || ""), item])).values()];
   const reviewsByRaw = new Map(dry.log.rawWrites.filter((w) => w.review).map((w) => [w.rawId, w.reviewReason]));
   const byMethod = {};
   const cashDays = new Map();
-  for (const item of seen) {
+  for (const item of uniqueSeen) {
     const n = core.normalizeItem(item, account);
     const key = n.paymentType || "∅";
     const bucket = (byMethod[key] ||= { found: 0, foundAmount: 0, toCreate: 0, toCreateAmount: 0, toUpdate: 0, toVoid: 0, alreadyPresent: 0, review: 0, ignored: 0 });

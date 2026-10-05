@@ -228,7 +228,7 @@ describe("CASH Intake V1 — engine", () => {
     expect(Object.keys(s).filter((k) => k !== "lastTransactionId").sort()).toEqual(NINE_FIELDS);
 
     const raw = store.raw.get("cafeteria/cash-1")!;
-    expect(raw).toMatchObject({ paymentType: "CASH", paymentMethod: "cash", feeAmount: null, feeStatus: "unknown", grossAmount: 163500 });
+    expect(raw).toMatchObject({ paymentType: "CASH", mappedPaymentMethod: "cash", feeAmount: null, feeStatus: "unknown", grossAmount: 163500 });
   });
 
   it("3/12. CASH anterior a 04/10 se ignora como preCashStart; ECOM/RECURRING/BALANCE/MOTO siguen ignorados como nonPOS", async () => {
