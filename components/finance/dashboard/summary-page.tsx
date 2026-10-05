@@ -13,6 +13,7 @@ import {
 import { combineSummaries } from "@/lib/finance/calculations";
 import {
   clp,
+  clpShort,
   previousPeriod,
   periodId,
   periodLabel,
@@ -205,7 +206,7 @@ function DayPanel({
         ) : status?.noRecords ? (
           <p className="day-panel-status status-muted">
             <CircleDashed size={15} aria-hidden="true" />
-            Sin registros
+            Sin registros de Ofrendas o Cafetería
           </p>
         ) : null}
       </div>
@@ -306,7 +307,7 @@ function MonthCalendar({
                     aria-pressed={selected === day.date}
                     aria-current={day.isToday ? "date" : undefined}
                     onClick={() => onSelect(day.date)}
-                    aria-label={`${dateLabelShort(day.date)}${day.isWorshipDay ? ", culto" : ""}${day.totalIncome ? `, ingresos ${clp(day.totalIncome)}` : ""}${day.missingCashAreas.length ? `, falta efectivo ${day.missingCashAreas.join(" y ")}` : ""}${day.noRecords ? ", sin registros" : ""}`}
+                    aria-label={`${dateLabelShort(day.date)}${day.isWorshipDay ? ", culto" : ""}${day.calendarCash ? `, efectivo de Ofrendas y Cafetería ${clp(day.calendarCash)}` : ""}${day.missingCashAreas.length ? `, falta efectivo ${day.missingCashAreas.join(" y ")}` : ""}${day.noRecords ? ", sin registros de Ofrendas o Cafetería" : ""}`}
                   >
                     <span className="calendar-cell-day">{Number(day.date.slice(8, 10))}</span>
                     {day.statusLabel && (
@@ -316,7 +317,11 @@ function MonthCalendar({
                         ) : day.noRecords ? (
                           <CircleDashed size={12} aria-hidden="true" />
                         ) : null}
-                        {day.missingCashAreas.length || day.noRecords ? "" : day.statusLabel}
+                        {day.noRecords
+                          ? ""
+                          : day.missingCashAreas.length
+                            ? day.calendarCash > 0 ? clpShort(day.calendarCash) : ""
+                            : day.statusLabel}
                       </span>
                     )}
                   </button>
@@ -739,6 +744,9 @@ export function SummaryPage() {
 
               <section className="calendar-section">
                 <div className="calendar-wrap">
+                  <p className="field-help mb-2">
+                    Montos: solo efectivo de Ofrendas y Cafetería. Selecciona un día para ver también los diezmos.
+                  </p>
                   <MonthCalendar
                     year={period.year}
                     month={period.month}
