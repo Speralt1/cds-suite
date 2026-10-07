@@ -4,6 +4,7 @@ const { defineJsonSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
+const { createHash, randomBytes } = require("node:crypto");
 
 const core = require("./sumup/core");
 const engine = require("./sumup/engine");
@@ -190,6 +191,436 @@ async function requireFinanceUser(req) {
   }
   return decoded.uid;
 }
+
+
+function campaignReaderToken() {
+  return randomBytes(24).toString("base64url");
+}
+
+function campaignReaderHash(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function isCampaignReaderToken(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{32}$/.test(value);
+}
+
+function isCampaignId(value) {
+  return (
+    typeof value === "string" &&
+    value.length >= 1 &&
+    value.length <= 70 &&
+    /^[a-z0-9-]+$/.test(value)
+  );
+}
+
+function campaignReaderResponse(res, status, body, extraHeaders = {}) {
+  const headers = {
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Robots-Tag": "noindex, nofollow",
+    ...extraHeaders,
+  };
+
+  for (const [key, value] of Object.entries(headers)) {
+    res.set(key, value);
+  }
+
+  res.status(status).json(body);
+}
+
+function campaignReaderStatus(snapshot) {
+  if (!snapshot || !snapshot.exists) {
+    return {
+      exists: false,
+      active: false,
+      rotation: 0,
+    };
+  }
+
+  const data = snapshot.data();
+
+  return {
+    exists: true,
+    active: data.active === true,
+    rotation: Number.isInteger(data.rotation)
+      ? data.rotation
+      : 0,
+  };
+}
+
+exports.campaignReaderLinkManage = onRequest(
+  { region: REGION, timeoutSeconds: 20 },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      campaignReaderResponse(
+        res,
+        405,
+        { ok: false, error: "method_not_allowed" },
+        { Allow: "POST" },
+      );
+      return;
+    }
+
+    let uid;
+    try {
+      uid = await requireFinanceUser(req);
+    } catch (error) {
+      const message = String(error && error.message ? error.message : error);
+      const status = message === "FORBIDDEN" ? 403 : 401;
+      campaignReaderResponse(res, status, {
+        ok: false,
+        error: status === 403 ? "forbidden" : "unauthenticated",
+      });
+      return;
+    }
+
+    const body =
+      req.body &&
+      typeof req.body === "object" &&
+      !Array.isArray(req.body)
+        ? req.body
+        : {};
+
+    const campaignId = body.campaignId;
+    const action = body.action;
+
+    if (
+      !isCampaignId(campaignId) ||
+      !["status", "issue", "deactivate"].includes(action)
+    ) {
+      campaignReaderResponse(res, 400, {
+        ok: false,
+        error: "invalid_request",
+      });
+      return;
+    }
+
+    try {
+      const campaignRef = db.doc(
+        "fundraisingCampaigns/" + campaignId,
+      );
+      const campaignSnapshot = await campaignRef.get();
+
+      if (!campaignSnapshot.exists) {
+        campaignReaderResponse(res, 404, {
+          ok: false,
+          error: "not_found",
+        });
+        return;
+      }
+
+      const linkRef = db.doc(
+        "campaignReaderLinks/" + campaignId,
+      );
+
+      if (action === "status") {
+        const snapshot = await linkRef.get();
+        campaignReaderResponse(res, 200, {
+          ok: true,
+          status: campaignReaderStatus(snapshot),
+        });
+        return;
+      }
+
+      if (action === "deactivate") {
+        const status = await db.runTransaction(
+          async (transaction) => {
+            const current = await transaction.get(linkRef);
+
+            if (!current.exists) {
+              return {
+                exists: false,
+                active: false,
+                rotation: 0,
+              };
+            }
+
+            const data = current.data();
+            const rotation = Number.isInteger(data.rotation)
+              ? data.rotation
+              : 0;
+
+            transaction.set(
+              linkRef,
+              {
+                active: false,
+                disabledAt: FieldValue.serverTimestamp(),
+                disabledBy: uid,
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: uid,
+              },
+              { merge: true },
+            );
+
+            return {
+              exists: true,
+              active: false,
+              rotation,
+            };
+          },
+        );
+
+        campaignReaderResponse(res, 200, {
+          ok: true,
+          status,
+        });
+        return;
+      }
+
+      const token = campaignReaderToken();
+      const tokenHash = campaignReaderHash(token);
+
+      const status = await db.runTransaction(
+        async (transaction) => {
+          const current = await transaction.get(linkRef);
+          const data = current.exists
+            ? current.data()
+            : null;
+          const rotation =
+            (data && Number.isInteger(data.rotation)
+              ? data.rotation
+              : 0) + 1;
+
+          transaction.set(linkRef, {
+            campaignId,
+            tokenHash,
+            active: true,
+            createdAt:
+              data && data.createdAt
+                ? data.createdAt
+                : FieldValue.serverTimestamp(),
+            createdBy:
+              data && typeof data.createdBy === "string"
+                ? data.createdBy
+                : uid,
+            rotation,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+          });
+
+          return {
+            exists: true,
+            active: true,
+            rotation,
+          };
+        },
+      );
+
+      campaignReaderResponse(res, 200, {
+        ok: true,
+        token,
+        status,
+      });
+    } catch (error) {
+      console.error("campaignReaderLinkManage", {
+        name:
+          error && error.name
+            ? String(error.name)
+            : "Error",
+        code:
+          error && error.code !== undefined
+            ? String(error.code)
+            : undefined,
+      });
+
+      campaignReaderResponse(res, 500, {
+        ok: false,
+        error: "internal",
+      });
+    }
+  },
+);
+
+exports.campaignReaderFeed = onRequest(
+  { region: REGION, timeoutSeconds: 20 },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      campaignReaderResponse(
+        res,
+        405,
+        { ok: false, error: "method_not_allowed" },
+        { Allow: "POST" },
+      );
+      return;
+    }
+
+    const body =
+      req.body &&
+      typeof req.body === "object" &&
+      !Array.isArray(req.body)
+        ? req.body
+        : {};
+
+    const token = isCampaignReaderToken(body.token)
+      ? body.token
+      : null;
+
+    if (!token) {
+      campaignReaderResponse(res, 404, {
+        ok: false,
+        error: "unavailable",
+      });
+      return;
+    }
+
+    try {
+      const tokenHash = campaignReaderHash(token);
+      const links = await db
+        .collection("campaignReaderLinks")
+        .where("tokenHash", "==", tokenHash)
+        .limit(1)
+        .get();
+
+      if (links.empty) {
+        campaignReaderResponse(res, 404, {
+          ok: false,
+          error: "unavailable",
+        });
+        return;
+      }
+
+      const link = links.docs[0].data();
+
+      if (
+        link.active !== true ||
+        link.tokenHash !== tokenHash ||
+        !isCampaignId(link.campaignId)
+      ) {
+        campaignReaderResponse(res, 404, {
+          ok: false,
+          error: "unavailable",
+        });
+        return;
+      }
+
+      const campaignId = link.campaignId;
+      const campaignRef = db.doc(
+        "fundraisingCampaigns/" + campaignId,
+      );
+
+      const [
+        campaignSnapshot,
+        contributionsSnapshot,
+        submissionsSnapshot,
+      ] = await Promise.all([
+        campaignRef.get(),
+        db
+          .collection("campaignContributions")
+          .where("campaignId", "==", campaignId)
+          .get(),
+        db
+          .collection("campaignSubmissions")
+          .where("campaignId", "==", campaignId)
+          .get(),
+      ]);
+
+      if (!campaignSnapshot.exists) {
+        campaignReaderResponse(res, 404, {
+          ok: false,
+          error: "unavailable",
+        });
+        return;
+      }
+
+      const campaign = campaignSnapshot.data();
+      const currentInstallment = Number(
+        campaign.currentInstallment || 0,
+      );
+
+      const verified = contributionsSnapshot.docs
+        .map((snapshot) => ({
+          id: "verified:" + snapshot.id,
+          ...snapshot.data(),
+        }))
+        .filter(
+          (item) =>
+            item.status === "approved" &&
+            (currentInstallment <= 0 ||
+              Number(item.installmentNumber || 0) ===
+                currentInstallment),
+        )
+        .map((item) => ({
+          id: item.id,
+          name: String(
+            item.name || "Aporte anónimo",
+          )
+            .trim()
+            .slice(0, 120),
+          amount: Number(item.amount || 0),
+          date: String(item.date || "").slice(0, 10),
+          status: "verified",
+        }));
+
+      const pending = submissionsSnapshot.docs
+        .map((snapshot) => ({
+          id: "pending:" + snapshot.id,
+          ...snapshot.data(),
+        }))
+        .filter((item) => item.status === "pending")
+        .map((item) => ({
+          id: item.id,
+          name: String(
+            item.name || "Aporte anónimo",
+          )
+            .trim()
+            .slice(0, 120),
+          amount: Number(item.amount || 0),
+          date: String(item.date || "").slice(0, 10),
+          status: "pending",
+        }));
+
+      const items = [...verified, ...pending].sort(
+        (a, b) => {
+          const byName = a.name.localeCompare(
+            b.name,
+            "es",
+            { sensitivity: "base" },
+          );
+
+          if (byName !== 0) return byName;
+
+          return b.date.localeCompare(a.date);
+        },
+      );
+
+      campaignReaderResponse(res, 200, {
+        ok: true,
+        campaign: {
+          title: String(campaign.title || "").slice(0, 120),
+          goalAmount: Number(campaign.goalAmount || 0),
+          verifiedAmount: Number(
+            campaign.verifiedAmount || 0,
+          ),
+          currentInstallment,
+          totalInstallments: Number(
+            campaign.totalInstallments || 0,
+          ),
+          verifiedCount: verified.length,
+          pendingCount: pending.length,
+          items,
+        },
+      });
+    } catch (error) {
+      console.error("campaignReaderFeed", {
+        name:
+          error && error.name
+            ? String(error.name)
+            : "Error",
+        code:
+          error && error.code !== undefined
+            ? String(error.code)
+            : undefined,
+      });
+
+      campaignReaderResponse(res, 500, {
+        ok: false,
+        error: "internal",
+      });
+    }
+  },
+);
 
 async function ensureSumUpSystemCategory() {
   const ref = db.doc('appSettings/finance');
