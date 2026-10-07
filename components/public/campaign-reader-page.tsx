@@ -171,6 +171,19 @@ export function CampaignReaderPage() {
   }
 
   const data = state.data;
+  const pendingAmount = data.items
+    .filter((item) => item.status === "pending")
+    .reduce((sum, item) => sum + item.amount, 0);
+  const progress =
+    data.goalAmount > 0
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            (data.verifiedAmount / data.goalAmount) * 100,
+          ),
+        )
+      : 0;
 
   return (
     <main className={styles.shell}>
@@ -191,17 +204,45 @@ export function CampaignReaderPage() {
           {quota && <p className={styles.quota}>{quota}</p>}
         </div>
 
+        <div className={styles.progressBlock}>
+          <div className={styles.progressHeading}>
+            <div>
+              <span>Avance de la campaña</span>
+              <strong>
+                {progress.toFixed(1).replace(".0", "")}%
+              </strong>
+            </div>
+            <small>
+              {clp(data.verifiedAmount)} de {clp(data.goalAmount)}
+            </small>
+          </div>
+
+          <div
+            className={styles.progressTrack}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+          >
+            <span style={{ width: progress + "%" }} />
+          </div>
+        </div>
+
         <div className={styles.metrics}>
           <div>
-            <span>Total verificado</span>
+            <span>Verificado</span>
             <strong>{clp(data.verifiedAmount)}</strong>
           </div>
           <div>
-            <span>Verificados</span>
+            <span>Pendiente registrado</span>
+            <strong>{clp(pendingAmount)}</strong>
+          </div>
+          <div>
+            <span>Aportes verificados</span>
             <strong>{data.verifiedCount}</strong>
           </div>
           <div>
-            <span>Pendientes</span>
+            <span>Por revisar</span>
             <strong>{data.pendingCount}</strong>
           </div>
         </div>
