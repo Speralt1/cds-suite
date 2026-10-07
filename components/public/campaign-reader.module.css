@@ -75,11 +75,61 @@
   font-size: 12px;
 }
 
+.progressBlock {
+  margin-top: 16px;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #f5f7f5;
+}
+
+.progressHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progressHeading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.progressHeading span {
+  color: #6b756f;
+  font-size: 10px;
+}
+
+.progressHeading strong {
+  color: #162019;
+  font-size: 15px;
+}
+
+.progressHeading small {
+  color: #6b756f;
+  font-size: 9px;
+}
+
+.progressTrack {
+  height: 6px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfe8e2;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #0f5c3a;
+}
+
 .metrics {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
-  gap: 8px;
-  margin-top: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
 }
 
 .metrics > div {
