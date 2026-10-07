@@ -30,6 +30,23 @@
             "value": "application/manifest+json"
           }
         ]
+      },
+      {
+        "source": "/campanas-lector",
+        "headers": [
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ],
     "rewrites": [
@@ -37,6 +54,20 @@
         "source": "/api/sumup-sync",
         "function": {
           "functionId": "sumupSyncNow",
+          "region": "southamerica-west1"
+        }
+      },
+      {
+        "source": "/api/campana-lector",
+        "function": {
+          "functionId": "campaignReaderFeed",
+          "region": "southamerica-west1"
+        }
+      },
+      {
+        "source": "/api/campana-lector-link",
+        "function": {
+          "functionId": "campaignReaderLinkManage",
           "region": "southamerica-west1"
         }
       },
