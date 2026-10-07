@@ -274,8 +274,17 @@
     padding: 15px;
   }
 
+  .progressHeading {
+    align-items: flex-start;
+  }
+
+  .progressHeading small {
+    max-width: 130px;
+    text-align: right;
+  }
+
   .metrics {
-    grid-template-columns: 1.35fr 0.8fr 0.8fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
