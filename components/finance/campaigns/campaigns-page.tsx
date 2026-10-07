@@ -730,21 +730,16 @@ function CampaignDetail({
       : `${window.location.origin}/c/${campaign.slug}`;
 
   useEffect(() => {
+    if (!user) return;
+
     let alive = true;
-
-    if (!user) {
-      setReaderStatus("none");
-      return;
-    }
-
-    setReaderStatus("loading");
-    setReaderError("");
-    setReaderUrl("");
 
     getCampaignReaderLinkStatus(user, campaign.id)
       .then((result) => {
         if (!alive) return;
 
+        setReaderError("");
+        setReaderUrl("");
         setReaderStatus(
           !result.status.exists
             ? "none"
