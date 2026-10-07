@@ -24,11 +24,17 @@ function clp(value: number) {
 }
 
 function compactDate(value: string) {
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  const parts = value.split("-");
 
-  if (!match) return value;
+  if (
+    parts.length !== 3 ||
+    parts[1].length !== 2 ||
+    parts[2].length !== 2
+  ) {
+    return value;
+  }
 
-  return match[3] + "/" + match[2];
+  return parts[2] + "/" + parts[1];
 }
 
 export function CampaignReaderPage() {
