@@ -338,26 +338,26 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 > Por ahora esta sección se actualiza manualmente.
 
 <!-- AUTO-STATUS:START -->
-- **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (avanzó desde `42408d6` con el merge del PR #2, Project Control)
-- **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `0d1bb0d` (merge de PR #1; árbol = `e6b2084`)
-- **Rama activa principal (base productiva):** `mission/slice6-usability` @ `e6b2084` (PR #1 **mergeado** el 2026-10-03; la rama se conserva porque es la base de PR #5)
-- **Release Candidate RC1:** `mission/platform-core-calendar-v1` (desde `e6b2084`), Draft PR #5 **[NO DEPLOY] Platform Core V1 + Calendar** contra `mission/slice6-usability`. Runbook y GO/NO-GO en `docs/mission-2026/20-platform-calendar-rc1-readiness.md`. **NOT DEPLOYED**
-- **Producción (`cds-administracion`):** corre la **Etapa A = Financial Core 2026** (PR #1, mergeado en `feature/preproduccion-mobile-v1` como `0d1bb0d`, árbol = `e6b2084`), desplegada el 2026-10-03/04. Detalle en `docs/mission-2026/21-controlled-rollout-log.md`:
-  - Firestore Rules: ruleset `2d9939ab…`;
-  - Functions: `sumupSyncNow -00006`, `sumupSyncScheduled -00007`, `campaignShare -00002`;
-  - Hosting: `edb77ffc04532a95`.
-  - **Platform Core / Calendar: NOT DEPLOYED** (Etapa B pendiente).
-- **Consolidación V1 (Fast Track):** `mission/consolidation-v1-fasttrack` (desde `73b9040`, stacked sobre PR #5), Draft PR "[NO DEPLOY] Integrantes · Consolidación V1 — Fast Track" con base `mission/platform-core-calendar-v1`. Docs 23/24/25. **NOT DEPLOYED**; ninguna migración aplicada; rollout propuesto para el 7-10-2026 con GO por fase (doc 25)
+- **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (default de GitHub; Project Control)
+- **Producción (`cds-administracion`) — VIGENTE (2026-10-08):** rama `feature/preproduccion-mobile-v1` @ **`a312c96`** = Etapa A `0d1bb0d` + SumUp CASH `ee33aa9` (PR #6) + recuperación del Hosting del 05/10 `06301ae` (PR #10, `ea18d62`) + seguridad del modal de efectivo (PR #11, `a312c96`):
+  - Hosting **`3d1dc8bc8d1bcc29`** (R0G, 2026-10-08 12:49Z);
+  - Firestore Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Storage `f700d246…`;
+  - Functions `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`, `campaignshare-00002-dij`;
+  - baseline financiero **A9 post-CASH** (`~/cds-ops/baseline-a9.json`).
+  - **Platform Core / Calendar y Consolidación: NOT DEPLOYED.**
+- **HISTÓRICO — NO USAR como objetivo de deploy ni de rollback** (no tienen SumUp CASH ni R0G): Hosting `edb77ffc04532a95`, `9e616f79835a96c2`, `7fb393576208f8c0`, `f4591416f0474b0f`; Functions `-00006`/`-00007` de la Etapa A; ruleset `8d0087d6…`; commits `648afd1`, `e6b2084`/`0d1bb0d` como fuente de Functions o Hosting.
+- **Pila de release (R1/R4, 2026-10-08):** `feature/preproduccion-mobile-v1` (`a312c96`) → PR #5 `mission/platform-core-calendar-v1` (`a8d782d`, base = preproducción, Draft) → PR #7 `mission/consolidation-v1-fasttrack` (base = PR #5, Draft). Ambos integran CASH y R0G; gates y Atlas en verde. Runbooks: doc 20 §13/§14/§19 y doc 25.
+- **Functions:** todo deploy es **por nombre**. El árbol tiene `sumupSyncNow` con `requireFinanceUser` refactorizado, **no desplegado**; requiere un GO separado.
 - **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
-- **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
-- **Última sincronización de contexto:** 2026-10-04 (Etapa A desplegada)
+- **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`; deploy solo desde `~/cds-deploy` en el commit exacto
+- **Última sincronización de contexto:** 2026-10-08 (R0G desplegado; pila reconciliada, R1/R4)
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-1. **Rollout controlado en curso** (doc 21): Etapa A desplegada (A0–A4 PASS). Sigue **A5**: observación de 7 días o más, con al menos un domingo de culto. La Etapa B (Platform + Calendar) solo empieza con un GO explícito de Salvador tras "ETAPA A STABLE".
-2. **Estrategia aprobada en el doc 20 §2 (opción A):** Etapa A = PR #1 solo (`e6b2084`) → observación ≥ 7 días → Etapa B = PR #5 (RC1). La Fase A0 exige backup, la consulta `feeAmount > 0` = 0 (la corre Salvador) y decidir la alerta del scheduler.
+1. **C-A0 fresco** (doc 25 §1.1) con GO explícito: A5, `prod-snap.sh`, backup `pre-etapa-b-*`, montos = A9. Después, la Etapa B por fases (doc 20 §13) y Consolidación (doc 25). Cada fase con su propio GO.
+2. *(Histórico)* La Etapa A (PR #1) se desplegó el 03/04-10. SumUp CASH se desplegó el 05/10 y R0G el 08/10 (doc 21).
 3. Confirmar qué parte de Slice 3A se integra después.
 4. Mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esas decisiones sigan abiertas.
 5. No cambiar todavía la default branch de GitHub.
@@ -413,5 +413,6 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - **Qué incluye:** permisos `members.consolidation.read/manage` (admin implícito; el fallback legacy no los otorga), módulo Integrantes, 4 colecciones `members*` de solo lectura para el cliente, 6 callables `members*` (escrituras transaccionales, idempotentes y auditadas), 3 índices, UI portada de PR #4 con privacidad reducida (sin datos religiosos, nacimiento ni menores), `check:no-preview`, `--summary` con el bloque de Integrantes.
 - **Qué NO está desplegado:** nada (ni reglas, ni Functions, ni índices, ni Hosting). Ninguna persona real cargada. Ningún permiso otorgado.
 - **Dependencia:** requiere la Etapa B (PR #5) desplegada antes (C-A1).
-- **Estado (2026-10-05):** QA visual PASS; 0 BLOCKER / 0 MAJOR; decisiones D1–D5 y excepción de eliminación **resueltas** (doc 25 §1): Etapa B puede empezar antes del cierre de A5 pero con GO por fase; piloto = Salvador como Admin, sin grants; migración masiva diferida. **Listo para iniciar C-A0 con GO humano.** Nada desplegado.
-- **Aislado de:** Financial Core (sin cambios en `functions/sumup/**`, `lib/finance/**`, `components/finance/**`) y SumUp CASH (`mission/sumup-cash-intake-v1`, otro carril).
+- **Estado (2026-10-08, R1/R4):** integrada sobre PR #5 `a8d782d`, que a su vez integra producción `a312c96` (CASH + R0G). Gates (unit, rules, emulador, build, `check:no-preview`) y Atlas en verde; QA visual de integración PASS. Lista para un **C-A0 fresco**. Nada desplegado.
+- **Estado (2026-10-05, histórico):** QA visual PASS; 0 BLOCKER / 0 MAJOR; decisiones D1–D5 y excepción de eliminación **resueltas** (doc 25 §1): Etapa B puede empezar antes del cierre de A5 pero con GO por fase; piloto = Salvador como Admin, sin grants; migración masiva diferida. **Listo para iniciar C-A0 con GO humano.** Nada desplegado.
+- **Aislado de:** Financial Core y SumUp CASH. Consolidación no modifica `functions/sumup/**`, `lib/finance/**` ni `components/finance/**`; esos archivos son idénticos a PR #5, y el modal de efectivo y el motor SumUp son idénticos a producción.

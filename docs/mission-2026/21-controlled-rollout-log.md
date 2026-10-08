@@ -399,3 +399,32 @@ Evidencia completa fuera del repo, sin PII: `~/cds-ops/r0*`, `r0e-*`, `r0g-*`, `
 **Baselines vigentes para el próximo C-A0:** producción `a312c96`; Hosting `3d1dc8bc8d1bcc29`; Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Functions `campaignshare-00002-dij`, `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`; financiero **A9 post-CASH**. Los valores de A0 y de la Etapa A quedan solo como evidencia pre-CASH.
 
 **Producción sin cambios en R1/R4:** sin deploy, merge a producción, migración ni escrituras.
+
+### STACK RECONCILIATION (R1/R4, 2026-10-08)
+
+| Pieza | Valor |
+|---|---|
+| Producción | `feature/preproduccion-mobile-v1` @ `a312c96c95d6b6ad2c336a72729bfb480791e1ff` · Hosting `3d1dc8bc8d1bcc29` · Rules `2d9939ab…` · Functions `-00002-dij` / `-00007-wut` / `-00008-nek` |
+| PR #5 | `73b9040` → **`a8d782de1277ca8c387eccbb216f5c9e0b2cb405`** (merge `be5ebb1` + 4 commits), base `feature/preproduccion-mobile-v1`, Draft |
+| PR #7 | `92ee592` → merge `f208f30` (parents `92ee592` + `a8d782d`) + commits de docs; el head final queda registrado en el PR (solo cambia `docs/` y `PROJECT_CONTEXT.md` respecto de `b413bfb`) |
+| Idénticos byte a byte | `cash-modal.tsx`, `lib/finance/hooks.ts`, `lib/offerings/cash.ts`, `functions/sumup/**` = `a312c96`; `summary-page.tsx`, `offerings-page.tsx`, `firebase.json` = `a8d782d` |
+
+**Gates** (worktree aislado, `npm ci` + `functions ci`, sin `.env.local`):
+
+| | PR #5 @ `d28a221`¹ | PR #7 @ `b413bfb` |
+|---|---|---|
+| lint · typecheck | OK · OK | OK · OK |
+| unit (vitest) | 56 archivos · **879/879** | 66 archivos · **1136/1136** |
+| Rules (emulador) | 5 · **115/115** | 6 · **150/150** |
+| Emulador (auth+firestore+functions) | 4 · **18/18** | 5 · **27/27** |
+| `build-shared --check` · paquete de Functions | OK · PASS | OK · PASS |
+| build · preview | OK · exclusiones OK² | OK · `check:no-preview` OK (6 rutas de Integrantes) |
+| Por área (PR #7) | — | R0G 40 · CASH 63 · Financial Core 95 · SumUp POS 50 · Calendario 223 · Consolidación 239 |
+
+¹ `a8d782d` solo agrega docs sobre `d28a221`. ² PR #5 no tiene `check:no-preview` (lo agrega PR #7); se corrieron las exclusiones equivalentes.
+
+**Atlas:** PR #5 PASS WITH FINDINGS (0 BLOCKER · 0 MAJOR, tras corregir MAJOR-1 del runbook y MINOR-2 del gate de escritura). PR #7 PASS WITH FINDINGS (0 BLOCKER · 0 MAJOR; MINOR/NIT de documentación corregidos en este commit). Informes en `~/cds-ops/r1-atlas-pr5-integration.md` y `r1-atlas-pr7-integration.md`.
+
+**QA visual de integración** (emuladores `demo-cds-suite`, datos ficticios; 1440 / 1024 / 390 / 375): navegación de Platform (5 módulos; barra móvil con "Ajustes"; sin overflow horizontal), Calendario, Integrantes (Inicio, Atención, Personas, ficha, Registrar persona), Configuración, Finanzas (Resumen, Ofrendas). Modal R0G en la pila: carga → formulario; fecha vacía validada; registro existente prellenado; aviso SumUp CASH; registro modificado en otro equipo → aviso con el monto vigente, guardar bloqueado y "Cargar valores vigentes". Admin con acceso implícito a Integrantes. Pastor sin Integrantes en el menú; el deep link redirige con "No tienes acceso a Integrantes". **PASS.** Nada se guardó desde la UI; solo hubo escrituras de prueba en el emulador local.
+
+**Listo para un C-A0 fresco** (doc 25 §1.1). Nada se desplegó ni se escribió en producción.
