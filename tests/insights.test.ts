@@ -209,13 +209,45 @@ describe("dayStatus — Sin registros", () => {
     expect(status.noRecords).toBe(false);
   });
 
-  it("does not flag a worship day that has any active transaction, even non-income", () => {
+  it("still flags a worship day with only an expense", () => {
     const status = dayStatus(
       "2026-09-02",
       [tx({ period: "2026-09", day: "2", amount: 1000, type: "expense", paymentMethod: "cash" })],
       today,
     );
-    expect(status.noRecords).toBe(false);
+    expect(status.noRecords).toBe(true);
+  });
+
+  it("keeps tithes off the cash calendar while retaining full day income", () => {
+    const tithes = [
+      tx({ period: "2026-09", day: "15", amount: 40000, category: "Diezmos", source: "tithe" }),
+      tx({ period: "2026-09", day: "15", amount: 100000, category: "Diezmos", source: "tithe" }),
+      tx({ period: "2026-09", day: "15", amount: 10000, category: "Diezmos", source: "tithe" }),
+    ];
+    const tuesday = dayStatus("2026-09-15", tithes, today);
+    expect(tuesday.totalIncome).toBe(150000);
+    expect(tuesday.calendarCash).toBe(0);
+    expect(tuesday.statusLabel).toBe("");
+
+    const sunday = dayStatus(
+      "2026-09-20",
+      [tx({ period: "2026-09", day: "20", amount: 82000, category: "Diezmos", source: "tithe" })],
+      today,
+    );
+    expect(sunday.noRecords).toBe(true);
+    expect(sunday.statusLabel).toBe("Sin registros");
+  });
+
+  it("shows only Ofrendas and Cafetería cash on the calendar", () => {
+    const status = dayStatus("2026-09-16", [
+      tx({ period: "2026-09", day: "16", amount: 43000, category: "Ofrendas" }),
+      tx({ period: "2026-09", day: "16", amount: 60000, category: "Cafetería" }),
+      tx({ period: "2026-09", day: "16", amount: 100000, category: "Diezmos", source: "tithe" }),
+      tx({ id: "sumup_1", period: "2026-09", day: "16", amount: 210000, paymentMethod: "card", category: "Cafetería", createdBy: "system:sumup" }),
+    ], today);
+    expect(status.totalIncome).toBe(413000);
+    expect(status.calendarCash).toBe(103000);
+    expect(status.statusLabel).toBe("$103 mil");
   });
 });
 

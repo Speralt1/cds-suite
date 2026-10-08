@@ -1,7 +1,7 @@
 // SumUp CASH Intake V1 — UI sub-slice (Hosting): Movimientos never labels
 // SumUp cash as card, and the manual "Caja del día" modal warns (never
 // blocks) when SumUp already recorded cash for that area/day.
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Timestamp } from "firebase/firestore";
 import { SumUpGroupRow } from "@/components/finance/transactions/transaction-list";
@@ -142,6 +142,27 @@ describe("Caja del día — aviso de efectivo ya registrado en SumUp", () => {
     renderModal([manual]);
     expect(screen.queryByText(/SumUp ya registró/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Actualizar efectivo" })).toBeEnabled();
+  });
+
+  it("pide confirmar una fecha fuera de culto y ofrece el servicio anterior", () => {
+    const onDateChange = vi.fn();
+    render(
+      <CashModal
+        area="cafeteria"
+        date="2026-10-05"
+        allTransactionsForDay={[]}
+        loading={false}
+        onAreaChange={() => {}}
+        onDateChange={onDateChange}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText(/lunes, 5 de octubre de 2026 no es miércoles ni domingo/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Usar domingo, 4 de octubre de 2026" }));
+    expect(onDateChange).toHaveBeenCalledWith("2026-10-04");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que el efectivo corresponde/ }));
+    expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeEnabled();
   });
 });
 

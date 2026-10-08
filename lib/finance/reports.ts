@@ -238,7 +238,7 @@ function buildWorshipDays(
             ? "Falta efectivo · 2 áreas"
             : `Falta efectivo · ${d.missingCashAreas[0]}`
           : d.noRecords
-            ? "Sin registros"
+            ? "Sin registros de caja"
             : d.date < SPLIT
               ? "—"
               : "Con ingresos",

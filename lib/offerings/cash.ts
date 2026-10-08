@@ -4,6 +4,21 @@ import type { FinanceTransaction } from "@/lib/finance/types";
 
 export type CashArea = "offerings" | "cafeteria";
 
+// Cash can be entered days after a service. Suggest the most recent service
+// date without relying on the browser's local timezone.
+export function previousCashServiceDate(date: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  const selected = new Date(Date.UTC(year, month - 1, day));
+  if (selected.toISOString().slice(0, 10) !== date) return null;
+  const weekday = selected.getUTCDay();
+  if (weekday === 0 || weekday === 3) return null;
+  const daysSinceSunday = weekday;
+  const daysSinceWednesday = (weekday - 3 + 7) % 7;
+  selected.setUTCDate(selected.getUTCDate() - Math.min(daysSinceSunday, daysSinceWednesday));
+  return selected.toISOString().slice(0, 10);
+}
+
 export function cashCategory(area: CashArea) {
   return area === "offerings" ? "Ofrendas" : "Cafetería";
 }
