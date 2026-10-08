@@ -90,4 +90,11 @@ Casos C < A: 6
 ## 7. Compatibilidad
 
 - **Calendario:** `calendarRead/ManageAll/…` siguen usando `gate()` sin cambios. Los tests de Calendario pasan.
-- **PR #7 (Consolidación):** agrega `membersRead()` sobre `gate()` y entradas en `implicants()`. Este fix toca helpers distintos, así que la integración debería ser un merge limpio. Hay que repetir la medición de presupuesto y `test:rules` en PR #7, que también corre `budget.test.ts`.
+- **PR #7 (Consolidación):** el merge **no** es limpio (Atlas R2 MINOR-1). Hay conflictos en el bloque de helpers de `firestore.rules` y en `tests/rules/platform-access.test.ts`. Receta:
+  - conservar el lado de este fix y agregar `membersRead()` de PR #7, que sigue usando `gate()`;
+  - no reintroducir el alias `admin()`;
+  - en el test, mantener la forma especializada de `settingsManage` y conservar `membersRead`.
+
+  Después, correr `test:rules`, incluido `budget.test.ts`. Una resolución incorrecta falla de forma visible.
+- **Límite:** se cuenta **por documento evaluado** (§1). Los comentarios de `firestore.rules` que dicen "por request" vienen de antes de esta medición.
+- **`REQUIRED_MARGIN = 100`** en `budget.test.ts` tiene hoy unos 2 términos de holgura. Si una validación nueva del resumen lo hace fallar, hay que optimizar, **no** bajar el umbral.

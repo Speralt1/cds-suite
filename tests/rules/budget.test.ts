@@ -18,6 +18,7 @@ import {
   type PadPoint,
 } from "./helpers/budget";
 
+// Do NOT lower this to make a new validation pass: optimize the rules instead (doc 26 §7).
 const REQUIRED_MARGIN = 100; // expressions
 const SOURCE = readRules();
 
