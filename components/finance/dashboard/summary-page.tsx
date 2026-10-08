@@ -185,7 +185,8 @@ function DayPanel({
   date: string;
   status?: DayStatus;
   transactions: FinanceTransaction[];
-  onRegisterCash: (area: CashArea) => void;
+  // Omitted when the viewer can't write finance records: no register buttons.
+  onRegisterCash?: (area: CashArea) => void;
   onViewDay: () => void;
 }) {
   const { rows, expenses, totalIncome } = dayBreakdown(transactions, date);
@@ -251,7 +252,7 @@ function DayPanel({
       )}
 
       <div className="day-panel-actions">
-        {(status?.missingCashAreas || []).map((area) => (
+        {onRegisterCash && (status?.missingCashAreas || []).map((area) => (
           <button
             key={area}
             type="button"
@@ -342,7 +343,13 @@ export function SummaryPage() {
   const [summaryView, setSummaryView] =
     useState<SummaryView>(period.view);
   const [dailyDate, setDailyDate] = useState(today());
-  const details = can(useAccess(), "finance.details.read");
+  const access = useAccess();
+  const details = can(access, "finance.details.read");
+  // Writing (cash, tithes, expenses, other movements) needs records.manage,
+  // as the Rules do. Legacy admin/pastor/finance have both, so for them this
+  // is the same as `details`; a v1 read-only profile no longer gets write
+  // actions that would end in permission-denied.
+  const manage = can(access, "finance.records.manage");
 
   const dailyPeriod: PeriodSelection = {
     year: Number(dailyDate.slice(0, 4)),
@@ -508,34 +515,38 @@ export function SummaryPage() {
 
       {details && (
         <div className="summary-actions">
-          <button
-            type="button"
-            className="button-primary summary-action-primary"
-            onClick={() => openCashModal(defaultCashArea(), today())}
-          >
-            + Registrar efectivo
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setActionModal("tithe")}
-          >
-            + Diezmo
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setActionModal("expense")}
-          >
-            + Gasto
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setActionModal("other")}
-          >
-            Otro movimiento
-          </button>
+          {manage && (
+            <>
+              <button
+                type="button"
+                className="button-primary summary-action-primary"
+                onClick={() => openCashModal(defaultCashArea(), today())}
+              >
+                + Registrar efectivo
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setActionModal("tithe")}
+              >
+                + Diezmo
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setActionModal("expense")}
+              >
+                + Gasto
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setActionModal("other")}
+              >
+                Otro movimiento
+              </button>
+            </>
+          )}
           <Link
             className="button-ghost"
             href={`/finanzas/reportes?periodo=${periodId(period.year, period.month)}`}
@@ -579,7 +590,7 @@ export function SummaryPage() {
                 date={dailyDate}
                 status={dayStatus(dailyDate, dailyTransactions.data, today(), WORSHIP_WEEKDAYS)}
                 transactions={dailyTransactions.data}
-                onRegisterCash={(area) => openCashModal(area, dailyDate)}
+                onRegisterCash={manage ? (area) => openCashModal(area, dailyDate) : undefined}
                 onViewDay={() => {}}
               />
             ) : !dailyIncome && !dailyExpense ? (
@@ -759,7 +770,7 @@ export function SummaryPage() {
                   date={effectiveSelectedDay}
                   status={selectedDayStatus}
                   transactions={latest.data}
-                  onRegisterCash={(area) => openCashModal(area, effectiveSelectedDay)}
+                  onRegisterCash={manage ? (area) => openCashModal(area, effectiveSelectedDay) : undefined}
                   onViewDay={() => {
                     setDailyDate(effectiveSelectedDay);
                     setSummaryView("day");
@@ -784,7 +795,7 @@ export function SummaryPage() {
                 Los indicadores y gráficos se completarán al registrar
                 movimientos.
               </p>
-              {details && (
+              {manage && (
                 <button
                   className="button-primary mt-5"
                   onClick={() => setActionModal("other")}
@@ -886,7 +897,7 @@ export function SummaryPage() {
         </section>
       )}
 
-      {actionModal === "other" && (
+      {manage && actionModal === "other" && (
         <TransactionForm
           onClose={() => setActionModal(null)}
           onSaved={(message) => {
@@ -895,7 +906,7 @@ export function SummaryPage() {
           }}
         />
       )}
-      {actionModal === "expense" && (
+      {manage && actionModal === "expense" && (
         <TransactionForm
           initialType="expense"
           onClose={() => setActionModal(null)}
@@ -905,7 +916,7 @@ export function SummaryPage() {
           }}
         />
       )}
-      {actionModal === "tithe" && (
+      {manage && actionModal === "tithe" && (
         <TitheRegister
           onClose={() => setActionModal(null)}
           onSaved={(message) => {
@@ -914,7 +925,7 @@ export function SummaryPage() {
           }}
         />
       )}
-      {actionModal === "cash" && (
+      {manage && actionModal === "cash" && (
         <CashModal
           area={cashArea}
           date={cashDate}

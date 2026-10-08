@@ -125,7 +125,9 @@ function IntegrationLine({
   offerings: SumUpIntegration | null;
   cafeteria: SumUpIntegration | null;
   syncing: boolean;
-  onSync: () => void;
+  // Omitted when the viewer can't write finance records (sumupSyncNow
+  // requires finance.records.manage): no sync button.
+  onSync?: () => void;
 }) {
   function part(label: string, data: SumUpIntegration | null) {
     const ok = data?.lastSyncStatus === "ok" || data?.lastSyncStatus === "partial";
@@ -147,15 +149,17 @@ function IntegrationLine({
       {part("Ofrendas", offerings)}
       <span className="integration-line-sep"> · </span>
       {part("Cafetería", cafeteria)}
-      <button
-        type="button"
-        className="button-ghost integration-line-sync"
-        disabled={syncing}
-        onClick={onSync}
-      >
-        <RefreshCw size={14} aria-hidden="true" />
-        {syncing ? "Sincronizando…" : "Sincronizar ahora"}
-      </button>
+      {onSync && (
+        <button
+          type="button"
+          className="button-ghost integration-line-sync"
+          disabled={syncing}
+          onClick={onSync}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+          {syncing ? "Sincronizando…" : "Sincronizar ahora"}
+        </button>
+      )}
     </p>
   );
 }
@@ -245,7 +249,8 @@ export function AreaCard({
   existingCash?: FinanceTransaction;
   // Efectivo del día registrado en SumUp (CASH importado), ya incluido en cashDay.
   sumUpCashDay: number;
-  onCash: () => void;
+  // Omitted when the viewer can't write finance records: no cash button.
+  onCash?: () => void;
 }) {
   const missingDayCash = cardDay > 0 && cashDay === 0;
   // Ambos orígenes activos el mismo día: puede ser legítimo, pero se avisa
@@ -309,14 +314,16 @@ export function AreaCard({
         </div>
       </div>
 
-      <button
-        type="button"
-        className={existingCash || sumUpCashDay > 0 ? "button-secondary" : "button-primary"}
-        onClick={onCash}
-      >
-        <Banknote size={16} aria-hidden="true" />
-        {existingCash ? `Editar efectivo · ${clp(existingCash.amount)}` : "Registrar efectivo"}
-      </button>
+      {onCash && (
+        <button
+          type="button"
+          className={existingCash || sumUpCashDay > 0 ? "button-secondary" : "button-primary"}
+          onClick={onCash}
+        >
+          <Banknote size={16} aria-hidden="true" />
+          {existingCash ? `Editar efectivo · ${clp(existingCash.amount)}` : "Registrar efectivo"}
+        </button>
+      )}
     </div>
   );
 }
@@ -352,6 +359,10 @@ export function OfferingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
+
+  // Writing (cash, sync, public giving settings) needs records.manage, as the
+  // Rules and sumupSyncNow do; legacy admin/pastor/finance have both.
+  const manage = can(access, "finance.records.manage");
 
   if (!can(access, "finance.details.read")) {
     return <Empty>Esta sección está reservada para Administración, Pastor y Finanzas.</Empty>;
@@ -519,7 +530,7 @@ export function OfferingsPage() {
               cashMonth={offeringCashMonth}
               existingCash={offeringCash}
               sumUpCashDay={sumUpCashForDay(financeTransactions.data, "offerings", selectedDate).amount}
-              onCash={() => setCashArea("offerings")}
+              onCash={manage ? () => setCashArea("offerings") : undefined}
             />
             <AreaCard
               title="Cafetería"
@@ -532,7 +543,7 @@ export function OfferingsPage() {
               cashMonth={cafeCashMonth}
               existingCash={cafeCash}
               sumUpCashDay={sumUpCashForDay(financeTransactions.data, "cafeteria", selectedDate).amount}
-              onCash={() => setCashArea("cafeteria")}
+              onCash={manage ? () => setCashArea("cafeteria") : undefined}
             />
           </div>
           <p className="field-help mt-3">
@@ -628,20 +639,20 @@ export function OfferingsPage() {
         offerings={offeringsIntegration.data}
         cafeteria={cafeIntegration.data}
         syncing={syncing}
-        onSync={() => void sync()}
+        onSync={manage ? () => void sync() : undefined}
       />
 
       <section className="panel offering-public-panel mt-4">
         <div><span className="eyebrow">LINK PÚBLICO</span><h2>Página pública de ofrendas · /ofrendar</h2></div>
         <div className="flex gap-2">
           <a className="button-secondary" href="/ofrendar" target="_blank" rel="noreferrer"><ExternalLink size={16} />Ver página</a>
-          <button className="button-secondary" type="button" onClick={() => setConfiguring(true)}><Settings2 size={16} />Configurar</button>
+          {manage && <button className="button-secondary" type="button" onClick={() => setConfiguring(true)}><Settings2 size={16} />Configurar</button>}
         </div>
       </section>
 
-      {configuring && <GivingSettingsModal current={settings.data} onClose={() => setConfiguring(false)} />}
+      {manage && configuring && <GivingSettingsModal current={settings.data} onClose={() => setConfiguring(false)} />}
 
-      {cashArea && (
+      {manage && cashArea && (
         <CashModal
           area={cashArea}
           date={selectedDate}
