@@ -2909,6 +2909,10 @@ button:disabled {
 .cash-date-warning-content .button-secondary {
   width: fit-content;
 }
+.cash-loading {
+  background: var(--color-canvas);
+  color: var(--color-muted);
+}
 .finance-form .cash-date-confirm {
   flex-direction: row;
   align-items: center;

@@ -19,6 +19,36 @@ export function previousCashServiceDate(date: string): string | null {
   return selected.toISOString().slice(0, 10);
 }
 
+// The range the "Caja del día" date input accepts (min = SumUp split day).
+export const CASH_DATE_MIN = "2026-09-09";
+export const CASH_DATE_MAX = "2099-12-31";
+
+// A real calendar day written as YYYY-MM-DD (the only shape the cash ids
+// accept). Date inputs emit "" while cleared and may emit 5-digit years.
+export function isCalendarDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.toISOString().slice(0, 10) === date;
+}
+
+// Why a typed cash date can't be used yet, or null when it is a real
+// YYYY-MM-DD inside the accepted range. A cleared <input type="date"> emits
+// "", so the modal must never feed this value to the cash helpers below.
+export function cashDateIssue(date: string): string | null {
+  if (!date) return "Ingresa la fecha correspondiente para continuar.";
+  if (!isCalendarDate(date)) {
+    return "La fecha no es válida. Revisa día, mes y año.";
+  }
+  if (date < CASH_DATE_MIN) {
+    return "Elige una fecha desde el 9 de septiembre de 2026.";
+  }
+  if (date > CASH_DATE_MAX) {
+    return "Elige una fecha hasta el 31 de diciembre de 2099.";
+  }
+  return null;
+}
+
 export function cashCategory(area: CashArea) {
   return area === "offerings" ? "Ofrendas" : "Cafetería";
 }

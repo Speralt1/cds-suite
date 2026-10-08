@@ -20,7 +20,7 @@ import { useTransactions } from "@/lib/finance/hooks";
 import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/insights";
 import { WORSHIP_WEEKDAYS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
-import { findActiveDailyCash, sumUpCashForDay, type CashArea } from "@/lib/offerings/cash";
+import { findActiveDailyCash, isCalendarDate, sumUpCashForDay, type CashArea } from "@/lib/offerings/cash";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -449,7 +449,11 @@ export function OfferingsPage() {
           <input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            // A cleared or partial date is ignored instead of crashing the
+            // cash readings below; the last valid day stays selected.
+            onChange={(e) => {
+              if (isCalendarDate(e.target.value)) setSelectedDate(e.target.value);
+            }}
           />
         </label>
         <button
@@ -616,13 +620,12 @@ export function OfferingsPage() {
 
       {cashArea && (
         <CashModal
-          key={`${cashArea}-${selectedDate}-${
-            (cashArea === "offerings" ? offeringCash : cafeCash)?.id || "new"
-          }`}
           area={cashArea}
           date={selectedDate}
           allTransactionsForDay={financeTransactions.data}
-          loading={financeTransactions.loading}
+          // Retained or cached data is not enough to write over: wait for the
+          // live, server-confirmed snapshot of selectedDate's month.
+          loading={!financeTransactions.synced}
           loadError={financeTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setSelectedDate}
