@@ -11,5 +11,5 @@ next-env.d.ts
 .vercel/
 .firebase/
 
-# Secretos locales del emulador de Functions
+# Functions emulator secret overrides (never commit)
 .secret.local

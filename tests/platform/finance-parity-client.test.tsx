@@ -155,3 +155,39 @@ describe("Líder (solo finance.summary.read): el resumen no cambia", () => {
     expect(finance.html).not.toBe(leader.html);
   });
 });
+
+describe("Escrituras financieras: solo con finance.records.manage (como las Rules)", () => {
+  const WRITE_ACTIONS = ["+ Registrar efectivo", "+ Diezmo", "+ Gasto", "Otro movimiento"];
+
+  it.each(["admin", "pastor", "finance"] as Role[])("legacy %s conserva todas las acciones de escritura", (role) => {
+    state.access = { role, active: true };
+    render(<SummaryPage />);
+    for (const name of WRITE_ACTIONS) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Reporte del mes →" })).toBeInTheDocument();
+  });
+
+  it("v1 con detalle de solo lectura ve el detalle pero ninguna acción de escritura", () => {
+    state.access = v1({
+      role: "pastor",
+      position: "Pastor",
+      homeModule: "finance",
+      permissions: ["finance.summary.read", "finance.details.read", "calendar.read"],
+    });
+    render(<SummaryPage />);
+    for (const name of WRITE_ACTIONS) expect(screen.queryByRole("button", { name })).toBeNull();
+    expect(screen.getByRole("link", { name: "Reporte del mes →" })).toBeInTheDocument();
+    // Detail is still loaded (details.read), only the writes are gone.
+    expect(state.transactionsEnabled.some((e) => e === true)).toBe(true);
+  });
+
+  it("v1 con finance.records.manage conserva las acciones de escritura", () => {
+    state.access = v1({
+      role: "finance",
+      position: "Finanzas",
+      homeModule: "finance",
+      permissions: ["finance.summary.read", "finance.details.read", "finance.records.manage"],
+    });
+    render(<SummaryPage />);
+    for (const name of WRITE_ACTIONS) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  });
+});

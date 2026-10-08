@@ -13,6 +13,7 @@ import {
 import { combineSummaries } from "@/lib/finance/calculations";
 import {
   clp,
+  clpShort,
   previousPeriod,
   periodId,
   periodLabel,
@@ -184,7 +185,8 @@ function DayPanel({
   date: string;
   status?: DayStatus;
   transactions: FinanceTransaction[];
-  onRegisterCash: (area: CashArea) => void;
+  // Omitted when the viewer can't write finance records: no register buttons.
+  onRegisterCash?: (area: CashArea) => void;
   onViewDay: () => void;
 }) {
   const { rows, expenses, totalIncome } = dayBreakdown(transactions, date);
@@ -205,7 +207,7 @@ function DayPanel({
         ) : status?.noRecords ? (
           <p className="day-panel-status status-muted">
             <CircleDashed size={15} aria-hidden="true" />
-            Sin registros
+            Sin registros de Ofrendas o Cafetería
           </p>
         ) : null}
       </div>
@@ -250,7 +252,7 @@ function DayPanel({
       )}
 
       <div className="day-panel-actions">
-        {(status?.missingCashAreas || []).map((area) => (
+        {onRegisterCash && (status?.missingCashAreas || []).map((area) => (
           <button
             key={area}
             type="button"
@@ -306,7 +308,7 @@ function MonthCalendar({
                     aria-pressed={selected === day.date}
                     aria-current={day.isToday ? "date" : undefined}
                     onClick={() => onSelect(day.date)}
-                    aria-label={`${dateLabelShort(day.date)}${day.isWorshipDay ? ", culto" : ""}${day.totalIncome ? `, ingresos ${clp(day.totalIncome)}` : ""}${day.missingCashAreas.length ? `, falta efectivo ${day.missingCashAreas.join(" y ")}` : ""}${day.noRecords ? ", sin registros" : ""}`}
+                    aria-label={`${dateLabelShort(day.date)}${day.isWorshipDay ? ", culto" : ""}${day.calendarCash ? `, efectivo de Ofrendas y Cafetería ${clp(day.calendarCash)}` : ""}${day.missingCashAreas.length ? `, falta efectivo ${day.missingCashAreas.join(" y ")}` : ""}${day.noRecords ? ", sin registros de Ofrendas o Cafetería" : ""}`}
                   >
                     <span className="calendar-cell-day">{Number(day.date.slice(8, 10))}</span>
                     {day.statusLabel && (
@@ -316,7 +318,11 @@ function MonthCalendar({
                         ) : day.noRecords ? (
                           <CircleDashed size={12} aria-hidden="true" />
                         ) : null}
-                        {day.missingCashAreas.length || day.noRecords ? "" : day.statusLabel}
+                        {day.noRecords
+                          ? ""
+                          : day.missingCashAreas.length
+                            ? day.calendarCash > 0 ? clpShort(day.calendarCash) : ""
+                            : day.statusLabel}
                       </span>
                     )}
                   </button>
@@ -337,7 +343,13 @@ export function SummaryPage() {
   const [summaryView, setSummaryView] =
     useState<SummaryView>(period.view);
   const [dailyDate, setDailyDate] = useState(today());
-  const details = can(useAccess(), "finance.details.read");
+  const access = useAccess();
+  const details = can(access, "finance.details.read");
+  // Writing (cash, tithes, expenses, other movements) needs records.manage,
+  // as the Rules do. Legacy admin/pastor/finance have both, so for them this
+  // is the same as `details`; a v1 read-only profile no longer gets write
+  // actions that would end in permission-denied.
+  const manage = can(access, "finance.records.manage");
 
   const dailyPeriod: PeriodSelection = {
     year: Number(dailyDate.slice(0, 4)),
@@ -356,6 +368,14 @@ export function SummaryPage() {
   const [cashDate, setCashDate] = useState(today());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
+  const cashTransactions = useTransactions(
+    {
+      year: Number(cashDate.slice(0, 4)),
+      month: Number(cashDate.slice(5, 7)),
+      view: "month",
+    },
+    details && actionModal === "cash",
+  );
 
   const total = combineSummaries(summaries.data);
   const dailyMonth = combineSummaries(dailySummaries.data);
@@ -495,34 +515,38 @@ export function SummaryPage() {
 
       {details && (
         <div className="summary-actions">
-          <button
-            type="button"
-            className="button-primary summary-action-primary"
-            onClick={() => openCashModal(defaultCashArea(), today())}
-          >
-            + Registrar efectivo
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setActionModal("tithe")}
-          >
-            + Diezmo
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setActionModal("expense")}
-          >
-            + Gasto
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setActionModal("other")}
-          >
-            Otro movimiento
-          </button>
+          {manage && (
+            <>
+              <button
+                type="button"
+                className="button-primary summary-action-primary"
+                onClick={() => openCashModal(defaultCashArea(), today())}
+              >
+                + Registrar efectivo
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setActionModal("tithe")}
+              >
+                + Diezmo
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setActionModal("expense")}
+              >
+                + Gasto
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setActionModal("other")}
+              >
+                Otro movimiento
+              </button>
+            </>
+          )}
           <Link
             className="button-ghost"
             href={`/finanzas/reportes?periodo=${periodId(period.year, period.month)}`}
@@ -566,7 +590,7 @@ export function SummaryPage() {
                 date={dailyDate}
                 status={dayStatus(dailyDate, dailyTransactions.data, today(), WORSHIP_WEEKDAYS)}
                 transactions={dailyTransactions.data}
-                onRegisterCash={(area) => openCashModal(area, dailyDate)}
+                onRegisterCash={manage ? (area) => openCashModal(area, dailyDate) : undefined}
                 onViewDay={() => {}}
               />
             ) : !dailyIncome && !dailyExpense ? (
@@ -604,17 +628,15 @@ export function SummaryPage() {
         <Loading />
       ) : summaries.error ? null : (
         <>
-          {!details && (
-            <Kpis
-              summary={total}
-              previous={
-                !previous.error &&
-                previous.data.some((summary) => summary.transactionCount > 0)
-                  ? combineSummaries(previous.data)
-                  : undefined
-              }
-            />
-          )}
+          <Kpis
+            summary={total}
+            previous={
+              !previous.error &&
+              previous.data.some((summary) => summary.transactionCount > 0)
+                ? combineSummaries(previous.data)
+                : undefined
+            }
+          />
 
           {details &&
             (latest.loading ? (
@@ -733,6 +755,9 @@ export function SummaryPage() {
 
               <section className="calendar-section">
                 <div className="calendar-wrap">
+                  <p className="field-help mb-2">
+                    Montos: solo efectivo de Ofrendas y Cafetería. Selecciona un día para ver también los diezmos.
+                  </p>
                   <MonthCalendar
                     year={period.year}
                     month={period.month}
@@ -745,7 +770,7 @@ export function SummaryPage() {
                   date={effectiveSelectedDay}
                   status={selectedDayStatus}
                   transactions={latest.data}
-                  onRegisterCash={(area) => openCashModal(area, effectiveSelectedDay)}
+                  onRegisterCash={manage ? (area) => openCashModal(area, effectiveSelectedDay) : undefined}
                   onViewDay={() => {
                     setDailyDate(effectiveSelectedDay);
                     setSummaryView("day");
@@ -770,7 +795,7 @@ export function SummaryPage() {
                 Los indicadores y gráficos se completarán al registrar
                 movimientos.
               </p>
-              {details && (
+              {manage && (
                 <button
                   className="button-primary mt-5"
                   onClick={() => setActionModal("other")}
@@ -872,7 +897,7 @@ export function SummaryPage() {
         </section>
       )}
 
-      {actionModal === "other" && (
+      {manage && actionModal === "other" && (
         <TransactionForm
           onClose={() => setActionModal(null)}
           onSaved={(message) => {
@@ -881,7 +906,7 @@ export function SummaryPage() {
           }}
         />
       )}
-      {actionModal === "expense" && (
+      {manage && actionModal === "expense" && (
         <TransactionForm
           initialType="expense"
           onClose={() => setActionModal(null)}
@@ -891,7 +916,7 @@ export function SummaryPage() {
           }}
         />
       )}
-      {actionModal === "tithe" && (
+      {manage && actionModal === "tithe" && (
         <TitheRegister
           onClose={() => setActionModal(null)}
           onSaved={(message) => {
@@ -900,17 +925,15 @@ export function SummaryPage() {
           }}
         />
       )}
-      {actionModal === "cash" && (
+      {manage && actionModal === "cash" && (
         <CashModal
-          key={`${cashArea}-${cashDate}`}
           area={cashArea}
           date={cashDate}
-          allTransactionsForDay={
-            cashDate.slice(0, 7) === dailyPeriodId
-              ? dailyTransactions.data
-              : latest.data
-          }
-          loading={dailyTransactions.loading || latest.loading}
+          allTransactionsForDay={cashTransactions.data}
+          // Retained or cached data is not enough to write over: wait for the
+          // live, server-confirmed snapshot of cashDate's month.
+          loading={!cashTransactions.synced}
+          loadError={cashTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setCashDate}
           onClose={() => setActionModal(null)}

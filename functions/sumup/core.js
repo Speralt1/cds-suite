@@ -16,16 +16,35 @@
  * reconstruct gross - refunds - fees = expected net deposit.
  * `fee_amount` is preserved on the raw document whenever the provider supplies
  * it, but it does not mutate the sale amount.
+ *
+ * SumUp CASH Intake V1 (docs/mission-2026/22-sumup-cash-2026-10-04-audit.md):
+ * from SUMUP_CASH_START_DATE on, cash recorded in the SumUp app
+ * (`payment_type === "CASH"`) is a legitimate SumUp income booked with
+ * `paymentMethod: "cash"`. CASH dated before that day never reaches the
+ * ledger in any mode (main, sweep or legacy) — it is ignored as
+ * `preCashStart`, because before 2026-10-04 that cash was (or should have
+ * been) registered manually. POS keeps its exact previous behavior.
  */
 
 const crypto = require("node:crypto");
 
 const SUMUP_SPLIT_START_DATE = "2026-09-09";
+// First local (America/Santiago) day on which SumUp CASH becomes a ledger source.
+const SUMUP_CASH_START_DATE = "2026-10-04";
 const SUMUP_LEGACY_CATEGORY = "SumUp histórico sin separar";
 const SUMUP_LIQUID_SCHEMA_VERSION = 2;
 const SUMUP_AMOUNT_BASIS = "gross_minus_refunds";
 
-const IGNORE_REASONS = ["nonPOS", "nonCLP", "nonPayment", "pending", "preSplit", "other"];
+// `nonPOS` keeps its historical key (counters, runs, UI) but now means
+// "payment type not supported": anything that is neither POS nor CASH.
+const IGNORE_REASONS = ["nonPOS", "nonCLP", "nonPayment", "pending", "preSplit", "preCashStart", "other"];
+
+// provider payment_type -> ledger paymentMethod. Only these two ever reach the ledger.
+const LEDGER_PAYMENT_METHOD = { POS: "card", CASH: "cash" };
+
+function ledgerPaymentMethodFor(paymentType) {
+  return LEDGER_PAYMENT_METHOD[paymentType] || null;
+}
 
 function safeId(value) {
   return String(value).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 180);
@@ -62,8 +81,11 @@ function categoryFor(account, isLegacy) {
   return account === "offerings" ? "Ofrendas" : "Cafetería";
 }
 
-function descriptionFor(account, isLegacy) {
+function descriptionFor(account, isLegacy, paymentMethod = "card") {
   if (isLegacy) return "Ingreso SumUp histórico · sin separación";
+  if (paymentMethod === "cash") {
+    return account === "offerings" ? "Ofrenda efectivo · SumUp" : "Venta Cafetería efectivo · SumUp";
+  }
   return account === "offerings" ? "Ofrenda tarjeta física · SumUp" : "Venta Cafetería · SumUp";
 }
 
@@ -100,17 +122,21 @@ function normalizeItem(item, account) {
   const status = String(item?.status || "");
   const type = String(item?.type || "");
   const paymentType = String(item?.payment_type || "");
+  const simplePaymentType = item?.simple_payment_type ? String(item.simple_payment_type) : "";
+  const paymentMethod = ledgerPaymentMethodFor(paymentType);
   const currency = String(item?.currency || "");
 
   const isChargeback = type === "CHARGE_BACK";
   const isPayment = type === "PAYMENT";
   const isPOS = paymentType === "POS";
+  const isCash = paymentType === "CASH";
+  const isSupportedPaymentType = paymentMethod !== null;
   const isCLP = currency === "CLP";
   const isPending = status === "PENDING";
 
   const isLegacy = timeParts ? timeParts.localDate < SUMUP_SPLIT_START_DATE : false;
   const category = categoryFor(account, isLegacy);
-  const description = descriptionFor(account, isLegacy);
+  const description = descriptionFor(account, isLegacy, paymentMethod || "card");
 
   const providerSnapshot = {
     transactionId: id,
@@ -119,6 +145,7 @@ function normalizeItem(item, account) {
     status,
     type,
     paymentType,
+    simplePaymentType,
     currency,
     grossAmount: gross,
     refundedAmount: refunded,
@@ -149,6 +176,12 @@ function normalizeItem(item, account) {
     entryMode: providerSnapshot.entryMode,
     productSummary: providerSnapshot.productSummary,
     transactionCode: providerSnapshot.transactionCode,
+    // The payment type is ledger-relevant truth (POS -> card, CASH -> cash),
+    // so a provider POS <-> CASH change must never be invisible to the hash.
+    // It is only included when it is not POS: every hash already stored for a
+    // POS item stays byte-identical (no mass rawRefresh on deploy), while any
+    // move away from POS — or back to it — changes the hash.
+    ...(paymentType !== "POS" ? { paymentType, simplePaymentType } : {}),
   });
 
   return {
@@ -165,6 +198,8 @@ function normalizeItem(item, account) {
     status,
     type,
     paymentType,
+    simplePaymentType,
+    paymentMethod,
     currency,
     grossAmount: gross,
     refundedAmount: refunded,
@@ -176,6 +211,8 @@ function normalizeItem(item, account) {
     isChargeback,
     isPayment,
     isPOS,
+    isCash,
+    isSupportedPaymentType,
     isCLP,
     isPending,
     providerSnapshot,
@@ -191,13 +228,14 @@ function normalizeItem(item, account) {
  *
  * @param {object} normalized  output of normalizeItem
  * @param {{financeDoc: object|null, rawSnapshotHash: string|null}} existing
- * @param {{mode: 'main'|'sweep'|'legacy', splitStartDate?: string}} context
+ * @param {{mode: 'main'|'sweep'|'legacy', splitStartDate?: string, cashStartDate?: string}} context
  * @returns {{action: string, reason?: string, ledgerEffect: boolean}}
  */
 function classifyItem(normalized, existing, context) {
   const ctx = context || {};
   const mode = ctx.mode || "main";
   const splitStartDate = ctx.splitStartDate || SUMUP_SPLIT_START_DATE;
+  const cashStartDate = ctx.cashStartDate || SUMUP_CASH_START_DATE;
   const financeDoc = existing?.financeDoc || null;
 
   if (!normalized.hasId || !normalized.hasTimestamp) {
@@ -208,10 +246,20 @@ function classifyItem(normalized, existing, context) {
     return { action: "review", reason: "chargeback", ledgerEffect: false };
   }
 
-  if (!normalized.isPOS) return { action: "ignored", reason: "nonPOS", ledgerEffect: false };
+  if (!normalized.isSupportedPaymentType) return { action: "ignored", reason: "nonPOS", ledgerEffect: false };
   if (!normalized.isCLP) return { action: "ignored", reason: "nonCLP", ledgerEffect: false };
   if (!normalized.isPayment) return { action: "ignored", reason: "nonPayment", ledgerEffect: false };
   if (normalized.isPending) return { action: "ignored", reason: "pending", ledgerEffect: false };
+  // BLOCKER guard (CASH Intake V1): CASH before the operational start date
+  // never has a ledger effect, in ANY mode — incremental, 45-day sweep or
+  // legacy backfill. If a ledger doc somehow already exists for it (it can
+  // only have been booked as card), a human decides: never auto-convert.
+  if (normalized.isCash && normalized.localDate < cashStartDate) {
+    if (financeDoc && financeDoc.status === "active") {
+      return { action: "review", reason: "payment_method_changed", ledgerEffect: false };
+    }
+    return { action: "ignored", reason: "preCashStart", ledgerEffect: false };
+  }
   if ((mode === "main" || mode === "sweep") && normalized.localDate < splitStartDate) {
     return { action: "ignored", reason: "preSplit", ledgerEffect: false };
   }
@@ -264,20 +312,25 @@ function classifyItem(normalized, existing, context) {
 
   if (wasActive && willBeActive) {
     // Ledger changes are decided ONLY by what the book actually shows
-    // (amount/category/day). A snapshotHash difference caused by metadata
-    // that never reaches the ledger (payout_*, card_type, etc.) must not
-    // bump revision or write a version — it only refreshes the raw doc.
+    // (amount/category/day/paymentMethod). A snapshotHash difference caused
+    // by metadata that never reaches the ledger (payout_*, card_type, etc.)
+    // must not bump revision or write a version — it only refreshes the raw doc.
     const sameAmount = Number(financeDoc.amount || 0) === normalized.amount;
     const sameCategory = financeDoc.category === normalized.category;
     const sameDay = financeDoc.day === normalized.dayKey;
+    // Every SumUp ledger doc written before CASH Intake V1 is card.
+    const samePaymentMethod = (financeDoc.paymentMethod || "card") === normalized.paymentMethod;
     const sameHash = existing?.rawSnapshotHash === normalized.snapshotHash;
 
-    if (sameAmount && sameCategory && sameDay) {
+    if (sameAmount && sameCategory && sameDay && samePaymentMethod) {
       if (sameHash) return { action: "unchanged", reason: null, ledgerEffect: false };
       return { action: "rawRefresh", reason: null, ledgerEffect: false };
     }
 
-    const reason = !sameAmount ? "refund_partial" : "reclassify";
+    // A payment-method-only change (POS <-> CASH) is applied and versioned
+    // with its own reason; its summary delta is monetarily zero because the
+    // monthly summary does not split income by payment method.
+    const reason = !sameAmount ? "refund_partial" : !sameCategory || !sameDay ? "reclassify" : "payment_method_changed";
     return { action: "update", reason, ledgerEffect: true };
   }
 
@@ -384,6 +437,9 @@ function classifyHttpError(error) {
 
 module.exports = {
   SUMUP_SPLIT_START_DATE,
+  SUMUP_CASH_START_DATE,
+  LEDGER_PAYMENT_METHOD,
+  ledgerPaymentMethodFor,
   SUMUP_LEGACY_CATEGORY,
   SUMUP_LIQUID_SCHEMA_VERSION,
   SUMUP_AMOUNT_BASIS,

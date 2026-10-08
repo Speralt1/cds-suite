@@ -30,6 +30,11 @@ import type {
   PeriodSelection,
 } from "./types";
 export type DataState<T> = { data: T; loading: boolean; error: string };
+// `synced`: the data comes from a server-confirmed snapshot of the listener
+// that is active right now for these exact constraints. Cached or retained
+// data keeps being shown (loading=false) but is never `synced`, so forms that
+// write on top of it (Caja del día) can wait for the real current state.
+export type CollectionState<T> = DataState<T[]> & { synced: boolean };
 const FinanceDataCacheContext = createContext<Map<string, unknown[]> | null>(
   null,
 );
@@ -50,7 +55,7 @@ export function useCollection<T>(
   constraints: QueryConstraint[],
   enabled = true,
   cacheKey?: string,
-): DataState<T[]> {
+): CollectionState<T> {
   const online = useOnlineStatus();
   const cache = useContext(FinanceDataCacheContext);
   const resolvedCacheKey = cacheKey ? `${name}:${cacheKey}` : "";
@@ -58,10 +63,11 @@ export function useCollection<T>(
     key: QueryConstraint[];
     data: T[];
     error: string;
+    synced: boolean;
   } | null>(null);
   useEffect(() => {
     if (!enabled) return;
-    return onSnapshot(
+    const unsubscribe = onSnapshot(
       query(collection(getFirebaseServices().db, name), ...constraints),
       { includeMetadataChanges: true },
       (s) => {
@@ -72,6 +78,7 @@ export function useCollection<T>(
           key: constraints,
           data,
           error: "",
+          synced: !s.metadata.fromCache,
         });
       },
       (e) =>
@@ -81,23 +88,33 @@ export function useCollection<T>(
             ? ((cache?.get(resolvedCacheKey) as T[] | undefined) ?? [])
             : [],
           error: errorMessage(e),
+          synced: false,
         }),
     );
+    return () => {
+      unsubscribe();
+      // The retained snapshot stops being current once its listener is gone;
+      // a later re-enable must not report it as synced.
+      setState((current) =>
+        current?.synced ? { ...current, synced: false } : current,
+      );
+    };
   }, [name, constraints, enabled, cache, resolvedCacheKey]);
   const cached = resolvedCacheKey
     ? (cache?.get(resolvedCacheKey) as T[] | undefined)
     : undefined;
   return !enabled
-    ? { data: [], loading: false, error: "" }
+    ? { data: [], loading: false, error: "", synced: false }
     : state?.key === constraints
       ? {
-          ...state,
+          data: state.data,
           loading: false,
           error:
             state.error ||
             (!online
               ? "Sin conexión: la información puede estar desactualizada."
               : ""),
+          synced: state.synced && online,
         }
       : cached
         ? {
@@ -106,8 +123,9 @@ export function useCollection<T>(
             error: !online
               ? "Sin conexión: la información puede estar desactualizada."
               : "",
+            synced: false,
           }
-        : { data: [], loading: true, error: "" };
+        : { data: [], loading: true, error: "", synced: false };
 }
 export function useDocument<T>(
   name: string,

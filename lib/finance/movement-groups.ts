@@ -1,7 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 import { dateLabel } from "./formatters";
 import { isSumUpTransaction } from "./insights";
-import type { FinanceTransaction } from "./types";
+import type { FinanceTransaction, PaymentMethod } from "./types";
 
 // "Categoría desconocida" nunca debería ocurrir en datos reales (siempre hay
 // category), pero una transacción SumUp sin categoría no debe fusionarse en
@@ -24,6 +24,8 @@ export type MovementEntry =
       day: string;
       date: Timestamp;
       category: string;
+      // SumUp CASH Intake V1: card (POS) and cash (CASH) never share a group.
+      paymentMethod: PaymentMethod;
       items: FinanceTransaction[];
       count: number;
       amount: number;
@@ -34,17 +36,25 @@ export type MovementEntry =
  * Etiqueta legible de un grupo SumUp a partir de una de sus transacciones.
  * activo: "SumUp · {categoría}"
  * anulado: "SumUp · {categoría} · Anulados o reembolsados en SumUp"
+ * El efectivo registrado en SumUp (CASH) agrega " · Efectivo" tras la categoría.
  */
 export function sumUpGroupLabel(t: FinanceTransaction): string {
   const category = t.category || NO_CATEGORY;
+  const base =
+    t.paymentMethod === "cash"
+      ? `SumUp · ${category} · Efectivo`
+      : `SumUp · ${category}`;
   return t.status === "voided"
-    ? `SumUp · ${category} · Anulados o reembolsados en SumUp`
-    : `SumUp · ${category}`;
+    ? `${base} · Anulados o reembolsados en SumUp`
+    : base;
 }
 
+// La clave de tarjeta no cambia (compatibilidad); el efectivo SumUp agrega
+// "|cash" para no mezclarse nunca con el grupo de tarjeta del mismo día.
 function groupKeyFor(t: FinanceTransaction): string {
   const category = t.category || NO_CATEGORY;
-  return `sumup|${t.status}|${t.type}|${t.period}|${t.day}|${category}`;
+  const base = `sumup|${t.status}|${t.type}|${t.period}|${t.day}|${category}`;
+  return t.paymentMethod === "cash" ? `${base}|cash` : base;
 }
 
 /**
@@ -97,6 +107,7 @@ export function groupMovements(items: FinanceTransaction[]): MovementEntry[] {
       day: string;
       date: Timestamp;
       category: string;
+      paymentMethod: PaymentMethod;
       items: FinanceTransaction[];
     }
   >();
@@ -119,6 +130,7 @@ export function groupMovements(items: FinanceTransaction[]): MovementEntry[] {
         day: t.day,
         date: t.date,
         category: t.category || NO_CATEGORY,
+        paymentMethod: t.paymentMethod,
         items: [t],
       });
     }
@@ -134,6 +146,7 @@ export function groupMovements(items: FinanceTransaction[]): MovementEntry[] {
       day: g.day,
       date: g.date,
       category: g.category,
+      paymentMethod: g.paymentMethod,
       items: g.items,
       count: g.items.length,
       amount: g.items.reduce((s, t) => s + t.amount, 0),

@@ -161,6 +161,7 @@ export interface DayStatus {
   isFuture: boolean;
   missingCashAreas: CashAreaLabel[];
   noRecords: boolean;
+  calendarCash: number;
   totalIncome: number;
   statusLabel: string;
 }
@@ -200,13 +201,20 @@ export function dayStatus(
     }
   }
 
-  const hasAnyActiveTransaction = transactions.some((t) => {
-    const { period, day } = dayKey(date);
-    return t.status === "active" && t.period === period && t.day === day;
-  });
+  // The calendar audits Ofrendas/Cafetería cash, not tithes. Before the
+  // merchant split, shared SumUp income still counts as a record because its
+  // area cannot be identified reliably.
+  const hasCashAreaRecord = dayIncome.some(
+    (t) => CASH_AREAS.some((area) => t.category === area) ||
+      (date < SPLIT && t.category === "SumUp histórico sin separar"),
+  );
   const noRecords =
-    !isFuture && isWorshipDay && date < todayStr && !hasAnyActiveTransaction;
+    !isFuture && isWorshipDay && date < todayStr && !hasCashAreaRecord;
 
+  const calendarCash = sumWhere(
+    dayIncome,
+    (t) => CASH_AREAS.some((area) => t.category === area) && t.paymentMethod === "cash",
+  );
   const totalIncome = dayIncome.reduce((sum, t) => sum + t.amount, 0);
 
   let statusLabel = "";
@@ -214,7 +222,7 @@ export function dayStatus(
   else if (missingCashAreas.length === 1)
     statusLabel = `Falta efectivo · ${missingCashAreas[0]}`;
   else if (noRecords) statusLabel = "Sin registros";
-  else if (!isFuture && totalIncome > 0) statusLabel = clpShort(totalIncome);
+  else if (!isFuture && calendarCash > 0) statusLabel = clpShort(calendarCash);
 
   return {
     date,
@@ -224,6 +232,7 @@ export function dayStatus(
     isFuture,
     missingCashAreas,
     noRecords,
+    calendarCash,
     totalIncome,
     statusLabel,
   };
@@ -302,7 +311,11 @@ export function reviewDays(
         label: `Falta efectivo · ${area}`,
       });
     if (d.noRecords)
-      items.push({ date: d.date, kind: "no-records", label: "Sin registros" });
+      items.push({
+        date: d.date,
+        kind: "no-records",
+        label: "Sin registros de Ofrendas o Cafetería",
+      });
   }
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -370,7 +383,7 @@ export function titheAggregates(
 
 // Default selected day for the calendar/panel (§D "Selección por defecto"):
 // the first review day, else today (if in month), else the last day with
-// income.
+// Ofrendas/Cafetería cash.
 export function defaultSelectedDay(
   calendar: MonthCalendar,
   review: ReviewItem[],
@@ -381,6 +394,6 @@ export function defaultSelectedDay(
   if (todayInMonth) return todayInMonth.date;
   const withIncome = [...calendar.days]
     .reverse()
-    .find((d) => d.totalIncome > 0);
+    .find((d) => d.calendarCash > 0);
   return withIncome?.date;
 }

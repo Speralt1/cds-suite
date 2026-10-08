@@ -20,7 +20,7 @@ import { useTransactions } from "@/lib/finance/hooks";
 import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/insights";
 import { WORSHIP_WEEKDAYS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
-import { findActiveDailyCash, type CashArea } from "@/lib/offerings/cash";
+import { findActiveDailyCash, isCalendarDate, sumUpCashForDay, type CashArea } from "@/lib/offerings/cash";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -125,7 +125,9 @@ function IntegrationLine({
   offerings: SumUpIntegration | null;
   cafeteria: SumUpIntegration | null;
   syncing: boolean;
-  onSync: () => void;
+  // Omitted when the viewer can't write finance records (sumupSyncNow
+  // requires finance.records.manage): no sync button.
+  onSync?: () => void;
 }) {
   function part(label: string, data: SumUpIntegration | null) {
     const ok = data?.lastSyncStatus === "ok" || data?.lastSyncStatus === "partial";
@@ -147,15 +149,17 @@ function IntegrationLine({
       {part("Ofrendas", offerings)}
       <span className="integration-line-sep"> · </span>
       {part("Cafetería", cafeteria)}
-      <button
-        type="button"
-        className="button-ghost integration-line-sync"
-        disabled={syncing}
-        onClick={onSync}
-      >
-        <RefreshCw size={14} aria-hidden="true" />
-        {syncing ? "Sincronizando…" : "Sincronizar ahora"}
-      </button>
+      {onSync && (
+        <button
+          type="button"
+          className="button-ghost integration-line-sync"
+          disabled={syncing}
+          onClick={onSync}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+          {syncing ? "Sincronizando…" : "Sincronizar ahora"}
+        </button>
+      )}
     </p>
   );
 }
@@ -221,7 +225,7 @@ function GivingSettingsModal({ current, onClose }: { current: GivingSettings | n
   );
 }
 
-function AreaCard({
+export function AreaCard({
   title,
   dayLabel,
   monthLabel,
@@ -231,6 +235,7 @@ function AreaCard({
   cardMonth,
   cashMonth,
   existingCash,
+  sumUpCashDay,
   onCash,
 }: {
   title: string;
@@ -242,9 +247,15 @@ function AreaCard({
   cardMonth: number;
   cashMonth: number;
   existingCash?: FinanceTransaction;
-  onCash: () => void;
+  // Efectivo del día registrado en SumUp (CASH importado), ya incluido en cashDay.
+  sumUpCashDay: number;
+  // Omitted when the viewer can't write finance records: no cash button.
+  onCash?: () => void;
 }) {
   const missingDayCash = cardDay > 0 && cashDay === 0;
+  // Ambos orígenes activos el mismo día: puede ser legítimo, pero se avisa
+  // para revisar que no sea el mismo dinero (nunca se bloquea ni se fusiona).
+  const bothCashOrigins = sumUpCashDay > 0 && !!existingCash;
   return (
     <div className="panel offering-area-card">
       <h3>{title}</h3>
@@ -266,6 +277,18 @@ function AreaCard({
             <strong className="tabular-nums">{clp(cashDay)}</strong>
           )}
         </div>
+        {sumUpCashDay > 0 && (
+          <p className="field-help">
+            Incluye {clp(sumUpCashDay)} registrado en SumUp
+          </p>
+        )}
+        {bothCashOrigins && (
+          <p className="notice-warning" role="status">
+            <TriangleAlert size={15} aria-hidden="true" />
+            Hay efectivo en SumUp y en Caja del día. Revisa que no sea el
+            mismo dinero.
+          </p>
+        )}
         <div className="offering-area-line offering-area-total">
           <span>Total del día</span>
           <strong className="tabular-nums">{clp(cardDay + cashDay)}</strong>
@@ -291,14 +314,16 @@ function AreaCard({
         </div>
       </div>
 
-      <button
-        type="button"
-        className={existingCash ? "button-secondary" : "button-primary"}
-        onClick={onCash}
-      >
-        <Banknote size={16} aria-hidden="true" />
-        {existingCash ? `Editar efectivo · ${clp(existingCash.amount)}` : "Registrar efectivo"}
-      </button>
+      {onCash && (
+        <button
+          type="button"
+          className={existingCash || sumUpCashDay > 0 ? "button-secondary" : "button-primary"}
+          onClick={onCash}
+        >
+          <Banknote size={16} aria-hidden="true" />
+          {existingCash ? `Editar efectivo · ${clp(existingCash.amount)}` : "Registrar efectivo"}
+        </button>
+      )}
     </div>
   );
 }
@@ -310,6 +335,20 @@ export function OfferingsPage() {
   const offeringsIntegration = useSumUpIntegration("offerings");
   const cafeIntegration = useSumUpIntegration("cafeteria");
   const [selectedDate, setSelectedDate] = useState(today());
+  // Raw value of the date input; re-synced when the day changes elsewhere
+  // (‹ › Hoy, or the cash modal).
+  const [dateInput, setDateInput] = useState(selectedDate);
+  const [dateInputFor, setDateInputFor] = useState(selectedDate);
+  if (dateInputFor !== selectedDate) {
+    setDateInputFor(selectedDate);
+    setDateInput(selectedDate);
+  }
+  // Picking a day (Hoy, calendar) also resets a half-typed input, even when
+  // that day is already the selected one.
+  function selectDate(date: string) {
+    setSelectedDate(date);
+    setDateInput(date);
+  }
   const financeTransactions = useTransactions(
     periodFromDate(selectedDate),
     true,
@@ -320,6 +359,10 @@ export function OfferingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
+
+  // Writing (cash, sync, public giving settings) needs records.manage, as the
+  // Rules and sumupSyncNow do; legacy admin/pastor/finance have both.
+  const manage = can(access, "finance.records.manage");
 
   if (!can(access, "finance.details.read")) {
     return <Empty>Esta sección está reservada para Administración, Pastor y Finanzas.</Empty>;
@@ -430,8 +473,21 @@ export function OfferingsPage() {
           Fecha
           <input
             type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            min="2000-01-01"
+            max="2099-12-31"
+            value={dateInput}
+            // A cleared or partial date stays in the input while it is being
+            // typed but never reaches the cash readings below (they would
+            // throw); the last valid day stays selected meanwhile.
+            onChange={(e) => {
+              setDateInput(e.target.value);
+              const next = e.target.value;
+              // Same range as the Resumen day picker; outside it the month
+              // calendar cannot be built.
+              if (isCalendarDate(next) && next >= "2000-01-01" && next <= "2099-12-31") {
+                setSelectedDate(next);
+              }
+            }}
           />
         </label>
         <button
@@ -445,7 +501,7 @@ export function OfferingsPage() {
         <button
           type="button"
           className="button-secondary"
-          onClick={() => setSelectedDate(today())}
+          onClick={() => selectDate(today())}
         >
           Hoy
         </button>
@@ -473,7 +529,8 @@ export function OfferingsPage() {
               cardMonth={offeringCardMonth}
               cashMonth={offeringCashMonth}
               existingCash={offeringCash}
-              onCash={() => setCashArea("offerings")}
+              sumUpCashDay={sumUpCashForDay(financeTransactions.data, "offerings", selectedDate).amount}
+              onCash={manage ? () => setCashArea("offerings") : undefined}
             />
             <AreaCard
               title="Cafetería"
@@ -485,7 +542,8 @@ export function OfferingsPage() {
               cardMonth={cafeCardMonth}
               cashMonth={cafeCashMonth}
               existingCash={cafeCash}
-              onCash={() => setCashArea("cafeteria")}
+              sumUpCashDay={sumUpCashForDay(financeTransactions.data, "cafeteria", selectedDate).amount}
+              onCash={manage ? () => setCashArea("cafeteria") : undefined}
             />
           </div>
           <p className="field-help mt-3">
@@ -526,9 +584,9 @@ export function OfferingsPage() {
               <thead>
                 <tr>
                   <th scope="col">Fecha</th>
-                  <th scope="col">Ofrendas SumUp</th>
+                  <th scope="col">Ofrendas tarjeta</th>
                   <th scope="col">Ofrendas efectivo</th>
-                  <th scope="col">Cafetería SumUp</th>
+                  <th scope="col">Cafetería tarjeta</th>
                   <th scope="col">Cafetería efectivo</th>
                   <th scope="col">Estado</th>
                 </tr>
@@ -540,7 +598,7 @@ export function OfferingsPage() {
                     className={day.date === selectedDate ? "is-selected" : undefined}
                   >
                     <td>
-                      <button type="button" className="offering-day-link" onClick={() => setSelectedDate(day.date)}>
+                      <button type="button" className="offering-day-link" onClick={() => selectDate(day.date)}>
                         {day.date.slice(8, 10)}-{day.date.slice(5, 7)}-{day.date.slice(0, 4)}
                       </button>
                     </td>
@@ -581,28 +639,28 @@ export function OfferingsPage() {
         offerings={offeringsIntegration.data}
         cafeteria={cafeIntegration.data}
         syncing={syncing}
-        onSync={() => void sync()}
+        onSync={manage ? () => void sync() : undefined}
       />
 
       <section className="panel offering-public-panel mt-4">
         <div><span className="eyebrow">LINK PÚBLICO</span><h2>Página pública de ofrendas · /ofrendar</h2></div>
         <div className="flex gap-2">
           <a className="button-secondary" href="/ofrendar" target="_blank" rel="noreferrer"><ExternalLink size={16} />Ver página</a>
-          <button className="button-secondary" type="button" onClick={() => setConfiguring(true)}><Settings2 size={16} />Configurar</button>
+          {manage && <button className="button-secondary" type="button" onClick={() => setConfiguring(true)}><Settings2 size={16} />Configurar</button>}
         </div>
       </section>
 
-      {configuring && <GivingSettingsModal current={settings.data} onClose={() => setConfiguring(false)} />}
+      {manage && configuring && <GivingSettingsModal current={settings.data} onClose={() => setConfiguring(false)} />}
 
-      {cashArea && (
+      {manage && cashArea && (
         <CashModal
-          key={`${cashArea}-${selectedDate}-${
-            (cashArea === "offerings" ? offeringCash : cafeCash)?.id || "new"
-          }`}
           area={cashArea}
           date={selectedDate}
           allTransactionsForDay={financeTransactions.data}
-          loading={financeTransactions.loading}
+          // Retained or cached data is not enough to write over: wait for the
+          // live, server-confirmed snapshot of selectedDate's month.
+          loading={!financeTransactions.synced}
+          loadError={financeTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setSelectedDate}
           onClose={() => setCashArea(null)}

@@ -33,7 +33,7 @@ function emptyCounts() {
     review: 0,
     chargebacks: 0,
     rawRefreshed: 0,
-    ignored: { nonPOS: 0, nonCLP: 0, nonPayment: 0, pending: 0, preSplit: 0, other: 0 },
+    ignored: { nonPOS: 0, nonCLP: 0, nonPayment: 0, pending: 0, preSplit: 0, preCashStart: 0, other: 0 },
   };
 }
 
@@ -78,6 +78,11 @@ function buildRawDoc(normalized, previousRaw, extra) {
     timestamp: normalized.date,
     status: normalized.status,
     paymentType: normalized.paymentType,
+    simplePaymentType: normalized.simplePaymentType,
+    // Ledger method this provider payment_type maps to (card | cash). On a
+    // review path the ledger doc may still hold another value until a human
+    // resolves it, so this is provider truth, not a mirror of the ledger.
+    mappedPaymentMethod: normalized.paymentMethod,
     cardType: normalized.providerSnapshot.cardType,
     entryMode: normalized.providerSnapshot.entryMode,
     user: normalized.providerSnapshot.user,
@@ -195,11 +200,13 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
       : { active: false, amount: 0, category: before.category, day: before.day };
 
     const delta = core.summaryDelta(before, after);
+    // Only non-zero entries count: a payment-method-only update (POS <-> CASH)
+    // yields {cat: 0, day: 0} and must not rewrite the summary at all.
     const hasDelta =
       delta.incomeTotalDelta !== 0 ||
       delta.countDelta !== 0 ||
-      Object.keys(delta.categoryDeltas).length > 0 ||
-      Object.keys(delta.dayDeltas).length > 0;
+      Object.values(delta.categoryDeltas).some((value) => value !== 0) ||
+      Object.values(delta.dayDeltas).some((value) => value !== 0);
 
     if (hasDelta) {
       const summary = await tx.getSummary(normalized.period);
@@ -214,7 +221,9 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
         period: normalized.period,
         day: normalized.dayKey,
         category: normalized.category,
-        paymentMethod: "card",
+        // POS -> card, CASH -> cash (core.LEDGER_PAYMENT_METHOD). classifyItem
+        // never lets any other payment type reach this point.
+        paymentMethod: normalized.paymentMethod,
         description: normalized.description,
         note: `SumUp ${normalized.providerSnapshot.transactionCode || normalized.id}`,
         source: "general",
@@ -251,6 +260,7 @@ async function applyLedgerDecision({ account, normalized, decision, store, runId
         before: freshFinance || null,
         afterAmount: normalized.amount,
         afterCategory: normalized.category,
+        afterPaymentMethod: normalized.paymentMethod,
         runId,
         at: now,
       });
