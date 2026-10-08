@@ -257,6 +257,11 @@ describe("Ofrendas y Cafetería — Caja del día", () => {
     // ‹ moves the day and the input follows it.
     fireEvent.click(screen.getByRole("button", { name: "Día anterior" }));
     expect(pageDate).toHaveValue("2026-10-06");
+    // "Hoy" also restores a half-typed input when today is already selected.
+    fireEvent.click(screen.getByRole("button", { name: "Hoy" }));
+    fireEvent.change(pageDate, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hoy" }));
+    expect(pageDate).toHaveValue("2026-10-07");
   });
 
   it("MINOR-1: cambiar en el modal a un mes no cargado espera ese mes antes de permitir guardar", () => {

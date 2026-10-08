@@ -488,9 +488,14 @@ describe("Brechas cubiertas tras la revisión de Atlas", () => {
       act(() => vi.advanceTimersByTime(12000));
       expect(screen.getByRole("status")).toHaveTextContent("Todavía no pudimos confirmar los datos con el servidor");
       expectBlocked();
-      // A new date restarts the wait instead of inheriting the warning.
+      // A new date restarts the wait instead of inheriting the warning…
       fireEvent.change(dateField(), { target: { value: "2026-11-01" } });
       expect(screen.getByRole("status")).toHaveTextContent("Cargando el efectivo registrado");
+      // …and so does coming back to the date that was slow before.
+      fireEvent.change(dateField(), { target: { value: "2026-10-04" } });
+      expect(screen.getByRole("status")).toHaveTextContent("Cargando el efectivo registrado");
+      act(() => vi.advanceTimersByTime(12000));
+      expect(screen.getByRole("status")).toHaveTextContent("Todavía no pudimos confirmar");
     } finally {
       vi.useRealTimers();
     }

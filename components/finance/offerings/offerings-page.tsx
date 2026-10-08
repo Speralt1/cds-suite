@@ -336,6 +336,12 @@ export function OfferingsPage() {
     setDateInputFor(selectedDate);
     setDateInput(selectedDate);
   }
+  // Picking a day (Hoy, calendar) also resets a half-typed input, even when
+  // that day is already the selected one.
+  function selectDate(date: string) {
+    setSelectedDate(date);
+    setDateInput(date);
+  }
   const financeTransactions = useTransactions(
     periodFromDate(selectedDate),
     true,
@@ -484,7 +490,7 @@ export function OfferingsPage() {
         <button
           type="button"
           className="button-secondary"
-          onClick={() => setSelectedDate(today())}
+          onClick={() => selectDate(today())}
         >
           Hoy
         </button>
@@ -581,7 +587,7 @@ export function OfferingsPage() {
                     className={day.date === selectedDate ? "is-selected" : undefined}
                   >
                     <td>
-                      <button type="button" className="offering-day-link" onClick={() => setSelectedDate(day.date)}>
+                      <button type="button" className="offering-day-link" onClick={() => selectDate(day.date)}>
                         {day.date.slice(8, 10)}-{day.date.slice(5, 7)}-{day.date.slice(0, 4)}
                       </button>
                     </td>

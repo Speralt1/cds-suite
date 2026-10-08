@@ -135,7 +135,11 @@ export function CashModal({
   useEffect(() => {
     if (!waitingFor) return;
     const timer = setTimeout(() => setSlowFor(waitingFor), SLOW_LOAD_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      // Every new wait (another date, or a reload of the same one) starts over.
+      setSlowFor(null);
+    };
   }, [waitingFor]);
   const slow = !!waitingFor && slowFor === waitingFor;
 
