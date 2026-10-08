@@ -399,14 +399,36 @@ describe("firestore.rules: tablas de acceso", () => {
   const gates = (fn: string) =>
     [...body(fn).matchAll(/gate\(\[([^\]]*)\], \[([^\]]*)\]\)/g)].map((m) => ({ ps: list(m[1]), roles: list(m[2]) }));
 
+  // Finanzas (rutas calientes, presupuesto de expresiones): financeX() = signedIn() && financeXOfAt(userPath());
+  // financeXOf(u) = misma evaluación que gateProfile(u, ps, legacyRoles) con las listas en literal.
   it.each([
-    ["financeSummaryRead", P.summary],
-    ["financeDetailsRead", P.details],
-    ["financeRecordsManage", P.records],
-    ["financePastoralManage", P.pastoral],
+    ["financeSummaryRead", "financeSummaryOf", P.summary],
+    ["financeDetailsRead", "financeDetailsOf", P.details],
+    ["financeRecordsManage", "financeRecordsOf", P.records],
+    ["financePastoralManage", "financePastoralOf", P.pastoral],
+  ])("%s() ≡ can() (implicantes y roles legacy, forma especializada)", (fn, of, perm) => {
+    expect(body(fn)).toContain(`signedIn() && ${of}At(userPath())`);
+    expect(body(`${of}At`)).toContain(`exists(up) && ${of}(get(up).data)`);
+    const src = body(of);
+    expect(src).toContain("u.active == true && (u.get('accessSchemaVersion', 0) == 1");
+    expect(src).toContain("|| u.get('baseRole', '') == 'admin')");
+    const ps = src.match(/u\.get\('permissions', \[\]\)\.hasAny\(\[([^\]]*)\]\)/);
+    const roles = src.match(/u\.get\('role', ''\) in \[([^\]]*)\]/);
+    expect(ps && list(ps[1])).toEqual(implicants[perm]);
+    expect(roles && list(roles[1])).toEqual(legacyHolders(implicants[perm]));
+  });
+
+  it("settingsManage() ≡ gate([], ['admin']) (activo ∧ admin; settings.manage nunca por permissions)", () => {
+    expect(body("settingsManage")).toContain("signedIn() && settingsManageAt(userPath())");
+    expect(body("settingsManageAt")).toContain("exists(up) && settingsManageOf(get(up).data)");
+    expect(body("settingsManageOf")).toContain("u.active == true && adminProfile(u)");
+    expect(body("adminProfile")).toContain("u.get('accessSchemaVersion', 0) == 1 ? u.get('baseRole', '') == 'admin' : u.get('role', '') == 'admin'");
+    expect(implicants["settings.manage"]).toEqual([]);
+  });
+
+  it.each([
     ["calendarRead", P.calRead],
     ["calendarManageAll", P.manageAll],
-    ["settingsManage", "settings.manage"],
   ])("%s() ≡ can('%s') (implicantes y roles legacy)", (fn, perm) => {
     const g = gates(fn);
     expect(g).toHaveLength(1);
