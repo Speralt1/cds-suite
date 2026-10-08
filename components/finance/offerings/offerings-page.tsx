@@ -20,7 +20,7 @@ import { useTransactions } from "@/lib/finance/hooks";
 import { buildMonthCalendar, isSumUpTransaction, SPLIT } from "@/lib/finance/insights";
 import { WORSHIP_WEEKDAYS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
-import { findActiveDailyCash, sumUpCashForDay, type CashArea } from "@/lib/offerings/cash";
+import { findActiveDailyCash, isCalendarDate, sumUpCashForDay, type CashArea } from "@/lib/offerings/cash";
 import {
   describeSumUpSyncResult,
   requestSumUpSync,
@@ -328,6 +328,20 @@ export function OfferingsPage() {
   const offeringsIntegration = useSumUpIntegration("offerings");
   const cafeIntegration = useSumUpIntegration("cafeteria");
   const [selectedDate, setSelectedDate] = useState(today());
+  // Raw value of the date input; re-synced when the day changes elsewhere
+  // (‹ › Hoy, or the cash modal).
+  const [dateInput, setDateInput] = useState(selectedDate);
+  const [dateInputFor, setDateInputFor] = useState(selectedDate);
+  if (dateInputFor !== selectedDate) {
+    setDateInputFor(selectedDate);
+    setDateInput(selectedDate);
+  }
+  // Picking a day (Hoy, calendar) also resets a half-typed input, even when
+  // that day is already the selected one.
+  function selectDate(date: string) {
+    setSelectedDate(date);
+    setDateInput(date);
+  }
   const financeTransactions = useTransactions(
     periodFromDate(selectedDate),
     true,
@@ -448,8 +462,21 @@ export function OfferingsPage() {
           Fecha
           <input
             type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            min="2000-01-01"
+            max="2099-12-31"
+            value={dateInput}
+            // A cleared or partial date stays in the input while it is being
+            // typed but never reaches the cash readings below (they would
+            // throw); the last valid day stays selected meanwhile.
+            onChange={(e) => {
+              setDateInput(e.target.value);
+              const next = e.target.value;
+              // Same range as the Resumen day picker; outside it the month
+              // calendar cannot be built.
+              if (isCalendarDate(next) && next >= "2000-01-01" && next <= "2099-12-31") {
+                setSelectedDate(next);
+              }
+            }}
           />
         </label>
         <button
@@ -463,7 +490,7 @@ export function OfferingsPage() {
         <button
           type="button"
           className="button-secondary"
-          onClick={() => setSelectedDate(today())}
+          onClick={() => selectDate(today())}
         >
           Hoy
         </button>
@@ -560,7 +587,7 @@ export function OfferingsPage() {
                     className={day.date === selectedDate ? "is-selected" : undefined}
                   >
                     <td>
-                      <button type="button" className="offering-day-link" onClick={() => setSelectedDate(day.date)}>
+                      <button type="button" className="offering-day-link" onClick={() => selectDate(day.date)}>
                         {day.date.slice(8, 10)}-{day.date.slice(5, 7)}-{day.date.slice(0, 4)}
                       </button>
                     </td>
@@ -616,13 +643,12 @@ export function OfferingsPage() {
 
       {cashArea && (
         <CashModal
-          key={`${cashArea}-${selectedDate}-${
-            (cashArea === "offerings" ? offeringCash : cafeCash)?.id || "new"
-          }`}
           area={cashArea}
           date={selectedDate}
           allTransactionsForDay={financeTransactions.data}
-          loading={financeTransactions.loading}
+          // Retained or cached data is not enough to write over: wait for the
+          // live, server-confirmed snapshot of selectedDate's month.
+          loading={!financeTransactions.synced}
           loadError={financeTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setSelectedDate}

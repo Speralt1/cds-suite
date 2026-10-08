@@ -916,11 +916,12 @@ export function SummaryPage() {
       )}
       {actionModal === "cash" && (
         <CashModal
-          key={`${cashArea}-${cashDate}`}
           area={cashArea}
           date={cashDate}
           allTransactionsForDay={cashTransactions.data}
-          loading={cashTransactions.loading}
+          // Retained or cached data is not enough to write over: wait for the
+          // live, server-confirmed snapshot of cashDate's month.
+          loading={!cashTransactions.synced}
           loadError={cashTransactions.error}
           onAreaChange={setCashArea}
           onDateChange={setCashDate}

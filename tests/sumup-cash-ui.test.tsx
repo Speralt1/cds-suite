@@ -159,10 +159,10 @@ describe("Caja del día — aviso de efectivo ya registrado en SumUp", () => {
     );
     expect(screen.getByText(/lunes, 5 de octubre de 2026 no es miércoles ni domingo/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Usar domingo, 4 de octubre de 2026" }));
-    expect(onDateChange).toHaveBeenCalledWith("2026-10-04");
     fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que el efectivo corresponde/ }));
     expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Usar domingo, 4 de octubre de 2026" }));
+    expect(onDateChange).toHaveBeenCalledWith("2026-10-04");
   });
 });
 
