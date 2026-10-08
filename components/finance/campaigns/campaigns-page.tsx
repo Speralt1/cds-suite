@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Copy,
@@ -28,6 +28,12 @@ import {
   type CampaignContribution,
 } from "@/lib/campaigns/client";
 import { syncPublicCampaignView } from "@/lib/campaigns/public-client";
+import {
+  deactivateCampaignReaderLink,
+  getCampaignReaderLinkStatus,
+  issueCampaignReaderLink,
+  publicCampaignReaderUrl,
+} from "@/lib/campaigns/reader-client";
 import {
   Empty,
   Loading,
@@ -685,6 +691,7 @@ function CampaignDetail({
   campaign: Campaign;
   onBack: () => void;
 }) {
+  const { user } = useAuth();
   const contributions = useCampaignContributions(campaign.id);
   const [add, setAdd] = useState(false);
   const [editing, setEditing] =
@@ -694,6 +701,13 @@ function CampaignDetail({
   const [paymentView, setPaymentView] =
     useState<"active" | "voided">("active");
   const [copied, setCopied] = useState(false);
+  const [readerStatus, setReaderStatus] = useState<
+    "loading" | "none" | "active" | "inactive"
+  >("loading");
+  const [readerUrl, setReaderUrl] = useState("");
+  const [readerBusy, setReaderBusy] = useState(false);
+  const [readerError, setReaderError] = useState("");
+  const [readerCopied, setReaderCopied] = useState(false);
 
   const activeContributions =
     contributions.data.filter(
@@ -714,6 +728,105 @@ function CampaignDetail({
     typeof window === "undefined"
       ? ""
       : `${window.location.origin}/c/${campaign.slug}`;
+
+  useEffect(() => {
+    if (!user) return;
+
+    let alive = true;
+
+    getCampaignReaderLinkStatus(user, campaign.id)
+      .then((result) => {
+        if (!alive) return;
+
+        setReaderError("");
+        setReaderUrl("");
+        setReaderStatus(
+          !result.status.exists
+            ? "none"
+            : result.status.active
+              ? "active"
+              : "inactive",
+        );
+      })
+      .catch(() => {
+        if (!alive) return;
+        setReaderStatus("none");
+        setReaderError(
+          "No pudimos consultar el enlace lector.",
+        );
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [campaign.id, user]);
+
+  async function issueReaderLink() {
+    if (!user || readerBusy) return;
+
+    setReaderBusy(true);
+    setReaderError("");
+    setReaderCopied(false);
+
+    try {
+      const result = await issueCampaignReaderLink(
+        user,
+        campaign.id,
+      );
+
+      setReaderUrl(
+        publicCampaignReaderUrl(result.token),
+      );
+      setReaderStatus("active");
+    } catch {
+      setReaderError(
+        "No pudimos generar el enlace lector.",
+      );
+    } finally {
+      setReaderBusy(false);
+    }
+  }
+
+  async function copyReaderLink() {
+    if (!readerUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(readerUrl);
+      setReaderCopied(true);
+      window.setTimeout(
+        () => setReaderCopied(false),
+        1600,
+      );
+    } catch {
+      setReaderError(
+        "No pudimos copiar el enlace. Intenta nuevamente.",
+      );
+    }
+  }
+
+  async function deactivateReaderLink() {
+    if (!user || readerBusy) return;
+
+    setReaderBusy(true);
+    setReaderError("");
+
+    try {
+      await deactivateCampaignReaderLink(
+        user,
+        campaign.id,
+      );
+
+      setReaderUrl("");
+      setReaderStatus("inactive");
+      setReaderCopied(false);
+    } catch {
+      setReaderError(
+        "No pudimos desactivar el enlace lector.",
+      );
+    } finally {
+      setReaderBusy(false);
+    }
+  }
 
   async function copyPublicUrl() {
     if (!publicUrl) return;
@@ -812,6 +925,70 @@ function CampaignDetail({
             <Copy size={16} />
             {copied ? "Copiado" : "Copiar"}
           </button>
+        </div>
+
+        <div className="campaign-public-link">
+          <div>
+            <strong>Link lector pastoral</strong>
+            <p>
+              {readerUrl
+                ? readerUrl
+                : readerStatus === "active"
+                  ? "Hay un enlace activo. Genera uno nuevo para volver a copiarlo."
+                  : "Solo muestra nombre, monto, fecha y estado del aporte."}
+            </p>
+            {readerStatus === "active" && !readerUrl && (
+              <p className="mt-2">
+                Generar uno nuevo invalida el enlace anterior.
+              </p>
+            )}
+            {readerError && (
+              <p className="notice error mt-2">
+                {readerError}
+              </p>
+            )}
+          </div>
+
+          <div className="campaign-reader-link-actions">
+            {readerUrl ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={copyReaderLink}
+                disabled={readerBusy}
+              >
+                <Copy size={16} />
+                {readerCopied ? "Copiado" : "Copiar"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={issueReaderLink}
+                disabled={
+                  readerBusy ||
+                  readerStatus === "loading"
+                }
+              >
+                {readerBusy
+                  ? "Generando…"
+                  : readerStatus === "active"
+                    ? "Generar nuevo"
+                    : "Generar link"}
+              </button>
+            )}
+
+            {readerStatus === "active" && (
+              <button
+                type="button"
+                className="button-danger"
+                onClick={deactivateReaderLink}
+                disabled={readerBusy}
+              >
+                Desactivar
+              </button>
+            )}
+          </div>
         </div>
       </section>
 

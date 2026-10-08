@@ -1,0 +1,53 @@
+name: Campaign reader CI
+
+on:
+  push:
+    branches:
+      - feature/campaign-reader-prod-v1
+  pull_request:
+    paths:
+      - "app/campanas-lector/**"
+      - "components/public/campaign-reader*"
+      - "components/finance/campaigns/**"
+      - "lib/campaigns/**"
+      - "functions/index.js"
+      - "firebase.json"
+      - "app/globals.css"
+      - "tests/campaign-reader-client.test.ts"
+      - ".github/workflows/campaign-reader-ci.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app
+        run: npm ci
+
+      - name: Install functions
+        run: npm --prefix functions ci
+
+      - name: Functions syntax
+        run: node --check functions/index.js
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
