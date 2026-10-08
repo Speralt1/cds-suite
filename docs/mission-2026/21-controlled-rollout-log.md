@@ -336,3 +336,47 @@ Solo lectura, igual que con Pastor.
 | Octubre | Sin resumen todavía (sin movimientos de octubre). Se espera el primero en el culto de hoy, domingo 04-10 |
 
 **Resultado del control inicial:** OK. No se detectó ninguna condición STOP. *(La primera versión del script dio un falso positivo de "más de 2 h sin scheduler", porque el código viejo no escribía `sumupSyncRuns`. Se corrigió para medir con los logs de invocación.)*
+
+## Etapa B + Consolidación V1 · C-A0 (2026-10-08, 00:22–00:45 hora de Santiago)
+
+**GO recibido:** "GO C-A0 ONLY" (backup + snapshot + A5 fresco). Sin merge ni deploy. Runbook: doc 25 §1.1. Toda la evidencia es de **solo lectura** y con cifras agregadas (sin PII ni ids financieros).
+
+### Resultado: **STOP** (no se avanza a C-A1)
+
+| Control | Resultado |
+|---|---|
+| A5 fresco (`~/cds-ops/a5-check.mjs`, 2026-10-08T03:23Z, ventana 24 h) | **REVISAR, 2 hallazgos:** (1) **Hosting cambió**; (2) 39 escrituras `system:sumup` |
+| Hallazgo (2): 39 escrituras | **Explicado, no es STOP:** 7 Ofrendas + 32 Cafetería, todas **ventas con tarjeta creadas el 07-10** (rev1); `updated/voided/reactivated = 0`, `errorClass` vacío, resumen 2026-10 = ledger **9/9** |
+| Hallazgo (1): Hosting | **NO explicado → STOP.** En vivo `9e616f79835a96c2` (05-10 23:56Z). Después del Hosting del rollout CASH (`7fb393576208f8c0`, 05-10 13:14Z) hubo **4 deploys más** el 05-10 entre 23:21Z y 23:56Z (`bce1d3fb…`, `8bcb236a…`, `1a3dfc02…`, `9e616f79…`) desde la cuenta de Salvador, 133 archivos (CASH: 132), build distinto (otros chunks y build id; mismas rutas). **Ningún doc del repo ni `~/cds-ops` los registra** |
+| Rules | `2d9939ab-2a9e-491e-b176-1cafd939e568` (2026-10-03 22:14Z) = Etapa A. **PASS** |
+| Functions | `campaignShare` `-00002-dij` (04-10) · `sumupSyncNow` `-00007-wut` · `sumupSyncScheduled` `-00008-nek` (05-10 13:59Z, **rollout SumUp CASH, PR #6**). Sin cambios desde CASH. **PASS** (cambio documentado) |
+| Scheduler | ENABLED, cada 60 min; 24 invocaciones/24 h, 0 no-2xx, intervalo máx. 60 min; último 03:21Z. **PASS** |
+| SumUp | Ofrendas y Cafetería `ok`, lease libre, `errorClass` null; sweeps completos. CASH en ledger: 1 activo ($163.500), invariantes OK. **PASS** |
+| Errores / 5xx / permission-denied | 0 / 0 (7 días) / 0 · reglas 191 ALLOW · 0 DENY |
+| Monitoring | Política `13747596744746850802` habilitada; sin no-2xx. **PASS** |
+| Índices | 5, todos READY (sin cambios) |
+| Backup | **NO ejecutado**: el STOP se detectó antes. Un export "pre-etapa-b" no tiene sentido hasta resolver los bloqueos (se toma en el próximo C-A0) |
+
+### Snapshot financiero (solo lectura)
+
+| Período | Ingresos | Egresos | Resultado | Diezmos | Movimientos |
+|---|---:|---:|---:|---:|---:|
+| 2026-09 (resumen) | 7.824.647 | 6.860.000 | 964.647 | 2.926.397 | 790 |
+| Ene–sep 2026 | 34.752.315 | 6.910.000 | 27.842.315 | 3.126.397 | 6.387 |
+| 2026-10 (resumen, `updatedAt` 2026-10-08T02:21Z) | 1.339.360 | 486.000 | 853.360 | 0 | 145 |
+
+- **Contra el baseline de A0 (doc 21 arriba):** septiembre y ene–sep tienen **+163.000 y +1 movimiento**. Coincide exactamente con la línea base **CASH-A9** de `~/cds-ops/baseline-a9.json` (2026-10-06T03:51Z, "incluye movimientos manuales de Tesorería del 05/10"): efectivo manual de Ofrendas 27-09 (+155.000) y de Cafetería 27-09 (+90.000), y una anulación de Ofrendas 22-09 (−82.000). El A5 del 06-10 los clasificó como escrituras humanas. **Explicado, pero el registro del rollout CASH (CASH-A1…A9) no está en el repo.**
+- **Octubre por origen (ledger activo):** SumUp POS 142 · $1.015.860 · SumUp CASH 1 · $163.500 · efectivo manual 1 · $160.000 · egreso manual por transferencia 1 · $486.000. Suma de ingresos = 1.339.360 = resumen. Sin movimientos en revisión.
+
+### GitHub y checkout de release
+
+- PR #5: head `73b90401708d…`, Draft, MERGEABLE/CLEAN, base `mission/slice6-usability`. PR #7: head `10b32147…`, Draft, MERGEABLE/CLEAN, base PR #5. Desde el QA visual (`a2579ba`) PR #7 solo cambió docs.
+- `~/cds-deploy`: limpio, detached en `ee33aa9` (línea de producción), refs actualizadas.
+
+### Bloqueos para C-A1
+
+1. **Hosting en vivo no documentado** (`9e616f79835a96c2`): identificar qué commit/rama se desplegó el 05-10 entre 23:21Z y 23:56Z, registrarlo y decidir si es la línea base válida.
+2. **PR #5 y PR #7 no contienen SumUp CASH** (`ee33aa9`, PR #6 mergeado en `feature/preproduccion-mobile-v1` y desplegado). Desplegar la Etapa B tal como está **revertiría** el motor CASH (`functions/sumup/*`) y su UI. Antes de C-A1: integrar `feature/preproduccion-mobile-v1` en PR #5 y PR #7 (conflictos en `.gitignore` y `firebase.json`), re-ejecutar todos los gates (incluida la suite CASH), y cambiar la Fase 3 del doc 20 a un deploy de Functions **por nombre** que no toque `sumupSync*` salvo con el código ya integrado.
+3. Actualizar los baselines esperados de la Etapa B (doc 25 §1.1) a la línea A9 y al Hosting que se valide en (1).
+
+**Producción sin cambios.** Ningún merge, deploy, migración ni escritura.
