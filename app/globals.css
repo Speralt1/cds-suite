@@ -2972,6 +2972,43 @@ button:disabled {
   background: var(--color-warning-soft);
   color: var(--color-warning);
 }
+.cash-date-warning {
+  align-items: flex-start;
+}
+.cash-date-warning > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.cash-date-warning-content {
+  display: grid;
+  gap: 10px;
+}
+.cash-date-warning-content p {
+  margin: 0;
+}
+.cash-date-warning-content .button-secondary {
+  width: fit-content;
+}
+.cash-loading {
+  background: var(--color-canvas);
+  /* Not --color-muted: 4.46:1 on --color-canvas misses AA (see above). */
+  color: #5f6d65;
+}
+.finance-form .cash-date-confirm {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+.finance-form .cash-date-confirm input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--color-primary);
+}
 .notice-ok {
   background: var(--color-primary-soft);
   color: var(--color-primary);

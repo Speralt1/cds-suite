@@ -306,9 +306,9 @@ export function createFinancePdf(report: FinanceReport, logoData?: string) {
     table(
       [
         "Fecha",
-        "Ofrendas SumUp",
+        "Ofrendas tarjeta",
         "Ofrendas efectivo",
-        "Cafetería SumUp",
+        "Cafetería tarjeta",
         "Cafetería efectivo",
         "Diezmos",
         "Total del día",
