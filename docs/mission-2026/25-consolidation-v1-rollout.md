@@ -1,6 +1,7 @@
 # 25 · Consolidación V1: runbook del rollout controlado (miércoles 7-10-2026)
 
 > **NO EJECUTADO.** Este documento solo prepara el rollout. Cada fase exige un **GO explícito de Salvador** y termina en **HARD STOP**.
+> **Actualización R1/R4 (2026-10-08).** El baseline productivo cambió: SumUp CASH (05/10), la recuperación del Hosting del 05/10 (R0B–R0D) y la seguridad del modal de efectivo (PR #11, R0E–R0G) ya están en producción. Rama productiva `feature/preproduccion-mobile-v1` @ **`a312c96`**; Hosting **`3d1dc8bc8d1bcc29`**; Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Functions `campaignshare-00002-dij`, `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`; baseline financiero **A9 post-CASH**. La pila quedó `a312c96` → PR #5 `a8d782d` → PR #7 (este PR). Los valores de la Etapa A (`edb77ffc04532a95`, `-00006/-00007`, montos A0) quedan **solo como evidencia histórica pre-CASH**. El C-A0 del 08/10 terminó en STOP (doc 21) por ese cambio de baseline; el próximo C-A0 parte de estos valores.
 > Spec: [doc 23](23-consolidation-v1-production-spec.md) · Seguridad: [doc 24](24-consolidation-v1-security-review.md) · Etapa B (Platform + Calendar): [doc 20](20-platform-calendar-rc1-readiness.md) §13–14 · Bitácora: [doc 21](21-controlled-rollout-log.md).
 
 ## 1. Decisiones humanas (RESUELTAS por Salvador el 2026-10-05)
@@ -21,15 +22,16 @@ Commits exactos a verificar al iniciar C-A0 (`git fetch` + `gh pr view`):
 
 | Pieza | Commit esperado |
 |---|---|
-| Producción hoy (Etapa A) | `0d1bb0d` (árbol = `e6b2084`): ruleset `2d9939ab-2a9e-491e-b176-1cafd939e568`, Hosting `edb77ffc04532a95`, Functions `sumupsyncnow-00006` · `sumupsyncscheduled-00007` · `campaignshare-00002` |
-| PR #5 (Etapa B) | head `73b90401708d116a190d0b8d286ca27861a5f3d5` |
-| PR #7 (Consolidación) | head `a2579baf4ba13e4162129b1d55b46ac0b21016a6` (o el commit de docs posterior que registre estas decisiones; verificar que solo cambie `docs/`) |
+| Producción hoy (post-CASH, post-R0G) | `a312c96c95d6b6ad2c336a72729bfb480791e1ff`: ruleset `2d9939ab-2a9e-491e-b176-1cafd939e568`, Hosting `3d1dc8bc8d1bcc29`, Functions `sumupsyncnow-00007-wut` · `sumupsyncscheduled-00008-nek` · `campaignshare-00002-dij` |
+| PR #5 (Etapa B) | head `a8d782de1277ca8c387eccbb216f5c9e0b2cb405` (base `feature/preproduccion-mobile-v1`) |
+| PR #7 (Consolidación) | el head registrado en el doc 21 (sección R1/R4); verificar que lo posterior solo cambie `docs/` |
+| *Histórico (pre-CASH, NO USAR como objetivo)* | *Etapa A `0d1bb0d`: Hosting `edb77ffc04532a95`, Functions `-00006` · `-00007` · `-00002`; PR #5 `73b9040`; PR #7 `a2579ba`/`92ee592`* |
 
 Checklist de C-A0, en orden (cada ítem deja evidencia en el doc 21, sin PII):
 1. **Commits:** los heads de PR #5 y PR #7 coinciden con la tabla; ambos PR en Draft, sin commits nuevos no revisados.
 2. **A5:** último reporte de `~/cds-ops/a5-check.mjs` sin STOP (y uno nuevo corrido al iniciar C-A0).
-3. **Snapshot de solo lectura:** ruleset, versión de Hosting, `functions:list`, índices = Etapa A. Se anotan como **objetivos de rollback**.
-4. **Montos = baseline** de A0 (ene–sep) y el resumen de octubre coherente.
+3. **Snapshot de solo lectura** (`~/cds-ops/prod-snap.sh`): ruleset, versión de Hosting, `functions:list`, índices = la fila "Producción hoy". Se anotan como **objetivos de rollback**.
+4. **Montos = baseline A9 post-CASH** (ene–sep 34.752.315 / 6.910.000 / diezmos 3.126.397 / 6.387 movs; `~/cds-ops/baseline-a9.json`), resumen de octubre = ledger 9/9 y `~/cds-ops/r0g-fin-snap.mjs snap` como foto previa. Las escrituras `system:sumup` de la ventana se aceptan solo si son creaciones legítimas (rev 1, nunca modificadas, autor `system:sumup`, activas).
 5. **Backup** (solo con el GO de C-A0): `gcloud firestore export gs://cds-administracion-backups/pre-consolidacion-$(date +%Y%m%d-%H%M) --project cds-administracion` → SUCCESSFUL.
 6. **Decisiones:** D1–D5 y la excepción de eliminación registradas (esta sección).
 7. **Gates del §2** en un checkout limpio de los commits exactos.
@@ -77,14 +79,14 @@ Reglas comunes: `--project cds-administracion` explícito; hora de inicio anotad
 
 | Fase | Comando / acción | Verificación | GO | STOP | Rollback |
 |---|---|---|---|---|---|
-| **C-A0 · Backup, snapshot, A5** | `gcloud firestore export gs://cds-administracion-backups/pre-consolidacion-$(date +%Y%m%d-%H%M) --project cds-administracion` · snapshot de solo lectura (ruleset, versión de Hosting, `functions:list`, índices) · correr `~/cds-ops/a5-check.mjs` | Export SUCCESSFUL; producción = Etapa A (`2d9939ab…`, `edb77ffc04532a95`, `-00006/-00007/-00002`); A5 sin STOP; **montos = baseline** | Todo OK y D1–D5 resueltos | Export falla, A5 con STOP, producción distinta | Nada cambió |
-| **C-A1 · Etapa B (PR #5)** | Fases 0–5 del doc 20 §13 (índice de calendario, reglas RC1, Functions completas, Hosting RC1, smoke). **Sin** Fases 6–7 (migración) salvo GO aparte | Las del doc 20 (Finanzas idéntico, calendario OK, sync SumUp OK) | Smoke del doc 20 Fase 5 PASS | Cualquier diferencia en Finanzas | Doc 20 §14 |
-| **C-A2 · Smoke Platform + Calendar** | Admin y pastor, solo lectura | Finanzas: montos = baseline A0; Calendario visible; **Integrantes NO aparece** (aún no hay Hosting de Consolidación); 0 DENY nuevos | Todo igual | Diferencias | Doc 20 §14 |
+| **C-A0 · Backup, snapshot, A5** | `gcloud firestore export gs://cds-administracion-backups/pre-consolidacion-$(date +%Y%m%d-%H%M) --project cds-administracion` · snapshot de solo lectura (ruleset, versión de Hosting, `functions:list`, índices) · correr `~/cds-ops/a5-check.mjs` | Export SUCCESSFUL; producción = `a312c96` (`2d9939ab…`, `3d1dc8bc8d1bcc29`, `-00007-wut/-00008-nek/-00002-dij`); A5 sin STOP; **montos = baseline A9** | Todo OK y D1–D5 resueltos | Export falla, A5 con STOP, producción distinta | Nada cambió |
+| **C-A1 · Etapa B (PR #5)** | Fases 0–5 del doc 20 §13 (índice de calendario, reglas RC1, **Functions de calendario por nombre** — `calendarPublicFeed`, `calendarShareLinkManage` —, Hosting RC1, smoke). **Sin** Fases 6–7 (migración) salvo GO aparte | Las del doc 20 (Finanzas idéntico, modal de efectivo R0G y aviso SumUp CASH intactos, calendario OK; `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`, `campaignshare-00002-dij` **sin cambio**) | Smoke del doc 20 Fase 5 PASS | Cualquier diferencia en Finanzas | Doc 20 §14 |
+| **C-A2 · Smoke Platform + Calendar** | Admin y pastor, solo lectura | Finanzas: montos = baseline A9 post-CASH; Calendario visible; **Integrantes NO aparece** (aún no hay Hosting de Consolidación); 0 DENY nuevos | Todo igual | Diferencias | Doc 20 §14 |
 | **C-A2.5 · Merge del PR de Consolidación** | Con PR #5 ya mergeado: cambiar la base del PR de Consolidación a `feature/preproduccion-mobile-v1`, verificar que el diff muestre solo Consolidación, mergear (merge commit) | `git diff --stat <merge> <head-de-la-rama>` vacío | Diff vacío | Diff no vacío | `git revert -m 1` |
 | **C-A3 · Índices** *(adelantado: ver §4)* | `./node_modules/.bin/firebase deploy --only firestore:indexes --project cds-administracion` | `firebase firestore:indexes` lista los 3 índices `members*`; en la consola pasan a **Habilitado** | 3 índices READY | El CLI propone **borrar** índices → responder **No** y STOP | No hace falta (aditivos, sin datos) |
 | **C-A4 · Rules de Consolidación** | `./node_modules/.bin/firebase deploy --only firestore:rules --project cds-administracion` | Ruleset nuevo = `firestore.rules` del commit (byte a byte). Simulación de reglas (API `:test`): admin lee `membersPeople`; pastor legacy, leader y finance **no**; nadie escribe. Finanzas: smoke admin + pastor sin DENY nuevos | Simulación esperada y 0 DENY nuevos | Cualquier DENY en Finanzas o Calendario | Restaurar el ruleset de C-A1 (consola › Reglas › historial) |
 | **C-A5 · Functions de Consolidación, POR NOMBRE** | `./node_modules/.bin/firebase deploy --only functions:membersPersonCreate,functions:membersPersonUpdate,functions:membersStatusChange,functions:membersVisitCreate,functions:membersFollowUpCreate,functions:membersOwnerOptions --project cds-administracion` | `functions:list`: 6 nuevas en `southamerica-west1`; **SumUp, campaignShare y calendario con la MISMA revisión que en C-A1**. Sin auth: `curl -s -X POST -H 'Content-Type: application/json' -d '{"data":{}}' https://southamerica-west1-cds-administracion.cloudfunctions.net/membersOwnerOptions` → `UNAUTHENTICATED` (no escribe nada) | 6 ACTIVE, revisiones financieras sin cambio | El CLI intenta tocar otras funciones; error de IAM; revisión de `sumupSync*` cambió | `firebase functions:delete <las 6> --region southamerica-west1 --project cds-administracion` (borra código, **no datos**) |
-| **C-A6 · Hosting con Integrantes** | `rm -rf out && npm run build && npm run check:no-preview && ./node_modules/.bin/firebase deploy --only hosting --project cds-administracion` | `curl` 200 en `/integrantes/consolidacion` y demás rutas; `check:no-preview` OK | Deploy OK | `check:no-preview` falla | Consola › Hosting › historial → versión de C-A1 |
+| **C-A6 · Hosting con Integrantes** | En `~/cds-deploy` @ commit exacto: `git merge-base --is-ancestor a312c96 HEAD` (0) · `rm -rf out .next && npm run build && npm run check:no-preview` · en `out/`: `grep -rlF "Cargar valores vigentes" out` y `grep -rl "SumUp ya registr" out` (modal R0G y aviso SumUp CASH presentes) · `./node_modules/.bin/firebase deploy --only hosting --project cds-administracion --dry-run` y luego sin `--dry-run` | `curl` 200 en `/integrantes/consolidacion` y demás rutas; `check:no-preview` OK; modal R0G presente | Deploy OK | `check:no-preview` falla | Consola › Hosting › historial → versión de C-A1 |
 | **C-A7 · Smoke Admin** | Admin, **solo lectura** | Integrantes visible (5 módulos; barra móvil "Ajustes"); dashboard en **estado vacío**; Atención vacía; Personas vacía; lista de responsables carga (callable `membersOwnerOptions`); Finanzas = baseline; Calendario igual; consola sin errores; 0 DENY nuevos | Todo OK | Error, DENY o diferencia en Finanzas | C-A6 → C-A5 → C-A4 (en ese orden, §5) |
 | **C-A8 · Permiso del piloto** | **No aplica (D3):** el piloto es Salvador como Admin (acceso implícito). No se otorga ningún grant. Solo se verifica, con `--summary` (lectura), que el bloque Integrantes siga en `explícitos 0` y que **un pastor NO vea** Integrantes (deep link redirige con aviso) | `consolidation.read/manage explícito 0`; pastor sin acceso | 0 grants | Cualquier grant inesperado | Quitar el permiso desde la UI (inmediato) |
 | **C-A9 · Smoke de Consolidación (sin escribir)** | Piloto | Navegación por las 5 pantallas, formularios abiertos y cerrados **sin guardar**; advertencias visibles ("solo adultos", "no registres información médica…"); sin campos de nacimiento/fe/bautismo; WhatsApp no aparece sin personas | Todo OK | Cualquier campo sensible o error | C-A6 |
@@ -116,6 +118,8 @@ Si hay urgencia (exposición de datos), R1 + R2 + R4 pueden ir primero y R3 desp
 
 - Cada paso es independiente: ante un problema de UI basta R1; ante un problema de escrituras, R1 + R2.
 - **Nunca** se revierte Financial Core ni se toca SumUp CASH en un rollback de Consolidación.
+- **Nunca** `firebase deploy --only functions` sin nombres ni redeploy de Functions desde un checkout anterior: el árbol de PR #5/#7 contiene un `sumupSyncNow` con `requireFinanceUser` refactorizado (doc 20 §19) que **no** está desplegado (`-00007-wut`), y un checkout anterior a `ee33aa9` quitaría SumUp CASH.
+- Los únicos objetivos de rollback de Hosting y Rules son los anotados en C-A0/C-A1 (hoy `3d1dc8bc8d1bcc29` y `2d9939ab…`); `edb77ffc04532a95`, `9e616f79835a96c2`, `f4591416f0474b0f` y `8d0087d6…` son **históricos, NO USAR** (no tienen R0G y/o CASH).
 - Re-habilitar: C-A4 → C-A5 → C-A6 desde el mismo commit.
 
 ### 5.1 Caveat legacy ampliado (Atlas A-02, doc 20 §14)
@@ -132,7 +136,7 @@ Diario durante 7 días (además de A5/Etapa B):
 - logs `severity>=ERROR` de las `members*` (sin PII: el código solo registra método, nombre y código del error);
 - evaluaciones de reglas DENY (esperadas: 0 en Finanzas);
 - `node scripts/migrate-access-v1.mjs --project cds-administracion --summary` (bloque Integrantes: solo los grants decididos);
-- montos financieros = baseline (A5).
+- montos financieros = baseline A9 post-CASH (A5) y `r0g-fin-snap.mjs compare` sin escrituras que no sean creaciones legítimas de SumUp.
 
 ## 7. Qué NO se hace el miércoles
 

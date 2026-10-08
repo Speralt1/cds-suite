@@ -380,3 +380,22 @@ Solo lectura, igual que con Pastor.
 3. Actualizar los baselines esperados de la Etapa B (doc 25 §1.1) a la línea A9 y al Hosting que se valide en (1).
 
 **Producción sin cambios.** Ningún merge, deploy, migración ni escritura.
+
+## Resolución de los bloqueos de C-A0 · R0 → R1/R4 (2026-10-08)
+
+Evidencia completa fuera del repo, sin PII: `~/cds-ops/r0*`, `r0e-*`, `r0g-*`, `r1-*`.
+
+| Paso | Qué se hizo | Resultado |
+|---|---|---|
+| R0 / R0B | Forense del Hosting `9e616f79835a96c2` | Se recuperó la fuente: una sesión local la desplegó el 05/10 desde una rama nunca publicada. Quedó preservada como `recovery/hosting-9e616f-20261005` @ `06301ae` (2 commits de UI de Finanzas sobre `ee33aa9`); su `out/` coincide 131/131 con la versión viva. **Bloqueo 1 resuelto** |
+| R0C / R0D | Auditoría Atlas y merge de PR #10 | `feature/preproduccion-mobile-v1` @ `ea18d62` (árbol = `06301ae`). Production unchanged |
+| R0E / R0F | PR #11, seguridad del modal de efectivo (MINOR-1/2/3) | Merge `a312c96`. Atlas: 0 BLOCKER / 0 MAJOR |
+| R0G | Deploy **solo Hosting** de `a312c96` (12:49Z) | Hosting `9e616f79835a96c2` → **`3d1dc8bc8d1bcc29`**; Rules y Functions sin cambio; smoke de lectura e integridad financiera PASS; el checker A5 espera el nuevo Hosting (lo único que se cambió en el checker) |
+| R1/R4 · PR #5 | Merge no destructivo de `a312c96` (`be5ebb1`). Conflictos `.gitignore` y `firebase.json` resueltos por semántica (`ignore` de CASH **y** `predeploy`). Fix de Atlas: las acciones de escritura de Resumen y Ofrendas exigen `finance.records.manage`. Runbook del doc 20: Functions por nombre; los objetivos pre-CASH quedan como HISTÓRICO | Head `a8d782d`, base `feature/preproduccion-mobile-v1`, Draft. Gates verdes: unit 879, rules 115, emulador 18; build, `build-shared` y paquete de Functions OK. Atlas: 0 BLOCKER / 0 MAJOR. **Bloqueo 2 resuelto para PR #5** |
+| R1/R4 · PR #7 | Merge de PR #5 `a8d782d` (`f208f30`, sin conflictos). Doc 25 al baseline post-R0G | Ver "STACK RECONCILIATION" abajo. **Bloqueos 2 y 3 resueltos** |
+
+**Desfase conocido (MINOR-3 de Atlas R1):** en el árbol de PR #5/#7, `sumupSyncNow` usa el `requireFinanceUser` del modelo de acceso compartido. La revisión viva `sumupsyncnow-00007-wut` mantiene la verificación legacy por rol, que es equivalente para los usuarios actuales (migración diferida, D4). Ni la Etapa B ni Consolidación la despliegan: **todo deploy de Functions es por nombre**. Desplegarla requiere un GO separado. `prod-snap.sh` y A5 verifican antes y después las revisiones `-00007-wut`, `-00008-nek` y `-00002-dij`.
+
+**Baselines vigentes para el próximo C-A0:** producción `a312c96`; Hosting `3d1dc8bc8d1bcc29`; Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Functions `campaignshare-00002-dij`, `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`; financiero **A9 post-CASH**. Los valores de A0 y de la Etapa A quedan solo como evidencia pre-CASH.
+
+**Producción sin cambios en R1/R4:** sin deploy, merge a producción, migración ni escrituras.
