@@ -84,10 +84,10 @@ function record(area: CashArea, date: string, amount: number, note: string): Fin
 }
 
 // Delivers a snapshot to every active financeTransactions listener of `period`.
-function emit(period: string, docs: FinanceTransaction[], fromCache = false) {
+function emit(period: string, docs: FinanceTransaction[], fromCache = false, includeCancelled = false) {
   const targets = fs.listeners.filter(
     (l) =>
-      l.active &&
+      (l.active || includeCancelled) &&
       l.ref.name === "financeTransactions" &&
       l.ref.cs?.some((c) => c.kind === "where" && c.field === "period" && c.value === period),
   );
@@ -167,8 +167,9 @@ describe("Resumen — Registrar efectivo", () => {
 
     fireEvent.change(dateField(), { target: { value: "2026-09-27" } });
     expectWaiting();
-    // A late October snapshot does not make September writable.
-    emit("2026-10", [record("offerings", "2026-10-07", 1, "tarde")]);
+    // A late October snapshot, even one delivered to the cancelled October
+    // listener of the modal, does not make September writable.
+    emit("2026-10", [record("offerings", "2026-10-07", 1, "tarde")], false, true);
     expectWaiting();
 
     emit("2026-09", [record("offerings", "2026-09-27", 20000, "Septiembre")]);
@@ -245,6 +246,17 @@ describe("Ofrendas y Cafetería — Caja del día", () => {
     const pageDate = screen.getByLabelText("Fecha");
     fireEvent.change(pageDate, { target: { value: "" } });
     expect(screen.getByRole("button", { name: /Editar efectivo · \$50\.000/ })).toBeInTheDocument();
+    // The typed value is kept (not snapped back) so the user can keep typing,
+    // including years that start with zeros.
+    expect(pageDate).toHaveValue("");
+    fireEvent.change(pageDate, { target: { value: "0020-10-07" } });
+    expect(pageDate).toHaveValue("0020-10-07");
+    fireEvent.change(pageDate, { target: { value: "2026-10-07" } });
+    expect(pageDate).toHaveValue("2026-10-07");
+    expect(screen.getByRole("button", { name: /Editar efectivo · \$50\.000/ })).toBeInTheDocument();
+    // ‹ moves the day and the input follows it.
+    fireEvent.click(screen.getByRole("button", { name: "Día anterior" }));
+    expect(pageDate).toHaveValue("2026-10-06");
   });
 
   it("MINOR-1: cambiar en el modal a un mes no cargado espera ese mes antes de permitir guardar", () => {

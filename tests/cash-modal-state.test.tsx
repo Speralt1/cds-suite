@@ -2,8 +2,8 @@
 // Cases A–N of the R0E brief, driven through a stateful parent that applies
 // onAreaChange/onDateChange like the real pages do, with the period's data
 // arriving asynchronously (re-render with a new store).
-import { fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Timestamp } from "firebase/firestore";
 import { CashModal } from "@/components/finance/offerings/cash-modal";
@@ -279,6 +279,13 @@ describe("H/I — fecha vacía o inválida (MINOR-3)", () => {
     expect(cashDateIssue("")).toBe("Ingresa la fecha correspondiente para continuar.");
     expect(cashDateIssue("2026-09-08")).toMatch(/desde el 9 de septiembre/);
     expect(cashDateIssue("2100-01-01")).toMatch(/hasta el 31 de diciembre de 2099/);
+    // Years 0001-0099 are real dates (the input emits them while typing the
+    // year): out of range, never "invalid", and never mapped to 19xx.
+    for (const typing of ["0002-10-07", "0020-10-07", "0202-10-07", "0020-02-29"]) {
+      expect(isCalendarDate(typing)).toBe(true);
+      expect(cashDateIssue(typing)).toBe("Elige una fecha desde el 9 de septiembre de 2026.");
+    }
+    expect(isCalendarDate("0021-02-29")).toBe(false);
     for (const ok of ["2026-09-09", "2026-10-04", "2028-02-29", "2099-12-31"]) {
       expect(cashDateIssue(ok)).toBeNull();
       expect(isCalendarDate(ok)).toBe(true);
@@ -444,5 +451,71 @@ describe("N — cambio rápido de área", () => {
     expect(title()).toBe("Editar efectivo · Cafetería");
     expect(amountField()).toHaveValue("80000");
     expect(noteField()).toHaveValue("Venta AM");
+  });
+});
+
+describe("Brechas cubiertas tras la revisión de Atlas", () => {
+  it("la confirmación de fecha fuera de culto se reinicia al cambiar la fecha", () => {
+    render(<Page store={{ "2026-10": { data: [] } }} date="2026-10-05" />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Confirmo que el efectivo corresponde/ }));
+    expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeEnabled();
+    fireEvent.change(dateField(), { target: { value: "2026-10-06" } });
+    expect(screen.getByRole("checkbox", { name: /Confirmo que el efectivo corresponde/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Registrar efectivo" })).toBeDisabled();
+  });
+
+  it("el snapshot del propio guardado no muestra un conflicto ni permite un segundo envío", async () => {
+    let finish: () => void = () => {};
+    mocks.save.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const existing = record("offerings", "2026-10-04", 50000, "Servicio AM");
+    const view = render(<Page store={{ "2026-10": { data: [existing] } }} />);
+    fireEvent.change(amountField()!, { target: { value: "52000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar efectivo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardando…" }));
+    fireEvent.submit(form());
+
+    view.rerender(<Page store={{ "2026-10": { data: [{ ...existing, amount: 52000, revision: 2 }] } }} />);
+    expect(screen.queryByText(/Este registro cambió/)).toBeNull();
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  });
+
+  it("si el servidor no confirma los datos, avisa en vez de quedar cargando sin explicación", () => {
+    vi.useFakeTimers();
+    try {
+      render(<Page store={{}} />);
+      expect(screen.getByRole("status")).toHaveTextContent("Cargando el efectivo registrado");
+      act(() => vi.advanceTimersByTime(12000));
+      expect(screen.getByRole("status")).toHaveTextContent("Todavía no pudimos confirmar los datos con el servidor");
+      expectBlocked();
+      // A new date restarts the wait instead of inheriting the warning.
+      fireEvent.change(dateField(), { target: { value: "2026-11-01" } });
+      expect(screen.getByRole("status")).toHaveTextContent("Cargando el efectivo registrado");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("si el padre cambia la fecha por su cuenta, el modal la muestra y carga ese día", () => {
+    const existing = record("offerings", "2026-10-07", 70000, "Miércoles");
+    const props = { area: "offerings" as const, allTransactionsForDay: [existing], loading: false, onAreaChange: () => {}, onDateChange: () => {}, onClose: () => {} };
+    const view = render(<CashModal {...props} date="2026-10-04" />);
+    expect(title()).toBe("Ingresar efectivo · Ofrendas");
+    view.rerender(<CashModal {...props} date="2026-10-07" />);
+    expect(dateField()).toHaveValue("2026-10-07");
+    expect(amountField()).toHaveValue("70000");
+  });
+
+  it("en StrictMode abre antes del registro, prellena al llegar y guarda monto y nota completos", async () => {
+    const existing = record("offerings", "2026-10-04", 50000, "Servicio AM");
+    const view = render(<StrictMode><Page store={{}} /></StrictMode>);
+    expectBlocked();
+    view.rerender(<StrictMode><Page store={{ "2026-10": { data: [existing] } }} /></StrictMode>);
+    expect(amountField()).toHaveValue("50000");
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar efectivo" }));
+    await vi.waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    const { input, existing: sent } = savedCall();
+    expect(input).toMatchObject({ amount: 50000, note: "Servicio AM" });
+    expect(sent).toBe(existing);
   });
 });

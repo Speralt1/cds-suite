@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
@@ -24,6 +24,10 @@ const AREA_LABELS: Record<CashArea, string> = {
 };
 
 const NO_SUMUP_CASH = { amount: 0, count: 0 };
+
+// After this long without a server-confirmed snapshot, say so instead of an
+// endless "Cargando…" (e.g. a captive portal while navigator.onLine is true).
+const SLOW_LOAD_MS = 12000;
 
 function cashDateLabel(date: string) {
   return new Intl.DateTimeFormat("es-CL", {
@@ -96,6 +100,12 @@ export function CashModal({
   // The raw input value. Only valid dates reach the parent (which queries by
   // the date's month), so clearing or mistyping the date never breaks the page.
   const [typedDate, setTypedDate] = useState(date);
+  // Defensive: if the parent changes `date` on its own, show that date.
+  const [typedFor, setTypedFor] = useState(date);
+  if (typedFor !== date) {
+    setTypedFor(date);
+    setTypedDate(date);
+  }
   const dateIssue = cashDateIssue(typedDate);
   const dateSettled = !dateIssue && typedDate === date;
   const ready = dateSettled && !loading && !loadError;
@@ -115,10 +125,20 @@ export function CashModal({
   }
   const active = identity && draft?.identity === identity ? draft : null;
   const record = active?.baseline;
-  const recordChanged =
-    !!record && !!existing && existing.revision !== record.revision;
-
   const [busy, setBusy] = useState(false);
+  // While saving, our own write may arrive as a new revision: not a conflict.
+  const recordChanged =
+    !busy && !!record && !!existing && existing.revision !== record.revision;
+
+  const waitingFor = dateSettled && !ready && !loadError ? `${area}|${date}` : null;
+  const [slowFor, setSlowFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!waitingFor) return;
+    const timer = setTimeout(() => setSlowFor(waitingFor), SLOW_LOAD_MS);
+    return () => clearTimeout(timer);
+  }, [waitingFor]);
+  const slow = !!waitingFor && slowFor === waitingFor;
+
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState<string | null>(null);
   const confirmKey = `${area}|${date}`;
@@ -244,7 +264,9 @@ export function CashModal({
               <Notice error={loadError} />
             ) : (
               <p className="notice cash-loading" role="status">
-                Cargando el efectivo registrado para esta fecha…
+                {slow
+                  ? "Todavía no pudimos confirmar los datos con el servidor. Revisa tu conexión: no se guardará nada hasta confirmarlos. Puedes cancelar y volver a intentarlo."
+                  : "Cargando el efectivo registrado para esta fecha…"}
               </p>
             ))}
 

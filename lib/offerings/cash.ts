@@ -28,8 +28,15 @@ export const CASH_DATE_MAX = "2099-12-31";
 export function isCalendarDate(date: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const [year, month, day] = date.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.toISOString().slice(0, 10) === date;
+  // setUTCFullYear, not Date.UTC: Date.UTC maps years 0-99 to 1900-1999, and
+  // date inputs emit "0002-…", "0020-…" while the year is being typed.
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(year, month - 1, day);
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
 }
 
 // Why a typed cash date can't be used yet, or null when it is a real

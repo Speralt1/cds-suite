@@ -328,6 +328,14 @@ export function OfferingsPage() {
   const offeringsIntegration = useSumUpIntegration("offerings");
   const cafeIntegration = useSumUpIntegration("cafeteria");
   const [selectedDate, setSelectedDate] = useState(today());
+  // Raw value of the date input; re-synced when the day changes elsewhere
+  // (‹ › Hoy, or the cash modal).
+  const [dateInput, setDateInput] = useState(selectedDate);
+  const [dateInputFor, setDateInputFor] = useState(selectedDate);
+  if (dateInputFor !== selectedDate) {
+    setDateInputFor(selectedDate);
+    setDateInput(selectedDate);
+  }
   const financeTransactions = useTransactions(
     periodFromDate(selectedDate),
     true,
@@ -448,11 +456,20 @@ export function OfferingsPage() {
           Fecha
           <input
             type="date"
-            value={selectedDate}
-            // A cleared or partial date is ignored instead of crashing the
-            // cash readings below; the last valid day stays selected.
+            min="2000-01-01"
+            max="2099-12-31"
+            value={dateInput}
+            // A cleared or partial date stays in the input while it is being
+            // typed but never reaches the cash readings below (they would
+            // throw); the last valid day stays selected meanwhile.
             onChange={(e) => {
-              if (isCalendarDate(e.target.value)) setSelectedDate(e.target.value);
+              setDateInput(e.target.value);
+              const next = e.target.value;
+              // Same range as the Resumen day picker; outside it the month
+              // calendar cannot be built.
+              if (isCalendarDate(next) && next >= "2000-01-01" && next <= "2099-12-31") {
+                setSelectedDate(next);
+              }
             }}
           />
         </label>

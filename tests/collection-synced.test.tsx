@@ -7,7 +7,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { FinanceDataCacheProvider, useCollection } from "@/lib/finance/hooks";
 
 const state = vi.hoisted(() => ({
-  listeners: [] as { next: (snapshot: unknown) => void; active: boolean }[],
+  listeners: [] as { next: (snapshot: unknown) => void; error: (e: unknown) => void; active: boolean }[],
 }));
 
 vi.mock("@/lib/firebase", () => ({ getFirebaseServices: () => ({ db: {} }) }));
@@ -19,8 +19,8 @@ vi.mock("firebase/firestore", () => ({
   orderBy: vi.fn(),
   query: vi.fn(),
   where: vi.fn(),
-  onSnapshot: (_: unknown, __: unknown, next: (snapshot: unknown) => void) => {
-    const listener = { next, active: true };
+  onSnapshot: (_: unknown, __: unknown, next: (snapshot: unknown) => void, error: (e: unknown) => void) => {
+    const listener = { next, error, active: true };
     state.listeners.push(listener);
     return () => {
       listener.active = false;
@@ -39,14 +39,16 @@ function emit(id: string, fromCache: boolean, hasPendingWrites = false) {
   });
 }
 
-function Probe({ enabled = true, cacheKey }: { enabled?: boolean; cacheKey?: string }) {
-  const constraints = useMemo(() => [], []);
+function Probe({ enabled = true, cacheKey, query = "a" }: { enabled?: boolean; cacheKey?: string; query?: string }) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const constraints = useMemo(() => [], [query]);
   const result = useCollection<{ id: string }>("items", constraints, enabled, cacheKey);
   return (
     <p>
       {result.loading ? "cargando" : result.data[0]?.id ?? "vacío"}
       {" · "}
       {result.synced ? "sincronizado" : "no sincronizado"}
+      {result.error && ` · ${result.error}`}
     </p>
   );
 }
@@ -99,5 +101,21 @@ it("sin conexión nunca está sincronizado", () => {
   emit("servidor", false);
   Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
   act(() => window.dispatchEvent(new Event("offline")));
-  expect(screen.getByText("servidor · no sincronizado")).toBeVisible();
+  expect(screen.getByText(/^servidor · no sincronizado · Sin conexión/)).toBeVisible();
+});
+
+it("un error de la consulta nunca está sincronizado", () => {
+  render(<Probe />);
+  emit("servidor", false);
+  act(() => state.listeners.at(-1)!.error(new Error("Sin permiso")));
+  expect(screen.getByText(/no sincronizado · Sin permiso/)).toBeVisible();
+});
+
+it("al cambiar las restricciones no hereda la sincronización de la consulta anterior", () => {
+  const view = render(<Probe />);
+  emit("a", false);
+  view.rerender(<Probe query="b" />);
+  expect(screen.getByText("cargando · no sincronizado")).toBeVisible();
+  emit("b", false);
+  expect(screen.getByText("b · sincronizado")).toBeVisible();
 });
