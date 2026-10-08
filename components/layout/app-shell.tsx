@@ -6,7 +6,7 @@
 //   los módulos permitidos (≤4, sin "Más"). La cuenta y "Cerrar sesión" viven
 //   en el avatar de la top bar, que abre la hoja "Cuenta".
 // - La navegación lista MÓDULOS; las secciones viven en la subnav de cada
-//   módulo dentro del contenido (FinanceNav sin cambios). Integrantes no existe.
+//   módulo dentro del contenido (FinanceNav sin cambios). Integrantes solo con permiso explícito o admin (doc 23).
 // - Funciona sin AccessProvider (solo "Finanzas", como antes) y conserva el
 //   skip link, <main id="main-content">, el botón "Cerrar sesión" y un único
 //   role="alert" para el error de logout.
@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   LogOut,
   Settings,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -38,6 +39,7 @@ import { Sheet } from "./sheet";
 const ICONS: Record<ModuleIconName, LucideIcon> = {
   Wallet,
   CalendarDays,
+  Users,
   ChartColumn,
   Settings,
 };
@@ -244,6 +246,9 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
         {modules.map((m) => {
           const Icon = ICONS[m.icon];
           const current = m.id === activeModule;
+          // Con 5 módulos (admin con Integrantes) "Configuración" no cabe en ninguna
+          // columna de 375–390 px: se usa siempre la etiqueta corta.
+          const crowded = modules.length >= 5;
           const short = BAR_SHORT_LABEL[m.id];
           return (
             <Link
@@ -259,13 +264,21 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
               >
                 <Icon className="size-[22px]" strokeWidth={1.75} />
               </span>
-              <span className={`max-w-full truncate whitespace-nowrap ${short ? "max-[359px]:hidden" : ""}`} aria-hidden="true">
-                {m.label}
-              </span>
-              {short && (
-                <span className="hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
+              {short && crowded ? (
+                <span className="max-w-full truncate whitespace-nowrap" aria-hidden="true">
                   {short}
                 </span>
+              ) : (
+                <>
+                  <span className={`max-w-full truncate whitespace-nowrap ${short ? "max-[359px]:hidden" : ""}`} aria-hidden="true">
+                    {m.label}
+                  </span>
+                  {short && (
+                    <span className="hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
+                      {short}
+                    </span>
+                  )}
+                </>
               )}
             </Link>
           );

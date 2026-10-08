@@ -39,6 +39,7 @@ exports.IMPLIES = {
     "calendar.events.manage_all": ["calendar.events.manage_assigned"],
     "calendar.events.manage_assigned": ["calendar.read"],
     "calendar.events.publish_assigned": ["calendar.read"],
+    "members.consolidation.manage": ["members.consolidation.read"],
 };
 /** Fallback legacy, IDÉNTICO al mapeo de la migración y a `legacyPermissions()` de las reglas. */
 exports.LEGACY_ROLE_ACCESS = {
@@ -210,10 +211,13 @@ function deriveLegacyRole(baseRole, perms) {
     return "leader";
 }
 // ---------- Módulos y módulo inicial ----------
-exports.MODULE_ORDER = ["finance", "calendar", "reports", "settings"];
+// Integrantes (Consolidación V1, doc 23) solo se ve con permiso EXPLÍCITO o admin:
+// el fallback legacy no lo otorga a ningún rol.
+exports.MODULE_ORDER = ["finance", "calendar", "members", "reports", "settings"];
 exports.MODULE_HREF = {
     finance: "/finanzas",
     calendar: "/calendario",
+    members: "/integrantes",
     reports: "/reportes",
     settings: "/configuracion",
 };
@@ -221,6 +225,7 @@ exports.MODULE_HREF = {
 exports.MODULE_PERMISSIONS = {
     finance: ["finance.summary.read"],
     calendar: ["calendar.read"],
+    members: ["members.consolidation.read"],
     reports: ["finance.details.read", "calendar.read"],
     settings: ["settings.manage"],
 };

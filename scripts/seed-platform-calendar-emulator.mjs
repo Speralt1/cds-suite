@@ -20,6 +20,14 @@
  *   diacono.publica@cds.test v1 Diácono: manage_assigned + publish_assigned en [multimedia, varones]
  *   inactivo@cds.test        doc LEGACY role finance, active:false
  *   sinmodulos@cds.test      v1 activo SIN permisos ni áreas ("Aún no tienes módulos asignados")
+ *   consolidacion@cds.test   v1 Coordinadora Consolidación: members.consolidation.manage + calendar.read
+ *   apoyo.consolidacion@cds.test v1 Apoyo Consolidación: solo members.consolidation.read
+ *
+ * Los líderes (solo calendario) NO tienen ningún permiso de Integrantes.
+ *
+ * Integrantes › Consolidación (doc 23): 14 personas ficticias con visitas,
+ * seguimientos y cambios que cubren todas las alertas y estados
+ * (scripts/seed-members-emulator.mjs, mismo servicio que las Functions).
  *
  * Áreas: 9 activas + Matrimonios inactiva (paleta cerrada). Actividades
  * relativas a "hoy" en America/Santiago, cada una con revision/lastChangeId y
@@ -44,6 +52,7 @@
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { seedMembers } from "./seed-members-emulator.mjs";
 
 const requireFromFunctions = createRequire(new URL("../functions/package.json", import.meta.url));
 const dates = requireFromFunctions("./shared/dates.js");
@@ -146,6 +155,36 @@ export const SEED_USERS = Object.freeze([
     displayName: "Javiera Muñoz (prueba)",
     note: "v1 activo sin módulos",
     doc: { role: "leader", active: true, baseRole: "standard", position: "Colaboradora", permissions: [], areaIds: [], homeModule: "calendar" },
+  },
+  {
+    uid: "seed-coord-consolidacion",
+    email: "consolidacion@cds.test",
+    displayName: "Coordinadora Consolidación (prueba)",
+    note: "v1 Coordinadora Consolidación (manage)",
+    doc: {
+      role: "leader",
+      active: true,
+      baseRole: "standard",
+      position: "Coordinadora Consolidación",
+      permissions: ["calendar.read", "members.consolidation.manage"],
+      areaIds: ["consolidacion"],
+      homeModule: "calendar",
+    },
+  },
+  {
+    uid: "seed-apoyo-consolidacion",
+    email: "apoyo.consolidacion@cds.test",
+    displayName: "Apoyo Consolidación (prueba)",
+    note: "v1 Apoyo Consolidación (solo lectura)",
+    doc: {
+      role: "leader",
+      active: true,
+      baseRole: "standard",
+      position: "Apoyo Consolidación",
+      permissions: ["members.consolidation.read"],
+      areaIds: [],
+      homeModule: "calendar",
+    },
   },
 ]);
 
@@ -731,6 +770,9 @@ export async function runSeed({ env = process.env, now = Date.now() } = {}) {
   const service = createShareLinkService({ store: createCalendarStore({ db }), clock: { now: () => Date.now() }, randomBytes: crypto.randomBytes });
   const { token } = await service.handle("seed-pastor", "create");
 
+  // Integrantes › Consolidación: personas ficticias con el servicio real de las Functions.
+  const members = await seedMembers({ db, nowMs: now, users: data.users, events: data.events });
+
   // Finanzas: como cliente autenticado (reglas reales), después de sembrar los perfiles.
   const { seedFinanceMovements } = await loadFinanceSeeder();
   const finance = await seedFinanceMovements({
@@ -746,6 +788,7 @@ export async function runSeed({ env = process.env, now = Date.now() } = {}) {
     feedUrl: feedUrlFor(),
     counts: { users: data.users.length, areas: data.areas.length, events: data.events.length },
     finance,
+    members,
   };
 }
 
@@ -761,6 +804,7 @@ async function main() {
   console.log(`Seed local listo (hoy en Santiago: ${result.today}) · ${result.counts.users} cuentas · ${result.counts.areas} áreas · ${result.counts.events} actividades`);
   console.log(`Cuentas del emulador (contraseña ficticia ${SEED_PASSWORD}):`);
   for (const u of SEED_USERS) console.log(`  ${u.email.padEnd(26)} ${u.note}`);
+  console.log(`Consolidación: ${result.members.people} personas ficticias · ${result.members.visits} visitas · ${result.members.followUps} seguimientos · ${result.members.changes} cambios.`);
   console.log(`Finanzas: ${result.finance.created} movimientos ficticios nuevos (${result.finance.skipped} ya existían), registrados como finanzas@cds.test.`);
   console.log("Enlace del calendario público (solo local, se muestra una vez):");
   console.log(`  ${result.publicUrl}`);

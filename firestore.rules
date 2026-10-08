@@ -33,6 +33,8 @@ service cloud.firestore {
         'calendar.events.manage_assigned': ['calendar.events.manage_assigned','calendar.events.manage_all'],
         'calendar.events.manage_all': ['calendar.events.manage_all'],
         'calendar.events.publish_assigned': ['calendar.events.publish_assigned'],
+        'members.consolidation.read': ['members.consolidation.read','members.consolidation.manage'],
+        'members.consolidation.manage': ['members.consolidation.manage'],
         'settings.manage': []
       };
     }
@@ -79,6 +81,9 @@ service cloud.firestore {
     function financeRecordsManage() { return gate(['finance.records.manage'], ['admin','pastor','finance']); }
     function financePastoralManage() { return gate(['finance.pastoral.manage'], ['admin','pastor']); }
     function admin() { return settingsManage(); }                  // alias histórico (appSettings)
+    // Integrantes › Consolidación V1 (doc 23): SOLO permiso explícito v1 o admin. Ningún rol legacy
+    // distinto de admin lo obtiene (legacyPermissions() no incluye members.*).
+    function membersRead() { return gate(['members.consolidation.read','members.consolidation.manage'], ['admin']); }
     // Movimientos importados desde proveedores son propiedad del backend.
     // Cloud Functions/Admin SDK no está sujeto a estas reglas; clientes sí.
     function providerOwnedFinanceTransaction(id) { return id.matches('^sumup_.*'); }
@@ -120,7 +125,7 @@ service cloud.firestore {
     }
 
     // ── users/{uid} (18a §C.1/§D.2) ──────────────────────────────────────────
-    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned']; }
+    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned','members.consolidation.read','members.consolidation.manage']; }
     function v1UserKeys() { return ['displayName','email','role','active','createdAt','baseRole','position','permissions','areaIds','homeModule','accessSchemaVersion','updatedAt','updatedBy']; }
     function validLegacyUser(d) {
       return d.keys().hasOnly(['displayName','email','role','active','createdAt'])
@@ -140,7 +145,7 @@ service cloud.firestore {
         && text(d.displayName,1,120) && text(d.email,3,160)
         && d.role in ['admin','pastor','finance','leader'] && d.active is bool && d.createdAt is timestamp
         && d.baseRole in ['admin','standard'] && text(d.position,0,60)
-        && d.permissions is list && d.permissions.size() <= 8 && d.permissions.hasOnly(permissionCatalogNoSettings())
+        && d.permissions is list && d.permissions.size() <= 10 && d.permissions.hasOnly(permissionCatalogNoSettings())
         && d.permissions.toSet().size() == d.permissions.size()
         && ((d.baseRole == 'admin') == (d.role == 'admin')) && d.role == derivedLegacyRole(d)
         && areaIdList(d.areaIds, 20)
@@ -1093,5 +1098,26 @@ service cloud.firestore {
 
     // ── calendarShareLinks: solo Admin SDK / Functions (18a §C.5) ───────────
     match /calendarShareLinks/{shareId} { allow read, write: if false; }
+
+    // ── Integrantes › Consolidación V1 (doc 23 §4) ──────────────────────────
+    // Lectura: members.consolidation.read/manage explícito (v1) o admin. Escritura del cliente:
+    // NUNCA. Las escriben solo las Functions members* con el Admin SDK (validación, auditoría,
+    // idempotencia y timestamps del servidor). Sin datos de Integrantes en ninguna otra colección.
+    match /membersPeople/{personId} {
+      allow get, list: if membersRead();
+      allow create, update, delete: if false;
+    }
+    match /membersVisits/{visitId} {
+      allow get, list: if membersRead();
+      allow create, update, delete: if false;
+    }
+    match /membersFollowUps/{followUpId} {
+      allow get, list: if membersRead();
+      allow create, update, delete: if false;
+    }
+    match /membersPersonChanges/{changeId} {
+      allow get, list: if membersRead();
+      allow create, update, delete: if false;
+    }
   }
 }

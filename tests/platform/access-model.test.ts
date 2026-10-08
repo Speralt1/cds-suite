@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { accessModel } from "@/lib/access/model";
-import { MODULES, MODULE_LABEL, modulesFor } from "@/lib/access/modules";
+import { MODULES, modulesFor } from "@/lib/access/modules";
 import { PERMISSION_DESCRIPTION, PERMISSION_GROUPS, PERMISSION_LABEL, POSITION_PRESETS } from "@/lib/access/labels";
 import { LEGACY_ROLE_ACCESS, PERMISSIONS, effectivePermissions, sortPermissions } from "@/lib/shared/access";
 import { PROFILES, profile, v1 } from "./profiles";
@@ -68,11 +68,10 @@ describe("accessModel", () => {
 });
 
 describe("registro de módulos", () => {
-  it("orden fijo y sin Integrantes", () => {
-    expect(MODULES.map((m) => m.label)).toEqual(["Finanzas", "Calendario", "Reportes", "Configuración"]);
-    expect(MODULES.map((m) => m.href)).toEqual(["/finanzas", "/calendario", "/reportes", "/configuracion"]);
-    expect(JSON.stringify(MODULES)).not.toMatch(/integrantes/i);
-    expect(Object.values(MODULE_LABEL)).not.toContain("Integrantes");
+  it("orden fijo con Integrantes entre Calendario y Reportes (doc 23)", () => {
+    expect(MODULES.map((m) => m.label)).toEqual(["Finanzas", "Calendario", "Integrantes", "Reportes", "Configuración"]);
+    expect(MODULES.map((m) => m.href)).toEqual(["/finanzas", "/calendario", "/integrantes", "/reportes", "/configuracion"]);
+    expect(MODULES.find((m) => m.id === "members")?.icon).toBe("Users");
   });
 
   it("modulesFor respeta el orden de la navegación", () => {

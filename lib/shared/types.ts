@@ -25,6 +25,8 @@ export const PERMISSIONS = [
   "calendar.events.manage_assigned",
   "calendar.events.manage_all",
   "calendar.events.publish_assigned",
+  "members.consolidation.read",
+  "members.consolidation.manage",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -41,10 +43,10 @@ export type LegacyRole = (typeof LEGACY_ROLES)[number];
 export const HOME_MODULES = ["finance", "calendar"] as const;
 export type HomeModule = (typeof HOME_MODULES)[number];
 
-export type ModuleId = "finance" | "calendar" | "reports" | "settings";
+export type ModuleId = "finance" | "calendar" | "members" | "reports" | "settings";
 
 /** Límites del documento v1 (iguales a las reglas). */
-export const MAX_STORED_PERMISSIONS = 8;
+export const MAX_STORED_PERMISSIONS = 10;
 export const MAX_AREA_IDS = 20;
 export const MAX_POSITION_LENGTH = 60;
 
