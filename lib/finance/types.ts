@@ -1,4 +1,5 @@
 import type { Timestamp } from "firebase/firestore";
+import type { BaseRole, HomeModule, Permission } from "../shared/types";
 export type Role = "admin" | "pastor" | "finance" | "leader";
 export interface AccessUser {
   displayName: string;
@@ -6,6 +7,16 @@ export interface AccessUser {
   role: Role;
   active: boolean;
   createdAt: Timestamp;
+  // Campos v1 (18a §C.1), opcionales: los documentos legacy no los tienen.
+  // La autorización se calcula siempre con lib/shared/access (`can`).
+  baseRole?: BaseRole;
+  position?: string;
+  permissions?: Permission[];
+  areaIds?: string[];
+  homeModule?: HomeModule;
+  accessSchemaVersion?: 1;
+  updatedAt?: Timestamp;
+  updatedBy?: string;
 }
 export type TransactionType = "income" | "expense";
 export type PaymentMethod = "cash" | "transfer" | "card" | "other";

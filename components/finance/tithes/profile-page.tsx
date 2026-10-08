@@ -13,7 +13,7 @@ import { getDownloadURL, ref as storageRef } from "firebase/storage";
 import { Ban } from "lucide-react";
 import { getFirebaseServices } from "@/lib/firebase";
 import { useAccess } from "@/lib/auth/access-provider";
-import { canSeePastoral } from "@/lib/finance/permissions";
+import { can } from "@/lib/shared/access";
 import { useCollection, useDocument } from "@/lib/finance/hooks";
 import { useLatestAttribution } from "@/lib/finance/tithe-hooks";
 import { groupAttributionsByMonth, titheAggregates } from "@/lib/finance/insights";
@@ -379,7 +379,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
       ) : (
         <Empty>No hay registros en {year}.</Empty>
       )}
-      {canSeePastoral(access.role) && <PastoralPanel profile={profile} />}{" "}
+      {can(access, "finance.pastoral.manage") && <PastoralPanel profile={profile} />}{" "}
       {edit && (
         <ProfileForm
           existing={profile}

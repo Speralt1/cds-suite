@@ -1,4 +1,5 @@
-const { onRequest } = require("firebase-functions/v2/https");
+const crypto = require("node:crypto");
+const { onRequest, onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineJsonSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
@@ -8,6 +9,10 @@ const { getAuth } = require("firebase-admin/auth");
 const core = require("./sumup/core");
 const engine = require("./sumup/engine");
 const { createFirestoreStore } = require("./sumup/firestore-store");
+const { createRequireFinanceUser } = require("./auth/require-finance-user");
+const { createCalendarStore } = require("./calendar/firestore-store");
+const { createPublicFeedHandler } = require("./calendar/public-feed");
+const { createShareLinkService, createShareLinkCallableHandler } = require("./calendar/share-links");
 
 initializeApp();
 
@@ -23,6 +28,7 @@ const sumupCafe = defineJsonSecret("SUMUP_CAFETERIA_CONFIG");
 
 const store = createFirestoreStore({ db, FieldValue, Timestamp });
 const clock = { now: () => Date.now() };
+const calendarStore = createCalendarStore({ db });
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -178,18 +184,15 @@ async function fetchPage({ config, changesSince, order, limit, cursor }) {
   return { items, nextCursor: next?.href || null };
 }
 
-async function requireFinanceUser(req) {
-  const header = req.get('authorization') || '';
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  if (!match) throw new Error('UNAUTHENTICATED');
-
-  const decoded = await getAuth().verifyIdToken(match[1]);
-  const user = await db.doc(`users/${decoded.uid}`).get();
-  if (!user.exists || user.data().active !== true || !['admin', 'pastor', 'finance'].includes(user.data().role)) {
-    throw new Error('FORBIDDEN');
-  }
-  return decoded.uid;
-}
+// Autorización financiera con el modelo de acceso compartido
+// (`can(userDoc, "finance.records.manage")`), equivalente a la regla legacy.
+const requireFinanceUser = createRequireFinanceUser({
+  verifyIdToken: (token) => getAuth().verifyIdToken(token),
+  getUserDoc: async (uid) => {
+    const user = await db.doc(`users/${uid}`).get();
+    return user.exists ? user.data() : null;
+  },
+});
 
 async function ensureSumUpSystemCategory() {
   const ref = db.doc('appSettings/finance');
@@ -467,4 +470,22 @@ exports.sumupSyncScheduled = onSchedule(
       }
     }
   },
+);
+
+// ---------- Calendario público (18a §E) ----------
+
+exports.calendarPublicFeed = onRequest(
+  { region: REGION, timeoutSeconds: 15, memory: "256MiB", maxInstances: 5 },
+  createPublicFeedHandler({
+    store: calendarStore,
+    clock,
+    isEmulator: process.env.FUNCTIONS_EMULATOR === "true",
+  }),
+);
+
+const shareLinks = createShareLinkService({ store: calendarStore, clock, randomBytes: crypto.randomBytes });
+
+exports.calendarShareLinkManage = onCall(
+  { region: REGION, timeoutSeconds: 15, maxInstances: 3 },
+  createShareLinkCallableHandler(shareLinks),
 );

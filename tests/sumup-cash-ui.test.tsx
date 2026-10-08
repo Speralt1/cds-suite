@@ -191,6 +191,24 @@ describe("Tarjeta de área — efectivo SumUp y Caja del día el mismo día", ()
     expect(screen.getByRole("button", { name: /Registrar efectivo/ })).toHaveClass("button-secondary");
   });
 
+  it("sin permiso de escritura (onCash omitido) la tarjeta no ofrece registrar efectivo", () => {
+    render(
+      <AreaCard
+        title="Cafetería"
+        dayLabel="dom 4 oct"
+        monthLabel="Octubre"
+        monthSuffix=""
+        cardDay={740360}
+        cardMonth={740360}
+        cashDay={163500}
+        cashMonth={163500}
+        sumUpCashDay={163500}
+      />,
+    );
+    expect(screen.getByText("Incluye $163.500 registrado en SumUp")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /efectivo/i })).toBeNull();
+  });
+
   it("con SumUp y Caja del día activos: aviso de revisión (manual primero o después), sin bloquear", () => {
     const manual = tx({ id: "cash_cafeteria_2026-10-04", amount: 163500, paymentMethod: "cash", createdBy: "uid-1" });
     card({ cashDay: 327000, sumUpCashDay: 163500, existingCash: manual });

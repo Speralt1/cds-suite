@@ -5,6 +5,7 @@ import { useAuth } from "./auth-provider";
 import { getFirebaseServices } from "../firebase";
 import { isAuthorized } from "../finance/permissions";
 import type { AccessUser } from "../finance/types";
+import { accessModel } from "../access/model";
 import { SessionLoading } from "@/components/ui/session-loading";
 import { useOnlineStatus } from "@/lib/browser/online";
 const AccessContext = createContext<AccessUser | null>(null);
@@ -94,7 +95,8 @@ export function AccessProvider({ children }: { children: React.ReactNode }) {
     );
   return (
     <AccessContext.Provider
-      key={`${user.uid}:${access.profile.role}`}
+      // Cualquier cambio de acceso (permisos, áreas, módulo inicial) desmonta los datos.
+      key={`${user.uid}:${accessModel(access.profile).fingerprint}`}
       value={access.profile}
     >
       {children}

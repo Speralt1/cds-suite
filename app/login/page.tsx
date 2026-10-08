@@ -7,6 +7,7 @@ import { Brand } from "@/components/layout/brand";
 import { SessionLoading } from "@/components/ui/session-loading";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getAuthErrorMessage } from "@/lib/auth/errors";
+import { markLandingIntent } from "@/lib/access/landing-intent";
 
 export default function LoginPage() {
   const { user, loading, initializationError, login } = useAuth();
@@ -17,7 +18,11 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && user && !initializationError) router.replace("/finanzas");
+    if (!loading && user && !initializationError) {
+      // La URL sigue siendo /finanzas; RouteGuard resuelve el módulo inicial.
+      markLandingIntent();
+      router.replace("/finanzas");
+    }
   }, [user, loading, initializationError, router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {

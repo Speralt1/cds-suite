@@ -6,15 +6,28 @@
 ## 1. Identidad del proyecto
 
 - **Nombre:** CDS Suite
-- **Propósito:** suite operativa para Casa de Salvación, con foco actual en finanzas, SumUp, ofrendas, cafetería, diezmos, movimientos, reportes y configuración.
+- **Propósito:** suite operativa para Casa de Salvación, organizada por módulos (§1.1). Su foco actual son finanzas (SumUp, ofrendas, cafetería, diezmos, movimientos, reportes y configuración) y calendario.
 - **Owner:** Salvador
 - **Repositorio:** `Speralt1/cds-suite`
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
 - **Base histórica/default actual de GitHub:** `feature/base-cds-suite`
 - **Línea de integración / preproducción:** `feature/preproduccion-mobile-v1`
-- **Rama activa de trabajo:** `mission/slice6-usability`
+- **Rama activa de trabajo (base productiva):** `mission/slice6-usability` (PR #1)
+- **Rama de la misión en curso:** `mission/platform-core-calendar-v1`. Es el Draft PR "[NO DEPLOY] Platform Core V1 + Calendar" contra `mission/slice6-usability` (§19)
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees`
 - **Trello:** pendiente de enlazar.
+
+### 1.1 Módulos de CDS Suite
+
+| Módulo | Estado |
+|---|---|
+| **Finanzas** | En código productivo, en la base de PR #1 |
+| **Calendario** | Código productivo en `mission/platform-core-calendar-v1`, validado solo con emuladores. **No desplegado** |
+| **Reportes** | Reportes financieros (PR #1) y reporte de Calendario (misión platform-core-calendar). **No desplegado** |
+| **Configuración** | General y Finanzas (PR #1); Áreas y Usuarios y permisos (misión platform-core-calendar). **No desplegado** |
+| **Integrantes** (futuro) | Solo existe como **preview** (PR #4, `/preview/integrantes/*`, fixtures). Sin backend, sin colección `people` y sin datos reales |
+
+El modelo de acceso nuevo es `role` (legacy, se conserva) + `baseRole` + `position` + `permissions[]` + `areaIds[]` + `homeModule` + `active` + `accessSchemaVersion`. Las reglas tienen un fallback exacto al rol legacy mientras dure la migración. Detalle en `docs/mission-2026/18-platform-core-calendar-production-spec.md` §3.
 
 ## 2. Regla de continuidad
 
@@ -325,27 +338,29 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 > Por ahora esta sección se actualiza manualmente.
 
 <!-- AUTO-STATUS:START -->
-- **Base histórica:** `feature/base-cds-suite` @ `42408d6`
-- **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `648afd1`
-- **Rama activa principal:** `mission/slice6-usability`
-- **HEAD previo a este contexto:** `70652bd`
-- **Upstream:** `origin/mission/slice6-usability`
-- **Local vs upstream al último chequeo:** `0 / 0`
-- **PR activo principal:** #1
-- **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5`
+- **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (avanzó desde `42408d6` con el merge del PR #2, Project Control)
+- **Integración / preproducción:** `feature/preproduccion-mobile-v1` @ `0d1bb0d` (merge de PR #1; árbol = `e6b2084`)
+- **Rama activa principal (base productiva):** `mission/slice6-usability` @ `e6b2084` (PR #1 **mergeado** el 2026-10-03; la rama se conserva porque es la base de PR #5)
+- **Release Candidate RC1:** `mission/platform-core-calendar-v1` (desde `e6b2084`), Draft PR #5 **[NO DEPLOY] Platform Core V1 + Calendar** contra `mission/slice6-usability`. Runbook y GO/NO-GO en `docs/mission-2026/20-platform-calendar-rc1-readiness.md`. **NOT DEPLOYED**
+- **Producción (`cds-administracion`):** corre la **Etapa A = Financial Core 2026** (PR #1, mergeado en `feature/preproduccion-mobile-v1` como `0d1bb0d`, árbol = `e6b2084`), desplegada el 2026-10-03/04. Detalle en `docs/mission-2026/21-controlled-rollout-log.md`:
+  - Firestore Rules: ruleset `2d9939ab…`;
+  - Functions: `sumupSyncNow -00006`, `sumupSyncScheduled -00007`, `campaignShare -00002`;
+  - Hosting: `edb77ffc04532a95`.
+  - **Platform Core / Calendar: NOT DEPLOYED** (Etapa B pendiente).
+- **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
+- **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
-- **Última sincronización de contexto:** 2026-09-27
+- **Última sincronización de contexto:** 2026-10-04 (Etapa A desplegada)
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-> No iniciar una nueva rama principal todavía.
-
-Primero:
-1. decidir el destino del PR #1;
-2. confirmar qué parte de Slice 3A debe integrarse después;
-3. mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esa decisión siga abierta;
-4. no cambiar todavía la default branch de GitHub.
+1. **Rollout controlado en curso** (doc 21): Etapa A desplegada (A0–A4 PASS). Sigue **A5**: observación de 7 días o más, con al menos un domingo de culto. La Etapa B (Platform + Calendar) solo empieza con un GO explícito de Salvador tras "ETAPA A STABLE".
+2. **Estrategia aprobada en el doc 20 §2 (opción A):** Etapa A = PR #1 solo (`e6b2084`) → observación ≥ 7 días → Etapa B = PR #5 (RC1). La Fase A0 exige backup, la consulta `feeAmount > 0` = 0 (la corre Salvador) y decidir la alerta del scheduler.
+3. Confirmar qué parte de Slice 3A se integra después.
+4. Mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esas decisiones sigan abiertas.
+5. No cambiar todavía la default branch de GitHub.
+6. **Ningún deploy** de reglas, Functions ni Hosting sin el plan de rollout del doc 18 §12 y sin aprobación humana explícita en cada paso.
 
 ## 18. Hitos recientes
 
@@ -355,3 +370,37 @@ Primero:
 - Worktree temporal Slice 3A retirado sin perder commits.
 - Checkout principal movido a `Proyectos Desarrollo`.
 - `PROJECT_CONTEXT.md` adoptado como contrato de continuidad.
+- 2026-10-02: previews de diseño PR #3 (Financial UX V2) y PR #4 (Calendario + Integrantes/Consolidación), solo fixtures, sin deploy.
+- 2026-10-03: Platform Core V1 + Calendar implementado en código productivo (rama `mission/platform-core-calendar-v1`), validado con Firebase Emulator Suite. **No desplegado.**
+- 2026-10-03/04: **Etapa A desplegada en producción** (PR #1 mergeado; Rules, Functions y Hosting de `e6b2084`). Backup previo, `feeAmount` = 0, alerta del scheduler SumUp, montos idénticos al baseline. Doc 21.
+- 2026-10-03: RC1 / hardening previo al deploy (doc 20). Token del calendario público en el fragmento + POST; `--summary` en la migración; snapshot de producción; runbook por fases; GO FOR CONTROLLED DEPLOYMENT. **No desplegado.**
+
+## 19. Platform Core V1 + Calendar (RC1, NOT DEPLOYED)
+
+- **Rama:** `mission/platform-core-calendar-v1`, desde `origin/mission/slice6-usability` @ `e6b2084`. Draft PR contra `mission/slice6-usability`, marcado **NO DEPLOY · NO PRODUCTION DATA · EMULATOR VALIDATED**. **No mergear.**
+- **Docs:**
+  - `docs/mission-2026/18-platform-core-calendar-production-spec.md`, con anexos 18a (Atlas) y 18b (Designer);
+  - `docs/mission-2026/19-platform-core-calendar-validation.md`.
+- **Qué incluye:**
+  - shell global por módulos;
+  - acceso por permisos con fallback legacy exacto;
+  - áreas;
+  - Calendario (recurrencia V1 y auditoría atómica);
+  - publicar separado de gestionar;
+  - enlace público con token hasheado + Functions `calendarPublicFeed`/`calendarShareLinkManage`;
+  - reporte de Calendario + PDF;
+  - Configuración › Áreas y Usuarios y permisos;
+  - migración `scripts/migrate-access-v1.mjs` (dry-run por defecto);
+  - seed y experiencia local con emuladores.
+- **Qué NO está desplegado:** nada. Ni reglas, ni Functions, ni índices, ni Hosting. La migración de usuarios **no** se ejecutó contra producción.
+- **Relación con los PR:**
+  - se construye sobre PR #1 (base productiva);
+  - PR #3 y PR #4 son referencias de diseño y producto: se portó código revisado de forma selectiva, sin merges;
+  - Integrantes/Consolidación sigue siendo solo preview;
+  - Slice 3A queda preservado y fuera de esta misión.
+- **RC1 (doc 20):**
+  - el enlace público es `/calendario-publico#<token>` y el feed recibe el token por POST (nunca en la URL);
+  - `node scripts/migrate-access-v1.mjs --project <id> --summary` da un dry-run solo con conteos;
+  - el rollback a reglas legacy exige primero el procedimiento del doc 20 §14 (v1 sin finanzas);
+  - en producción, PITR está desactivado y no hay backups ni alertas: se resuelven en la Fase 0 del rollout.
+- **Local:** `npm run dev:platform` levanta Auth + Firestore + Functions con el proyecto `demo-cds-suite`, siembra datos ficticios y arranca Next sin tocar Firebase real. **Ojo:** `npm run dev` a secas usa `.env.local`, que apunta al proyecto real.
