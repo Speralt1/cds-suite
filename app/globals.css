@@ -235,7 +235,8 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  *::backdrop {
     scroll-behavior: auto !important;
     transition: none !important;
     animation: none !important;
@@ -733,6 +734,9 @@ button:disabled {
 }
 .chart-box .recharts-legend-wrapper {
   font-size: 0.75rem;
+}
+.chart-box .recharts-label-list text {
+  font-size: 0.6875rem;
 }
 .chart-legend {
   display: flex;
@@ -3720,6 +3724,8 @@ button:disabled {
 }
 .app-sidebar :focus-visible {
   outline-color: var(--color-side-focus);
+  /* Hacia adentro: el rail tiene poco margen y overflow-y recortaría el anillo. */
+  outline-offset: -3px;
 }
 @media (min-width: 1024px) {
   .app-sidebar {
@@ -3742,8 +3748,7 @@ button:disabled {
     padding: 0;
   }
   .app-sidebar .app-brand-text,
-  .app-nav-label,
-  .app-logout-label {
+  .app-nav-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -3806,8 +3811,7 @@ button:disabled {
     height: 1.375rem;
     flex-shrink: 0;
   }
-  .app-nav-short,
-  .app-logout-short {
+  .app-nav-short {
     display: block;
     max-width: 100%;
     overflow: hidden;
@@ -3830,6 +3834,12 @@ button:disabled {
   }
   .app-logout {
     margin-top: 0.5rem;
+  }
+  /* "Cerrar sesión" visible en dos líneas: el nombre accesible es el texto. */
+  .app-logout-label {
+    max-width: 100%;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
   .app-logout:disabled {
     opacity: 0.6;
@@ -3876,13 +3886,10 @@ button:disabled {
     flex-direction: row;
     justify-content: flex-start;
     gap: 0.625rem;
-    min-height: 2.5rem;
+    min-height: var(--tap-min);
     padding: 0 0.625rem;
     font-size: 0.875rem;
     line-height: 1.25rem;
-  }
-  html:not([data-sidebar="collapsed"]) .app-logout {
-    min-height: var(--tap-min);
   }
   html:not([data-sidebar="collapsed"]) .app-nav-link[aria-current="page"]::before {
     top: 0.625rem;
@@ -3904,9 +3911,9 @@ button:disabled {
     clip-path: none;
     text-align: left;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  html:not([data-sidebar="collapsed"]) .app-nav-short,
-  html:not([data-sidebar="collapsed"]) .app-logout-short {
+  html:not([data-sidebar="collapsed"]) .app-nav-short {
     display: none;
   }
   html:not([data-sidebar="collapsed"]) .app-account-row {
@@ -4129,7 +4136,9 @@ button:disabled {
   color: var(--color-ink);
   box-shadow: 0 12px 32px #14231d26;
 }
-.app-topbar .text-size-popover :focus-visible {
+/* Superficies claras dentro de la barra oscura (popover y hoja "Aa"): anillo
+   de foco normal; el verde claro de la barra no contrasta sobre blanco. */
+.app-topbar :is(.text-size-popover, dialog) :focus-visible {
   outline-color: #7b9d56;
 }
 .text-size-title {
@@ -4198,6 +4207,8 @@ button:disabled {
 /* ---------- Reflujo a 110–125 % (§C4 riesgos) ----------
    Al 100 % no aplica nada (la vista queda idéntica). Con texto más grande las
    grillas de columnas fijas pasan a columnas con mínimo en rem. */
+html[data-text-size="large"] .kpi-grid,
+html[data-text-size="xlarge"] .kpi-grid,
 html[data-text-size="large"] .tithe-kpis,
 html[data-text-size="xlarge"] .tithe-kpis {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
@@ -4213,4 +4224,14 @@ html[data-text-size="xlarge"] .settings-general-grid {
 html[data-text-size="large"] .user-settings-fields,
 html[data-text-size="xlarge"] .user-settings-fields {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+}
+/* Barra inferior con texto al 110–125 %: etiqueta corta ("Ajustes"), igual
+   que bajo 360 px; "Configuración" no cabe en una columna. */
+html[data-text-size="large"] .bar-label-full,
+html[data-text-size="xlarge"] .bar-label-full {
+  display: none;
+}
+html[data-text-size="large"] .bar-label-short,
+html[data-text-size="xlarge"] .bar-label-short {
+  display: block;
 }

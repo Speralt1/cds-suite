@@ -12,8 +12,8 @@
 //   avatar "Cuenta"); ≥1024 fila sobre canvas en la columna de contenido, no
 //   sticky, con la hamburguesa a la izquierda y "Aa" a la derecha.
 // - Orden de foco: skip link → hamburguesa → rail/sidebar → Aa → avatar → main.
-//   Por eso la <aside> (position: fixed) vive en el DOM dentro de la barra,
-//   entre la hamburguesa y "Aa".
+//   Por eso la <aside> (position: fixed) vive en el DOM dentro del <header>
+//   de la barra (landmarks anidados), entre la hamburguesa y "Aa".
 // - La navegación lista MÓDULOS; las secciones viven en la subnav de cada
 //   módulo dentro del contenido. Integrantes no existe.
 // - Funciona sin AccessProvider (solo "Finanzas", como antes) y conserva el
@@ -66,10 +66,17 @@ const ICONS: Readonly<Record<ModuleIconName, LucideIcon>> = {
 
 /**
  * Etiqueta corta visible en el rail (1024–1279 o sidebar contraída) y en la
- * barra inferior en pantallas muy angostas (<360 px). El nombre accesible es
- * siempre el completo.
+ * barra inferior en pantallas muy angostas (<360 px) o con texto al 110–125 %.
+ * WCAG 2.5.3 (etiqueta en el nombre): el nombre accesible contiene la palabra
+ * visible y el nombre completo, p. ej. "Ajustes · Configuración".
  */
 const SHORT_LABEL: Partial<Record<ModuleId, string>> = { settings: "Ajustes" };
+
+/** Nombre accesible del módulo cuando hay etiqueta corta (si no, el texto visible). */
+export function moduleAccessibleName(id: ModuleId, label: string): string {
+  const short = SHORT_LABEL[id];
+  return short ? `${short} · ${label}` : label;
+}
 
 /** Sin AccessProvider el shell muestra solo Finanzas (comportamiento previo). */
 const FALLBACK_MODULES: readonly ModuleId[] = ["finance"];
@@ -135,7 +142,12 @@ function ModuleNav({ modules, active }: { modules: readonly ModuleDef[]; active:
           const current = m.id === active;
           return (
             <li key={m.id}>
-              <Link href={m.href} aria-current={current ? "page" : undefined} className="app-nav-link">
+              <Link
+                href={m.href}
+                aria-current={current ? "page" : undefined}
+                aria-label={SHORT_LABEL[m.id] ? moduleAccessibleName(m.id, m.label) : undefined}
+                className="app-nav-link"
+              >
                 <Icon className="app-nav-icon" strokeWidth={1.75} aria-hidden="true" />
                 <span className="app-nav-label">{m.label}</span>
                 <span className="app-nav-short" aria-hidden="true">
@@ -170,6 +182,13 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
   const [textSize] = useTextSize();
   const wide = useMediaQuery(WIDE_QUERY);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
+  // Al pasar a ≥1280 (p. ej. rotar un iPad Pro) se olvida el cajón abierto:
+  // si no, volvería a abrirse solo al regresar a <1280.
+  const [prevWide, setPrevWide] = useState(wide);
+  if (prevWide !== wide) {
+    setPrevWide(wide);
+    if (wide) setDrawerPath(null);
+  }
   const drawerOpen = drawerPath === pathname && !wide;
   const activeLabel = modules.find((m) => m.id === activeModule)?.label ?? "CDS Suite";
   const collapsed = sidebar === "collapsed";
@@ -181,10 +200,8 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
   useLayoutEffect(() => applyTextSize(getTextSize()), [textSize]);
   useLayoutEffect(() => applySidebarPref(getSidebarPref()), [sidebar]);
 
-  const closeDrawer = useCallback(() => {
-    setDrawerPath(null);
-    hamburgerRef.current?.focus();
-  }, []);
+  // El foco vuelve a la hamburguesa al desmontarse el cajón (NavDrawer).
+  const closeDrawer = useCallback(() => setDrawerPath(null), []);
 
   async function handleLogout() {
     setSigningOut(true);
@@ -227,7 +244,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
         Saltar al contenido
       </a>
 
-      <div className="app-topbar">
+      <header className="app-topbar">
         <div className="app-topbar-inner">
           <button ref={hamburgerRef} type="button" className="app-hamburger" {...hamburgerProps}>
             <Menu className="size-6" strokeWidth={1.75} aria-hidden="true" />
@@ -255,9 +272,6 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
               <button type="button" className="app-logout" onClick={handleLogout} disabled={signingOut}>
                 <LogoutIcon signingOut={signingOut} />
                 <span className="app-logout-label">{signingOut ? "Cerrando…" : "Cerrar sesión"}</span>
-                <span className="app-logout-short" aria-hidden="true">
-                  Salir
-                </span>
               </button>
               {errorAlert("footer", "app-logout-error")}
             </div>
@@ -274,7 +288,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
             <Avatar initial={account.initial} />
           </button>
         </div>
-      </div>
+      </header>
 
       <div className="app-content">
         <NoticeRegion />
@@ -296,7 +310,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
             <Link
               key={m.id}
               href={m.href}
-              aria-label={m.label}
+              aria-label={moduleAccessibleName(m.id, m.label)}
               aria-current={current ? "page" : undefined}
               className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 text-[0.6875rem] leading-[0.875rem] font-medium ${current ? "text-primary" : "text-muted"}`}
             >
@@ -306,11 +320,14 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
               >
                 <Icon className="size-[1.375rem]" strokeWidth={1.75} />
               </span>
-              <span className={`max-w-full truncate whitespace-nowrap ${short ? "max-[359px]:hidden" : ""}`} aria-hidden="true">
+              <span
+                className={`max-w-full truncate whitespace-nowrap ${short ? "bar-label-full max-[359px]:hidden" : ""}`}
+                aria-hidden="true"
+              >
                 {m.label}
               </span>
               {short && (
-                <span className="hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
+                <span className="bar-label-short hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
                   {short}
                 </span>
               )}
@@ -326,6 +343,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
           icons={ICONS}
           brand={<SuiteBrand />}
           onClosed={closeDrawer}
+          returnFocusRef={hamburgerRef}
           footer={
             <>
               <div className="app-drawer-account">

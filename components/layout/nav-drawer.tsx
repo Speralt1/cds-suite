@@ -4,7 +4,8 @@
 // izquierda, ancho --drawer-w, 100dvh, fondo `side`. Contiene la marca, los
 // módulos con su nombre completo (filas de 3rem), la cuenta y "Cerrar sesión".
 // - Se cierra con Esc, con el fondo, con "Cerrar menú" y al navegar.
-// - El foco vuelve a la hamburguesa (lo hace el shell en `onClosed`).
+// - El foco vuelve a la hamburguesa (`returnFocusRef`) al desmontarse por
+//   cualquier motivo: cierre, navegación o paso a ≥1280.
 // - Solo se monta abierto: así "Cerrar sesión" y el role="alert" del logout
 //   no se duplican en el DOM.
 // Movimiento: entra en 200ms ease-out y sale en 160ms; sin animación con
@@ -31,14 +32,17 @@ export interface NavDrawerProps {
   footer: React.ReactNode;
   /** Se llama cuando el cajón terminó de cerrarse (el shell lo desmonta). */
   onClosed: () => void;
+  /** Control que recibe el foco cuando el cajón se desmonta (la hamburguesa). */
+  returnFocusRef: React.RefObject<HTMLElement | null>;
 }
 
-export function NavDrawer({ modules, active, icons, brand, footer, onClosed }: NavDrawerProps) {
+export function NavDrawer({ modules, active, icons, brand, footer, onClosed, returnFocusRef }: NavDrawerProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
+  const exitTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -48,13 +52,16 @@ export function NavDrawer({ modules, active, icons, brand, footer, onClosed }: N
       else dialog.setAttribute("open", "");
     }
     closeRef.current?.focus();
+    const returnTo = returnFocusRef;
     return () => {
+      window.clearTimeout(exitTimer.current);
       if (dialog?.hasAttribute("open")) {
         if (typeof dialog.close === "function") dialog.close();
         else dialog.removeAttribute("open");
       }
+      returnTo.current?.focus();
     };
-  }, []);
+  }, [returnFocusRef]);
 
   const requestClose = useCallback(() => {
     if (closingRef.current) return;
@@ -64,7 +71,8 @@ export function NavDrawer({ modules, active, icons, brand, footer, onClosed }: N
       return;
     }
     setClosing(true);
-    window.setTimeout(onClosed, EXIT_MS);
+    window.clearTimeout(exitTimer.current);
+    exitTimer.current = window.setTimeout(onClosed, EXIT_MS);
   }, [onClosed]);
 
   return (

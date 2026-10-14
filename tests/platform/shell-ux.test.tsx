@@ -14,7 +14,7 @@ import {
   resetPreferencesForTests,
   setTextSize,
 } from "@/lib/ui/preferences";
-import { PREPAINT_SCRIPT, SIDEBAR_KEY, TEXT_SIZE_KEY } from "@/lib/ui/prepaint";
+import { PREPAINT_SCRIPT, PUBLIC_PATH_PATTERN, SIDEBAR_KEY, TEXT_SIZE_KEY } from "@/lib/ui/prepaint";
 
 const state = vi.hoisted(() => ({
   path: "/finanzas",
@@ -55,6 +55,38 @@ function stubMedia(matching: string[]) {
       dispatchEvent: () => false,
     })),
   });
+}
+
+/** matchMedia controlable: `set(query, matches)` dispara los listeners "change". */
+function controllableMedia(initial: string[] = []) {
+  const matching = new Set(initial);
+  const listeners = new Map<string, Set<() => void>>();
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      get matches() {
+        return matching.has(query);
+      },
+      media: query,
+      onchange: null,
+      addEventListener: (_: string, cb: () => void) => {
+        if (!listeners.has(query)) listeners.set(query, new Set());
+        listeners.get(query)!.add(cb);
+      },
+      removeEventListener: (_: string, cb: () => void) => listeners.get(query)?.delete(cb),
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+  return {
+    set(query: string, on: boolean) {
+      if (on) matching.add(query);
+      else matching.delete(query);
+      act(() => listeners.get(query)?.forEach((cb) => cb()));
+    },
+  };
 }
 
 /** localStorage que lanza en cada acceso (ventana privada / bloqueado). */
@@ -107,19 +139,44 @@ describe("rail (1024–1279) con etiquetas cortas visibles", () => {
       "Ajustes",
     ]);
     for (const a of links) expect(a.querySelector(".app-nav-short")).toHaveAttribute("aria-hidden", "true");
-    expect(within(nav).getByRole("link", { name: "Configuración" })).toHaveAttribute("href", "/configuracion");
+    // WCAG 2.5.3: el nombre accesible contiene la palabra visible ("Ajustes").
+    expect(within(nav).getByRole("link", { name: "Ajustes · Configuración" })).toHaveAttribute("href", "/configuracion");
+    for (const name of ["Finanzas", "Calendario", "Reportes"]) {
+      expect(within(nav).getByRole("link", { name })).not.toHaveAttribute("aria-label");
+    }
     expect(within(nav).getByRole("link", { name: "Finanzas" })).toHaveAttribute("aria-current", "page");
     // Sin tooltips como única etiqueta.
     expect(nav.querySelector("[class*='group-hover']")).toBeNull();
   });
 
-  it("el pie conserva cuenta y 'Cerrar sesión' (con etiqueta corta 'Salir' solo visual)", () => {
+  it("el pie conserva cuenta y 'Cerrar sesión' con el texto visible igual al nombre", () => {
     shell();
     const aside = screen.getByRole("complementary");
     expect(aside).toHaveAttribute("id", "app-sidebar");
     expect(within(aside).getByText("Ana")).toBeInTheDocument();
     const logout = within(aside).getByRole("button", { name: "Cerrar sesión" });
-    expect(within(logout).getByText("Salir")).toHaveAttribute("aria-hidden", "true");
+    expect(logout.textContent).toBe("Cerrar sesión");
+    expect(logout.querySelector("[aria-hidden='true']:not(svg)")).toBeNull();
+  });
+
+  it("la barra superior es un <header> (banner) que contiene la hamburguesa, el rail y 'Aa'", () => {
+    shell();
+    const banner = screen.getByRole("banner");
+    expect(banner.tagName).toBe("HEADER");
+    expect(within(banner).getByRole("button", { name: "Abrir menú de navegación" })).toBeInTheDocument();
+    expect(within(banner).getByRole("complementary")).toHaveAttribute("id", "app-sidebar");
+    expect(within(banner).getByRole("button", { name: /^Tamaño del texto/ })).toBeInTheDocument();
+  });
+
+  it("barra inferior: la etiqueta corta lleva la clase que la muestra con texto grande", () => {
+    shell();
+    const bar = screen.getByRole("navigation", { name: "Barra de módulos" });
+    const settings = within(bar).getByRole("link", { name: "Ajustes · Configuración" });
+    expect(settings.querySelector(".bar-label-full")).toHaveTextContent("Configuración");
+    expect(settings.querySelector(".bar-label-short")).toHaveTextContent("Ajustes");
+    const css = fs.readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
+    expect(css).toMatch(/html\[data-text-size="xlarge"\] \.bar-label-full \{\s*display: none;/);
+    expect(css).toMatch(/html\[data-text-size="xlarge"\] \.bar-label-short \{\s*display: block;/);
   });
 
   it("orden de foco: skip link → hamburguesa → rail → Aa → avatar → main", () => {
@@ -216,6 +273,84 @@ describe("hamburguesa y cajón (<1280)", () => {
     expect(within(drawer).getByRole("alert")).toHaveTextContent("conexión");
     await user.click(within(drawer).getByRole("button", { name: "Cerrar menú" }));
     expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+});
+
+describe("cajón: animación de salida y cambios de breakpoint", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("con movimiento: sale en 160ms (is-closing) y luego devuelve el foco a la hamburguesa", () => {
+    vi.useFakeTimers();
+    controllableMedia([]);
+    shell();
+    const burger = screen.getByRole("button", { name: "Abrir menú de navegación" });
+    fireEvent.click(burger);
+    const drawer = screen.getByRole("dialog", { name: "Menú de navegación" });
+    fireEvent.click(within(drawer).getByRole("button", { name: "Cerrar menú" }));
+    expect(drawer).toHaveClass("is-closing");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(159));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(burger).toHaveFocus();
+  });
+
+  it("el temporizador de salida se cancela al desmontar: no cierra un cajón reabierto", () => {
+    vi.useFakeTimers();
+    controllableMedia([]);
+    const view = shell();
+    const burger = screen.getByRole("button", { name: "Abrir menú de navegación" });
+    fireEvent.click(burger);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cerrar menú" }));
+    // Navegación durante la salida: el cajón se desmonta antes de los 160ms.
+    state.path = "/calendario";
+    view.rerender(
+      <AppShell>
+        <p>Contenido</p>
+      </AppShell>,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(burger);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(500));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("abierto en 1024 → rotar a ≥1280 lo cierra y no se reabre al volver (foco en la hamburguesa)", async () => {
+    const user = userEvent.setup();
+    const media = controllableMedia(["(min-width: 768px)"]);
+    shell();
+    const burger = screen.getByRole("button", { name: "Abrir menú de navegación" });
+    await user.click(burger);
+    expect(screen.getByRole("dialog", { name: "Menú de navegación" })).toBeInTheDocument();
+
+    media.set("(min-width: 1280px)", true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(burger).toHaveAccessibleName("Contraer barra lateral");
+    expect(burger).toHaveFocus();
+
+    media.set("(min-width: 1280px)", false);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(burger).toHaveAccessibleName("Abrir menú de navegación");
+    expect(burger).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("CSS del shell (revisión Atlas)", () => {
+  const css = fs.readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
+  it("anillo de foco normal en las superficies claras de la barra; hacia adentro en el rail", () => {
+    expect(css).toMatch(/\.app-topbar :is\(\.text-size-popover, dialog\) :focus-visible \{\s*outline-color: #7b9d56;/);
+    expect(css).toMatch(/\.app-sidebar :focus-visible \{[^}]*outline-offset: -3px;/);
+  });
+  it("enlaces del sidebar expandido ≥44px; KPIs de Reportes refluyen al 110–125 %; backdrop sin movimiento", () => {
+    expect(css).toMatch(/html:not\(\[data-sidebar="collapsed"\]\) \.app-logout \{[^}]*min-height: var\(--tap-min\);/);
+    expect(css).not.toMatch(/\.app-nav-link,\s*html:not\(\[data-sidebar="collapsed"\]\) \.app-logout \{[^}]*min-height: 2\.5rem/);
+    expect(css).toMatch(/html\[data-text-size="xlarge"\] \.kpi-grid,/);
+    expect(css).toMatch(/\*::after,\s*\*::backdrop \{/);
+    expect(css).toMatch(/\.chart-box \.recharts-label-list text \{\s*font-size: 0\.6875rem;/);
   });
 });
 
@@ -393,6 +528,26 @@ describe("preferencias de interfaz (lib/ui)", () => {
     } finally {
       restore();
     }
+  });
+
+  it("cada ruta de primer nivel de app/ está clasificada: privada o excluida del script", () => {
+    // Una ruta pública nueva no puede heredar en silencio el tamaño de texto
+    // privado: debe agregarse a PUBLIC_PATH_PATTERN (o aquí, si es privada).
+    const PRIVATE = new Set(["(private)", "login"]);
+    const root = path.resolve(__dirname, "../../app");
+    const dirs = fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+    expect(dirs).toEqual(expect.arrayContaining([...PRIVATE]));
+    for (const dir of dirs) {
+      const isPublic = PUBLIC_PATH_PATTERN.test(`/${dir}`);
+      expect(isPublic !== PRIVATE.has(dir), `app/${dir} sin clasificar (privada o PUBLIC_PATH_PATTERN)`).toBe(true);
+    }
+    // Rutas públicas que no son carpetas de app/ (rewrites de firebase.json).
+    expect(PUBLIC_PATH_PATTERN.test("/c/abc")).toBe(true);
+    expect(PUBLIC_PATH_PATTERN.test("/calendario")).toBe(false);
+    expect(PUBLIC_PATH_PATTERN.test("/configuracion")).toBe(false);
   });
 
   it("las rutas y módulos públicos no importan las preferencias ni el shell", () => {
