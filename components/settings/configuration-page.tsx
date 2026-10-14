@@ -4,6 +4,7 @@
 // la guardia viven en app/(private)/configuracion/layout.tsx; aquí se repite
 // SettingsGuard como defensa por si el componente se monta en otra ruta.
 
+import { BankCashSettingsPanel } from "./bank-cash-settings-panel";
 import { FinanceSettingsPanel } from "./finance-settings-panel";
 import { SettingsGuard } from "./settings-guard";
 import { PageHeading } from "./settings-ui";
@@ -58,6 +59,7 @@ export function FinanceConfigurationPage() {
         subtitle="Categorías de ingresos y gastos, y métodos de pago."
       />
       <FinanceSettingsPanel />
+      <BankCashSettingsPanel />
     </SettingsGuard>
   );
 }
