@@ -13,13 +13,20 @@
 //   status      ∈ PENDIENTE | CONCILIADO | CON_DIFERENCIA | REQUIERE_REVISION
 //
 // Reglas (falla cerrado, nunca adivina un monto):
-//  · Cualquier forma o vocabulario desconocido → "unavailable".
+//  · Cualquier forma o vocabulario desconocido (status, statusClass, basis, id,
+//    fechas, montos no enteros) → "unavailable".
 //  · Cualquier cuenta con ok:false → "unavailable" con su errorClass.
 //  · Solo suman abonos statusClass === "successful" con payoutDate dentro de la
-//    ventana que los devolvió; se deduplican por id entre ventanas.
-//  · Los no exitosos se cuentan en avisos (no suman).
-//  · basis "indeterminate" o un abono exitoso que requiere revisión por moneda o
-//    monto → parcial (y ese abono no suma).
+//    ventana que los devolvió; se deduplican por cuenta + id entre ventanas.
+//  · in_progress / failed / sin fecha: no suman y se cuentan en avisos.
+//  · statusClass "unknown": no suma y deja el saldo parcial.
+//  · basis "indeterminate": sus abonos exitosos SÍ suman, y el saldo queda parcial.
+//  · Abono exitoso que REQUIERE_REVISION por moneda o monto: no suma, parcial.
+//  · Abono exitoso con neto negativo (solo deducciones, p. ej. contracargo): no
+//    suma (puede haberse descontado de otro abono), parcial. Nunca oculta el resto.
+//  · Cuenta con rowLimitReached: parcial (faltan filas).
+//  · Si el servidor responde con asOfDate anterior al fin pedido, la cobertura
+//    termina en asOfDate (parcial si es antes de hoy).
 import { isSafeAmount, isYmd, type Ymd } from "./bank-model";
 import type { SumupPayout, SumupPayoutsInput } from "./bank-balance";
 
@@ -46,6 +53,8 @@ interface WindowResult {
   payouts: SumupPayout[];
   pendingAmount: number;
   skipped: number;
+  /** Último día realmente cubierto: min(endDate, asOfDate del servidor). */
+  coveredTo: Ymd;
   partial: string[];
 }
 
@@ -57,7 +66,9 @@ function parseWindow(raw: unknown): WindowResult {
   const startDate = period.startDate as Ymd;
   const endDate = period.endDate as Ymd;
   if (!Array.isArray(raw.accounts) || raw.accounts.length === 0) fail("La respuesta de SumUp no trae cuentas.");
-  const out: WindowResult = { startDate, endDate, payouts: [], pendingAmount: 0, skipped: 0, partial: [] };
+  const serverAsOf = isYmd(raw.asOfDate) ? (raw.asOfDate as Ymd) : null;
+  const coveredTo = serverAsOf && serverAsOf < endDate ? serverAsOf : endDate;
+  const out: WindowResult = { startDate, endDate, payouts: [], pendingAmount: 0, skipped: 0, coveredTo, partial: [] };
   for (const acc of raw.accounts) {
     if (!isObj(acc) || !oneOf(ACCOUNTS, acc.account)) fail("La respuesta de SumUp trae una cuenta desconocida.");
     const label = ACCOUNT_LABEL[acc.account as string];
@@ -68,12 +79,18 @@ function parseWindow(raw: unknown): WindowResult {
     if (!isObj(acc.basis) || !oneOf(BASES, acc.basis.basis)) fail("La respuesta de SumUp trae una base de montos desconocida.");
     if (acc.basis.basis === "indeterminate")
       out.partial.push(`SumUp ${label}: no se pudo determinar si los abonos vienen netos o brutos.`);
+    if (acc.rowLimitReached === true)
+      out.partial.push(`SumUp ${label}: se alcanzó el límite de filas; pueden faltar abonos.`);
     if (!Array.isArray(acc.settlements)) fail("La respuesta de SumUp no trae abonos.");
     for (const st of acc.settlements) {
       if (!isObj(st) || typeof st.id !== "string" || !st.id) fail("La respuesta de SumUp trae abonos sin identificador.");
       if (!oneOf(STATUS_CLASSES, st.statusClass) || !oneOf(STATUSES, st.status))
         fail("La respuesta de SumUp trae un estado de abono desconocido.");
       if (st.payoutDate !== null && !isYmd(st.payoutDate)) fail("La respuesta de SumUp trae una fecha de abono inválida.");
+      if (st.statusClass === "unknown") {
+        out.partial.push(`SumUp ${label}: hay abonos con estado desconocido que no se sumaron.`);
+        continue;
+      }
       if (st.statusClass !== "successful") {
         out.skipped++;
         continue;
@@ -90,8 +107,14 @@ function parseWindow(raw: unknown): WindowResult {
         out.partial.push(`SumUp ${label}: un abono del ${payoutDate} requiere revisión (moneda o monto) y no se sumó.`);
         continue;
       }
-      if (typeof st.netPaid !== "number" || !isSafeAmount(st.netPaid, { allowZero: true }))
+      if (typeof st.netPaid !== "number" || !isSafeAmount(st.netPaid, { allowNegative: true }))
         fail("La respuesta de SumUp trae un monto de abono inválido.");
+      if (st.netPaid < 0) {
+        out.partial.push(
+          `SumUp ${label}: un abono del ${payoutDate} tiene neto negativo (contracargo o devolución) y no se sumó; revisa la cartola.`,
+        );
+        continue;
+      }
       out.payouts.push({
         id: `${acc.account}:${st.id}`,
         payoutDate,
@@ -148,7 +171,7 @@ export function adaptSumupReconciliationResponse(raw: unknown | unknown[], asOf?
   if (skipped)
     warnings.push(`${skipped} abono(s) SumUp en proceso, fallidos o sin fecha no se suman al banco.`);
   const coverageFrom = windows[0].startDate;
-  const coverageTo = windows[windows.length - 1].endDate;
+  const coverageTo = windows[windows.length - 1].coveredTo;
   if (asOf && coverageFrom > asOf) partialReasons.push("El período consultado a SumUp empieza después de hoy.");
   return {
     status: "available",

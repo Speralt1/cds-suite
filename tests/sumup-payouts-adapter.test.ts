@@ -140,6 +140,48 @@ describe("adaptSumupReconciliationResponse", () => {
     expect(adaptSumupReconciliationResponse([w1, w1]).status).toBe("unavailable");
   });
 
+  it("rowLimitReached en una cuenta: parcial con el nombre de la cuenta", () => {
+    const r = adaptSumupReconciliationResponse(response({}, [account(), account({ account: "cafeteria", settlements: [], rowLimitReached: true })]));
+    expect(r.status === "available" && r.partialReasons).toEqual(["SumUp Cafetería: se alcanzó el límite de filas; pueden faltar abonos."]);
+    expect(r.status === "available" && r.payouts).toHaveLength(1);
+  });
+
+  it("statusClass unknown: no suma y deja parcial; in_progress/failed solo avisan", () => {
+    const r = adaptSumupReconciliationResponse(
+      response({}, [account({ settlements: [settlement(), settlement({ id: "u", statusClass: "unknown", status: "REQUIERE_REVISION" }), settlement({ id: "p", statusClass: "in_progress", status: "PENDIENTE" })] })]),
+    );
+    if (r.status !== "available") throw new Error("esperaba available");
+    expect(r.payouts.map((p) => p.id)).toEqual(["offerings:ref-1"]);
+    expect(r.partialReasons).toEqual(["SumUp Ofrendas: hay abonos con estado desconocido que no se sumaron."]);
+    expect(r.warnings!.join(" ")).toMatch(/1 abono\(s\) SumUp en proceso/);
+  });
+
+  it("un contracargo (neto negativo) no oculta los demás abonos: se excluye y queda parcial", () => {
+    const r = adaptSumupReconciliationResponse(
+      response({}, [account({ settlements: [settlement(), settlement({ id: "cb", netPaid: -15_000, status: "CON_DIFERENCIA", payoutDate: "2026-10-08" })] })]),
+      "2026-10-13",
+    );
+    if (r.status !== "available") throw new Error("esperaba available");
+    expect(r.payouts.map((p) => p.id)).toEqual(["offerings:ref-1"]);
+    expect(r.partialReasons![0]).toMatch(/2026-10-08 tiene neto negativo/);
+    const est = computeBankBalance({ account: { openingBalance: 0, openingDate: "2026-09-30", openingCash: null }, ledger: [], treasury: [], payouts: r, asOf: "2026-10-13" });
+    expect(est.status).toBe("partial");
+    expect(est.bank!.estimated).toBe(97_000);
+  });
+
+  it("base indeterminada: sus abonos SÍ suman y el saldo queda parcial", () => {
+    const r = adaptSumupReconciliationResponse(response({}, [account({ basis: { basis: "indeterminate" } })]));
+    expect(r.status === "available" && r.payouts).toHaveLength(1);
+    expect(r.status === "available" && r.partialReasons).toHaveLength(1);
+  });
+
+  it("asOfDate del servidor anterior al fin pedido: la cobertura termina ahí (parcial frente a hoy)", () => {
+    const r = adaptSumupReconciliationResponse(response({ asOfDate: "2026-10-12" }), "2026-10-13");
+    expect(r.status === "available" && r.coverageTo).toBe("2026-10-12");
+    const est = computeBankBalance({ account: { openingBalance: 0, openingDate: "2026-09-30", openingCash: null }, ledger: [], treasury: [], payouts: r, asOf: "2026-10-13" });
+    expect(est.status).toBe("partial");
+  });
+
   it("cobertura que empieza después de hoy: parcial", () => {
     const r = adaptSumupReconciliationResponse(response({ period: { startDate: "2026-10-20", endDate: "2026-10-21" } }), "2026-10-13");
     expect(r.status === "available" && r.partialReasons).toContain("El período consultado a SumUp empieza después de hoy.");
@@ -180,6 +222,23 @@ describe("ventanas y llamada a la callable", () => {
     expect(r.status).toBe("available");
   });
 
+  it("como máximo 2 ventanas en paralelo y conserva el orden", async () => {
+    let active = 0;
+    let peak = 0;
+    const call = vi.fn(async (input: { startDate: string; endDate: string }) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active--;
+      return response({ period: { startDate: input.startDate, endDate: input.endDate } }, [account({ settlements: [] })]);
+    });
+    const r = await fetchSumupPayoutsForBank(call, "2026-04-30", "2026-10-13");
+    expect(call).toHaveBeenCalledTimes(5);
+    expect(peak).toBe(2);
+    expect(r.status === "available" && r.coverageFrom).toBe("2026-05-01");
+    expect(r.status === "available" && r.partialReasons).toEqual([]);
+  });
+
   it("si la función no existe o falla: falla cerrado a 'no disponible'", async () => {
     const call = vi.fn(async () => {
       throw Object.assign(new Error("not found"), { code: "functions/not-found" });
@@ -206,8 +265,15 @@ describe("resolveBankBalanceState: nunca un número con una consulta fallida", (
     expect(resolveBankBalanceState({ ...base, treasury: { data: [], loading: false, error: "denegado" } }).result).toBeNull();
     expect(resolveBankBalanceState({ ...base, account: { ...acc, error: "sin conexión" } }).result).toBeNull();
   });
-  it("abonos cargando (null): estado cargando, sin número", () => {
+  it("abonos cargando (null): hay cifras de banco/caja pero nunca 'complete'", () => {
     const s = resolveBankBalanceState(base);
+    expect(s.loading).toBe(false);
+    expect(s.payoutsLoading).toBe(true);
+    expect(s.result?.status).toBe("partial");
+    expect(s.result?.bank?.estimated).toBe(1_000);
+  });
+  it("fuentes del libro cargando: estado cargando, sin número", () => {
+    const s = resolveBankBalanceState({ ...base, ledger: [{ data: [], loading: true, error: "" }, ok] });
     expect(s.loading).toBe(true);
     expect(s.result).toBeNull();
   });
