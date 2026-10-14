@@ -1,0 +1,287 @@
+/* Saldo bancario estimado (doc 30). Estilos acotados (CSS Module): no tocan
+   globals.css ni el layout. Tokens con valor de respaldo por si el tema no los
+   emite. iPad primero: 2×2 en 600–1199 px, 4 columnas desde 1200 px. */
+
+.card {
+  border: 1px solid var(--color-line, #e2e7df);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--color-ink, #233c33);
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--color-muted, #68776e);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.figure {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--color-line, #e2e7df);
+  border-radius: 12px;
+  background: var(--color-canvas, #f8f9f6);
+  padding: 14px 16px;
+}
+
+.figurePrimary {
+  border-color: var(--color-primary, #285b45);
+  background: var(--color-primary-soft, #eaf1e9);
+}
+
+.label {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.value {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.valueMuted {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--color-muted, #68776e);
+}
+
+.negative {
+  color: var(--color-danger, #a02e2e);
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6d65;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge,
+.badgeWarn,
+.badgeInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.badge {
+  background: #fff;
+  color: var(--color-primary, #285b45);
+  border: 1px solid var(--color-primary, #285b45);
+}
+
+.badgeWarn {
+  background: var(--color-warning-soft, #fbf1de);
+  color: #6f4c14;
+}
+
+.badgeInfo {
+  background: var(--color-info-soft, #e5eef6);
+  color: var(--color-info, #245a86);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.linkButton {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: var(--color-primary, #285b45);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.linkButton:focus-visible,
+.textButton:focus-visible {
+  outline: 2px solid var(--color-primary, #285b45);
+  outline-offset: 2px;
+}
+
+.textButton {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 0 10px;
+  color: var(--color-primary, #285b45);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notes {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #6f4c14;
+}
+
+.skeleton {
+  height: 96px;
+  border-radius: 12px;
+  background: var(--color-line, #e2e7df);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--color-danger, #a02e2e);
+  font-size: 14px;
+}
+
+/* Hoja "¿Cómo se calcula?" */
+.sheet {
+  padding: 20px 24px 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.sheetSection h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.sheetIntro {
+  font-size: 13px;
+  line-height: 20px;
+  color: #5f6d65;
+}
+
+.lines {
+  display: grid;
+  border-top: 1px solid var(--color-line, #e2e7df);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-line, #e2e7df);
+}
+
+.sign {
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.lineLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.lineDetail {
+  grid-column: 2 / 4;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6d65;
+}
+
+.lineAmount {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.lineTotal {
+  composes: line;
+  border-bottom: 0;
+  font-weight: 700;
+}
+
+.formula {
+  font-size: 13px;
+  line-height: 20px;
+  border-radius: 10px;
+  background: var(--color-canvas, #f8f9f6);
+  padding: 10px 12px;
+}
