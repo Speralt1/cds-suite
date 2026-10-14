@@ -222,7 +222,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={size === "wide" ? "finance-modal min-[641px]:w-[min(720px,calc(100%-32px))]!" : "finance-modal"}
+      className={size === "wide" ? "finance-modal min-[641px]:w-[min(45rem,calc(100%-32px))]!" : "finance-modal"}
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();

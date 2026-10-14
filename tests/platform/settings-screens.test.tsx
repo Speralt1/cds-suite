@@ -456,7 +456,7 @@ describe("Configuración · ciclo 1 (C2–C4)", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Editar Luis Líder" })[0]);
     const dialog = openDialog("Luis Líder");
     expect(dialog.className).toContain("finance-modal");
-    expect(dialog.className).toContain("720px");
+    expect(dialog.className).toContain("45rem");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
     fireEvent.click(screen.getByRole("button", { name: /Agregar usuario/ }));
     expect(openDialog("Agregar usuario").className).toBe("finance-modal");
