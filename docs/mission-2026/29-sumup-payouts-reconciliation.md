@@ -106,11 +106,19 @@ salida:  { readOnly: true, period, payoutFetch, salesRead, asOfDate, policy, dif
 - `provider_bad_response`
 - `emulator_offline`
 
+**Tope de ventas leídas.** Se leen como máximo 20.000 ventas por cuenta. Si alguna cuenta llega al tope, la respuesta trae `salesLimitReached: true` y el panel avisa que algunos abonos podrían aparecer como no vinculados.
+
 **Límite de filas.** Se piden `limit=9999` filas. Si SumUp devuelve 9999 o más, la cuenta trae `rowLimitReached: true` y el panel avisa que puede haber abonos que no se muestran.
 
 **Solo lectura:**
 - El único llamado HTTP es `GET` a `/payouts`, con timeout de 15 s.
-- Firestore se envuelve en `readOnlyFirestore`, un Proxy **profundo**. Todo lo que sale de él vuelve envuelto: retornos de métodos, propiedades como `ref.firestore` y `ref.parent`, snapshots y su `ref`, `snap.docs[i].ref` y los datos leídos. Pedir `set`, `update`, `delete`, `create`, `add`, `batch`, `runTransaction`, `bulkWriter` o `recursiveDelete` **lanza** un error, y lo mismo pasa al asignar propiedades. Esto está probado con un db simulado y con el Admin SDK real sobre el emulador.
+- Firestore se envuelve en `readOnlyFirestore`, un Proxy **profundo**.
+  - **Qué vuelve envuelto:** todo lo que sale de él. Esto incluye retornos de métodos (también dentro de promesas), propiedades como `ref.firestore` y `ref.parent`, snapshots y su `ref`, `snap.docs[i].ref`, los datos leídos y los descriptores de propiedad.
+  - **Callbacks:** los que se le pasan reciben sus argumentos envueltos. Por ejemplo, en `qs.forEach(d => …)`, `d.ref` está protegido.
+  - **Prototipo y constructor:** `Object.getPrototypeOf(x)` devuelve el prototipo envuelto, así que `Object.getPrototypeOf(ref).set` también lanza. `x.constructor` (salvo Object/Array) lanza al llamarse.
+  - **Qué lanza `ReadOnlyViolation`:** pedir `set`, `update`, `delete`, `create`, `add`, `batch`, `runTransaction`, `bulkWriter` o `recursiveDelete`, y también asignar, definir o borrar propiedades o cambiar el prototipo.
+  - **Pruebas:** está probado con un db simulado (refs con métodos en el prototipo) y con el Admin SDK real sobre el emulador.
+  - **Límite:** solo protege lo que se obtiene a través de la guardia. Este módulo no usa Firestore por ningún otro camino.
 - El store solo expone `getUser`, `listSales` y `getFinanceAmounts`, y está congelado.
 - Lee `financeTransactions/{idPropuesta}` con `getAll`, solo para saber si una comisión ya existe en el libro.
 
@@ -129,6 +137,7 @@ Este contrato sirve, por ejemplo, al adaptador de `feature/bank-balance-estimate
 | Campo | Tipo |
 |---|---|
 | `readOnly` | `true` |
+| `salesLimitReached` | `boolean`: se alcanzó el tope de 20.000 ventas leídas por cuenta |
 | `period` | `{ startDate, endDate }`: días de venta pedidos, YYYY-MM-DD |
 | `payoutFetch` | `{ startDate, endDate }` o `null` (ventana futura): fechas de abono pedidas a SumUp |
 | `salesRead` | `{ startDate, endDate }` |
@@ -180,6 +189,7 @@ Este contrato sirve, por ejemplo, al adaptador de `feature/bank-balance-estimate
 | `netPaid` | número: **abono neto depositado** |
 | `difference` | número: bruto − neto. No es la comisión. |
 | `residual` | número |
+| `rawResidual` | número: el mismo residual con los montos sin redondear, a 2 decimales |
 | `saleDays` | YYYY-MM-DD[] |
 | `byDay` | `[{ saleDate, gross, fee, sales }]` |
 | `inWindow` | `boolean`: fecha de abono dentro de `period` |
@@ -260,8 +270,17 @@ Siempre se muestran con ícono y texto.
 |---|---|
 | **REQUIERE REVISIÓN** | Hay deducciones, filas sin vincular (sin código, no encontradas o de otra cuenta), base indeterminada o `gross`, abono fallido o con estado desconocido, problema de moneda, duplicados en conflicto, una venta pagada dos veces, comisión ausente o un monto que no cuadra. Un abono fallido cuyas ventas tienen otro abono exitoso lleva además el motivo informativo `payout_retried` ("reintentado"). |
 | **PENDIENTE** | El abono está en proceso. O el `residual` no es 0 y aún no pasaron **N días hábiles** (parámetro `differenceBusinessDays`, 5 por defecto, con feriados como parámetro). Las ventas sin ninguna fila de abono exitosa se muestran como filas "Por abonar". |
-| **CONCILIADO** | `residual = 0`, todo vinculado y base `net`. También cuando `|residual|` ≤ número de filas redondeadas del abono, con el motivo informativo `rounding`: cada fila con decimales, al redondear monto y comisión por separado, puede desviar a lo más $1. |
+| **CONCILIADO** | `residual = 0`, todo vinculado y base `net`. También por la **regla de redondeo** (ver más abajo), con el motivo informativo `rounding`. |
 | **CON DIFERENCIA** | `residual ≠ 0` después de N días hábiles. El panel muestra "diferencia $X", que es el `residual`. |
+
+**Regla de redondeo.** Un abono con `residual ≠ 0` queda CONCILIADO, con el motivo `rounding`, solo si se cumplen las tres condiciones:
+1. tiene filas con decimales;
+2. `|residual|` ≤ número de esas filas, porque monto y comisión se redondean por separado y cada fila puede desviar a lo más $1;
+3. con los montos **originales, sin redondear**, `|rawResidual| < $0,5`.
+
+Si no se cumplen, es una diferencia real y queda PENDIENTE o CON DIFERENCIA. Ejemplo: 20 filas con comisión 345,4 que en total pagan $5 de menos tienen `residual = rawResidual = 5`, así que quedan CON DIFERENCIA y no como redondeo. Las filas guardan `rawAmount`/`rawFee` solo para esta regla.
+
+**Abono reintentado.** Un abono fallido cuyas ventas pagó otro abono exitoso conserva el estado `REQUIERE_REVISION` en los datos, pero el panel lo muestra como **"Reintentado"**, con un ícono y el motivo `payout_retried`. El panel muestra hasta dos motivos por abono, y los informativos (`rounding`, `refunds_before_payout`) también se ven en los conciliados.
 
 Una devolución previa al abono que cuadra exacto queda CONCILIADO, con el motivo informativo `refunds_before_payout` y el ajuste visible.
 
@@ -351,6 +370,8 @@ En **Ofrendas y Cafetería**, debajo de "Días del mes", hay una sección **"Con
    - anular cuando el monto llegue a 0.
 
    Esta rama **no** lo hace ni lo prepara de forma implícita.
+
+   Al escribir en el futuro, hay que **filtrar las propuestas por `accountingDate` dentro del período** que se registra. Una vista de octubre incluye abonos posteriores (por ejemplo, del 03-11) que pagan ventas de octubre, y sus propuestas tienen fecha contable de noviembre con la política `payout_date`. Además, solo se registran propuestas en estado `propuesta`. El id determinista evita duplicados, pero no reemplaza este filtro.
 3. **Backfill** de meses anteriores: no está incluido. Sería una migración aparte.
 4. **N días hábiles** para "Con diferencia" (5 por defecto) y la lista de feriados chilenos que se pasará como parámetro.
 5. Confirmar contra la cartola 1 o 2 depósitos más, por ejemplo uno con devolución, cuando ocurra.
