@@ -73,8 +73,8 @@ export function Switch({
         }`}
       >
         <span
-          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow transition-[left] motion-reduce:transition-none ${
-            checked ? "left-[19px]" : "left-0.5"
+          className={`absolute top-0.5 h-[1.125rem] w-[1.125rem] rounded-full bg-white shadow transition-[left] motion-reduce:transition-none ${
+            checked ? "left-[1.1875rem]" : "left-0.5"
           }`}
         />
       </span>
@@ -85,7 +85,7 @@ export function Switch({
 /** Aviso en tono advertencia: siempre ícono + texto visible. */
 export function WarningNote({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
-    <p id={id} className="flex items-start gap-2 rounded-[10px] bg-warning-soft px-3 py-2.5 text-[13px] leading-5 text-[#6f4c14]">
+    <p id={id} className="flex items-start gap-2 rounded-[10px] bg-warning-soft px-3 py-2.5 text-[0.8125rem] leading-5 text-[#6f4c14]">
       <TriangleAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>{children}</span>
     </p>
@@ -94,7 +94,7 @@ export function WarningNote({ children, id }: { children: React.ReactNode; id?: 
 
 export function InfoNote({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
-    <p id={id} className="flex items-start gap-2 rounded-[10px] bg-primary-soft px-3 py-2.5 text-[13px] leading-5 text-primary">
+    <p id={id} className="flex items-start gap-2 rounded-[10px] bg-primary-soft px-3 py-2.5 text-[0.8125rem] leading-5 text-primary">
       <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>{children}</span>
     </p>
@@ -104,7 +104,7 @@ export function InfoNote({ children, id }: { children: React.ReactNode; id?: str
 /** Insignia corta de aviso (lista): ícono + texto, nunca solo el ícono. */
 export function WarningBadge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-[#6f4c14]">
+    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[0.6875rem] font-medium text-[#6f4c14]">
       <TriangleAlert size={12} aria-hidden="true" />
       {children}
     </span>

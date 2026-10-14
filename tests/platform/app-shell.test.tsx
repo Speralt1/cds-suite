@@ -102,7 +102,7 @@ describe("AppShell: módulos por perfil", () => {
     state.path = "/configuracion/usuarios";
     shell();
     expect(
-      within(screen.getAllByRole("navigation", { name: "Módulos" })[1]).getByRole("link", { name: "Configuración" }),
+      within(screen.getAllByRole("navigation", { name: "Módulos" })[1]).getByRole("link", { name: "Ajustes · Configuración" }),
     ).toHaveAttribute("aria-current", "page");
   });
 
@@ -179,11 +179,12 @@ describe("AppShell · barra móvil sin «Más» (ciclo 1, C1)", () => {
       "Calendario",
       "Integrantes",
       "Reportes",
-      "Configuración",
+      // WCAG 2.5.3: el nombre contiene la etiqueta corta visible y el nombre completo.
+      "Ajustes · Configuración",
     ]);
     expect(within(bar).queryAllByRole("button")).toHaveLength(0);
     expect(bar.style.gridTemplateColumns).toBe("repeat(5, minmax(0, 1fr))");
-    const settings = within(bar).getByRole("link", { name: "Configuración" });
+    const settings = within(bar).getByRole("link", { name: "Ajustes · Configuración" });
     expect(settings).toHaveAttribute("href", "/configuracion");
     // Con 5 columnas la etiqueta visible es siempre la corta; el nombre accesible, el completo.
     expect(within(settings).getByText("Ajustes")).toBeInTheDocument();

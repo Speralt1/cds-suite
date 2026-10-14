@@ -8,6 +8,19 @@ export function clp(value: number) {
     maximumFractionDigits: 0,
   }).format(Number.isFinite(value) ? value : 0);
 }
+// Signed CLP for the Resumen ledger (28 §B): real minus sign U+2212 and a
+// thin space (U+2009) between the sign and the amount, so a negative never
+// reads as "$-20.400". Zero has no sign. `plus: false` omits the "+" (the
+// period result shows "$4.109.132" but "− $20.400").
+export const MINUS_SIGN = "\u2212";
+export const THIN_SPACE = "\u2009";
+export function clpSigned(value: number, { plus = true }: { plus?: boolean } = {}) {
+  const n = Number.isFinite(value) ? value : 0;
+  if (n === 0) return clp(0);
+  const amount = clp(Math.abs(n));
+  if (n < 0) return `${MINUS_SIGN}${THIN_SPACE}${amount}`;
+  return plus ? `+${THIN_SPACE}${amount}` : amount;
+}
 // Compact CLP for tight spaces (calendar cells): "$165 mil", "$1,2 M".
 export function clpShort(value: number) {
   const n = Number.isFinite(value) ? value : 0;
@@ -55,6 +68,31 @@ export function dateLabel(value?: Timestamp) {
         year: "numeric",
       }).format(d)
     : "Sin registro";
+}
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", {
+  timeZone: "America/Santiago",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+/**
+ * Fecha y hora de Chile continental (America/Santiago), p. ej. "08-10-2026 14:58".
+ * Para auditoría (Creado el / Modificado el / Anulado el): distingue dos registros del mismo día.
+ */
+export function dateTimeLabel(value?: Timestamp) {
+  const d = value?.toDate?.();
+  if (!d || !Number.isFinite(d.getTime())) return "Sin registro";
+  const part = Object.fromEntries(
+    DATE_TIME_FORMAT.formatToParts(d).map((p) => [p.type, p.value]),
+  );
+  return `${part.day}-${part.month}-${part.year} ${part.hour}:${part.minute}`;
+}
+/** Referencia corta y visible de un movimiento: últimos 6 caracteres del id ("…5UFRhF"). */
+export function shortReference(id: string) {
+  return id.length > 6 ? `…${id.slice(-6)}` : id;
 }
 export function periodId(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;

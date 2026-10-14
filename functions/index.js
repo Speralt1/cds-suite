@@ -490,6 +490,10 @@ exports.calendarShareLinkManage = onCall(
   createShareLinkCallableHandler(shareLinks),
 );
 
+// ---------- Conciliación de abonos SumUp (solo lectura, doc 29) ----------
+
+exports.sumupPayoutsReconciliation = require("./sumup-payouts/read").buildSumupPayoutsReconciliation({ db, region: REGION, secrets: [sumupOfferings, sumupCafe] });
+
 // ---------- Integrantes › Consolidación V1 (doc 23 §5) ----------
 
 const { createMembersStore } = require("./members/firestore-store");

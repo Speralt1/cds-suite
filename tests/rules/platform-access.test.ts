@@ -37,6 +37,11 @@ import {
   USERS,
 } from "./helpers/platform-fixtures";
 
+// Marca de tiempo del CLIENTE para los casos negativos de auditoría: fija y lejana,
+// nunca igual a request.time. Con Timestamp.now() el emulador podía procesar la
+// escritura en el mismo milisegundo y aceptarla (test intermitente, Atlas 13/10).
+const CLIENT_TIME = Timestamp.fromMillis(Date.UTC(2020, 0, 1));
+
 let env: RulesTestEnvironment;
 
 const input: TransactionInput = {
@@ -322,7 +327,7 @@ describe("users v1", () => {
 
   it("auditoría v1: updatedAt == request.time y updatedBy == actor; sin downgrade a legacy", async () => {
     const admin = dbOf(env, "v1-admin");
-    await assertFails(updateDoc(doc(admin, "users", "leader"), v1Patch("v1-admin", { updatedAt: Timestamp.now() })));
+    await assertFails(updateDoc(doc(admin, "users", "leader"), v1Patch("v1-admin", { updatedAt: CLIENT_TIME })));
     await assertFails(updateDoc(doc(admin, "users", "leader"), v1Patch("v1-admin", { updatedBy: "otro" })));
     // downgrade v1 → legacy
     const stored = USERS["v1-finance"];

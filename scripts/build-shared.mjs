@@ -23,6 +23,8 @@ export const SHARED_FILES = Object.freeze([
   "calendar-core",
   "public-calendar",
   "share-token-format",
+  "names",
+  "sumup-payouts",
   "members",
 ]);
 
