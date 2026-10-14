@@ -13,8 +13,9 @@ import {
   PieChart,
   Pie,
   Cell,
+  LabelList,
 } from "recharts";
-import { clp } from "@/lib/finance/formatters";
+import { clp, clpShort, periodLabel } from "@/lib/finance/formatters";
 import { useRemPx } from "@/lib/ui/preferences";
 import { combineSummaries, evolution } from "@/lib/finance/calculations";
 import type { MonthlySummary, PeriodSelection } from "@/lib/finance/types";
@@ -26,9 +27,32 @@ const colors = [
   "#ad9373",
   "#d2d8cb",
 ];
+// Serie colors from the Design Lock tokens (28 §B: --color-chart-income,
+// --color-chart-expense, --color-chart-result). Recharts needs literal
+// values for SVG attributes, so they are mirrored here with the same hex.
+const SERIES = {
+  income: "#285b45",
+  expense: "#c0694c",
+  result: "#60746b",
+} as const;
+// Value labels are text: they use the AA text tokens (--color-income
+// #256b47, --color-expense #a4482f), not the bar fills (#c0694c is 3.91:1).
+// Their font size comes from CSS (B1: .chart-box .recharts-label-list text).
+const LABEL_INK = {
+  income: "#256b47",
+  expense: "#a4482f",
+} as const;
+// Legend order is Ingresos, Gastos, Resultado (Recharts sorts by name by
+// default, which put Gastos first).
+const LEGEND_ORDER = ["Ingresos", "Diezmos", "Gastos", "Resultado"];
+const legendSorter = (item: { value?: unknown }) => {
+  const index = LEGEND_ORDER.indexOf(String(item.value));
+  return index === -1 ? LEGEND_ORDER.length : index;
+};
 const tooltip = (value: unknown) => clp(Number(value));
 /** Ancho del eje Y: 3,5rem, en px porque recharts lo exige numérico. */
 const Y_AXIS_REM = 3.5;
+const valueLabel = (value: unknown) => clpShort(Number(value));
 const axis = (v: number) =>
   Math.abs(v) >= 1000000
     ? `${v / 1000000}M`
@@ -66,12 +90,12 @@ export function EvolutionChart({
           <XAxis dataKey="label" className="chart-axis-compact" minTickGap={15} />
           <YAxis tickFormatter={axis} width={yAxisWidth} />
           <Tooltip formatter={tooltip} />
-          <Legend />
+          <Legend itemSorter={legendSorter} />
           <Line
             isAnimationActive={false}
             name={tithe ? "Diezmos" : "Ingresos"}
             dataKey="income"
-            stroke="#285b45"
+            stroke={SERIES.income}
             strokeWidth={2}
             dot={false}
           />
@@ -80,7 +104,7 @@ export function EvolutionChart({
               isAnimationActive={false}
               name="Gastos"
               dataKey="expense"
-              stroke="#ad9373"
+              stroke={SERIES.expense}
               strokeWidth={2}
               dot={false}
             />
@@ -90,7 +114,7 @@ export function EvolutionChart({
               isAnimationActive={false}
               name="Resultado"
               dataKey="result"
-              stroke="#60746b"
+              stroke={SERIES.result}
               strokeDasharray="4 4"
               dot={false}
             />
@@ -174,9 +198,11 @@ export function FinanceCharts({
         >
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart
+              // Room for the clpShort value labels above the bars.
+              margin={{ top: 22, right: 8, left: 0, bottom: 0 }}
               data={[
                 {
-                  label: "Período",
+                  label: periodLabel(period),
                   income: sum.incomeTotal,
                   expense: sum.expenseTotal,
                 },
@@ -186,23 +212,27 @@ export function FinanceCharts({
               <XAxis dataKey="label" />
               <YAxis width={yAxisWidth} tickFormatter={axis} />
               <Tooltip formatter={tooltip} />
-              <Legend />
+              <Legend itemSorter={legendSorter} />
               <Bar
                 isAnimationActive={false}
                 name="Ingresos"
                 dataKey="income"
-                fill="#285b45"
+                fill={SERIES.income}
                 radius={[5, 5, 0, 0]}
                 maxBarSize={64}
-              />
+              >
+                <LabelList dataKey="income" position="top" formatter={valueLabel} fill={LABEL_INK.income} />
+              </Bar>
               <Bar
                 isAnimationActive={false}
                 name="Gastos"
                 dataKey="expense"
-                fill="#ad9373"
+                fill={SERIES.expense}
                 radius={[5, 5, 0, 0]}
                 maxBarSize={64}
-              />
+              >
+                <LabelList dataKey="expense" position="top" formatter={valueLabel} fill={LABEL_INK.expense} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
