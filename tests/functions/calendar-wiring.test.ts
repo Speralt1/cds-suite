@@ -29,7 +29,14 @@ describe("firebase.json", () => {
 
   it("headers de privacidad para la página pública (y los existentes se conservan)", () => {
     const headers: HeaderRule[] = firebase.hosting.headers;
-    expect(headers.map((h) => h.source)).toEqual(["/sw.js", "/manifest.webmanifest", "/calendario-publico"]);
+    // "**" y "/_next/static/**" (caché de HTML, tests/hosting-cache.test.ts) van primero.
+    expect(headers.map((h) => h.source)).toEqual([
+      "**",
+      "/_next/static/**",
+      "/sw.js",
+      "/manifest.webmanifest",
+      "/calendario-publico",
+    ]);
     for (const source of ["/calendario-publico"]) {
       const rule = headers.find((h) => h.source === source)!;
       expect(Object.fromEntries(rule.headers.map((h) => [h.key, h.value]))).toEqual({
