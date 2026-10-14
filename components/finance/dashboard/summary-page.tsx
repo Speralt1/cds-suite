@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState } from "react";
-import { TriangleAlert, CircleDashed, CircleCheck, Banknote, Clock } from "lucide-react";
+import { Fragment, useState, type ReactNode } from "react";
+import { TriangleAlert } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
 import {
@@ -13,7 +13,6 @@ import {
 import { combineSummaries } from "@/lib/finance/calculations";
 import {
   clp,
-  clpShort,
   previousPeriod,
   periodId,
   periodLabel,
@@ -26,7 +25,7 @@ import {
   incomeByMethod,
   isSumUpTransaction,
   reviewDays,
-  type DayStatus,
+  type IncomeByMethodResult,
 } from "@/lib/finance/insights";
 import { WORSHIP_WEEKDAYS, MONTHS, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
 import type { FinanceTransaction, PeriodSelection } from "@/lib/finance/types";
@@ -43,15 +42,15 @@ import { TransactionForm } from "../forms/transaction-form";
 import { TransactionList } from "../transactions/transaction-list";
 import { TitheRegister } from "../tithes/tithe-register";
 import { CashModal } from "../offerings/cash-modal";
-import { Kpis } from "./kpis";
+import { BalanceBand, BalanceBandSkeleton } from "./balance-band";
+import { FundsPosition } from "./funds-position";
+import { CashCalendarSection, CashCalendarSkeleton } from "./cash-calendar";
+import { AREA_TO_KEY, CashDayPanel, dateLabelShort } from "./cash-day-panel";
+import "./tokens.css";
+import "./summary.css";
 
 type SummaryView = "day" | "month" | "year";
 type ActionModal = "cash" | "tithe" | "expense" | "other" | null;
-
-const AREA_TO_KEY: Record<string, CashArea> = {
-  Ofrendas: "offerings",
-  Cafetería: "cafeteria",
-};
 
 // SumUp breakdown order (§D minor de Atlas): Ofrendas, luego Cafetería,
 // luego el histórico sin separar y por último cualquier otra categoría.
@@ -69,276 +68,140 @@ function sumUpCategoryLabel(category: string) {
   return category === "SumUp histórico sin separar" ? "Histórico sin separar" : category;
 }
 
-function DailyKpis({
+function shortDayMonth(date: string) {
+  return `${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1].slice(0, 3).toLowerCase()}`;
+}
+
+function isSumUpIncome(t: FinanceTransaction) {
+  return t.type === "income" && t.paymentMethod === "card" && isSumUpTransaction(t.id, t.createdBy);
+}
+
+// "Ingresos por tipo de dinero" y "por fuente", lado a lado desde 52rem
+// (28 §C1 "Tablas"). "Gastos y resultado" ya no existe: su nota y su
+// advertencia viven en la BalanceBand.
+function IncomeTables({
   income,
-  expense,
-  tithe,
-  movements,
-  showDetails,
+  incomeByCategory,
+  incomeTotal,
+  truncated,
 }: {
-  income: number;
-  expense: number;
-  tithe: number;
-  movements: number;
-  showDetails: boolean;
+  income: IncomeByMethodResult;
+  incomeByCategory: Record<string, number>;
+  incomeTotal: number;
+  truncated: boolean;
 }) {
-  const rows: [string, string, number, boolean][] = [
-    ["Ingresos", "income", income, false],
-    ["Gastos", "expense", expense, false],
-    ["Resultado del día", "result", income - expense, false],
-  ];
-
-  if (showDetails) {
-    rows.push(
-      ["Diezmos", "tithe", tithe, false],
-      ["Movimientos", "movements", movements, true],
-    );
-  }
-
   return (
-    <div className="kpi-grid">
-      {rows.map(([label, key, value, integer]) => (
-        <article className="kpi" key={key}>
-          <h3>{label}</h3>
-          <p
-            className={
-              key === "result" && value < 0 ? "text-danger" : ""
-            }
-          >
-            {integer ? value.toLocaleString("es-CL") : clp(value)}
-          </p>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-// Panel del día (§D "Panel del día" / §C1.5): rows for Ofrendas, Cafetería,
-// Diezmos, SumUp histórico sin separar and Otros ingresos, split into
-// SumUp bruto / Efectivo / Otros / Total. Zero rows are hidden.
-function dayBreakdown(transactions: FinanceTransaction[], date: string) {
-  const period = date.slice(0, 7);
-  const day = String(Number(date.slice(8, 10)));
-  const dayTx = transactions.filter(
-    (t) => t.status === "active" && t.period === period && t.day === day,
-  );
-  const definitions: [string, (t: FinanceTransaction) => boolean][] = [
-    ["Ofrendas", (t) => t.type === "income" && t.category === "Ofrendas"],
-    ["Cafetería", (t) => t.type === "income" && t.category === "Cafetería"],
-    ["Diezmos", (t) => t.type === "income" && t.source === "tithe"],
-    [
-      "SumUp histórico sin separar",
-      (t) => t.type === "income" && t.category === "SumUp histórico sin separar",
-    ],
-    [
-      "Otros ingresos",
-      (t) =>
-        t.type === "income" &&
-        t.source !== "tithe" &&
-        !["Ofrendas", "Cafetería", "SumUp histórico sin separar"].includes(
-          t.category,
-        ),
-    ],
-  ];
-  const rows = definitions
-    .map(([label, match]) => {
-      const items = dayTx.filter(match);
-      const sumUp = items
-        .filter((t) => t.paymentMethod === "card" && isSumUpTransaction(t.id, t.createdBy))
-        .reduce((s, t) => s + t.amount, 0);
-      const cash = items
-        .filter((t) => t.paymentMethod === "cash")
-        .reduce((s, t) => s + t.amount, 0);
-      const other = items
-        .filter(
-          (t) =>
-            t.paymentMethod !== "cash" &&
-            !(t.paymentMethod === "card" && isSumUpTransaction(t.id, t.createdBy)),
-        )
-        .reduce((s, t) => s + t.amount, 0);
-      return { label, sumUp, cash, other, total: sumUp + cash + other };
-    })
-    .filter((row) => row.total > 0);
-  const expenses = dayTx
-    .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0);
-  const totalIncome = rows.reduce((s, r) => s + r.total, 0);
-  return { rows, expenses, totalIncome };
-}
-
-function dateLabelShort(date: string) {
-  const [, month, day] = date.split("-").map(Number);
-  const weekday = new Date(`${date}T12:00:00.000Z`).toLocaleDateString("es-CL", {
-    weekday: "short",
-    timeZone: "UTC",
-  });
-  return `${weekday} ${day} ${MONTHS[month - 1].slice(0, 3).toLowerCase()}`;
-}
-
-function DayPanel({
-  date,
-  status,
-  transactions,
-  onRegisterCash,
-  onViewDay,
-}: {
-  date: string;
-  status?: DayStatus;
-  transactions: FinanceTransaction[];
-  // Omitted when the viewer can't write finance records: no register buttons.
-  onRegisterCash?: (area: CashArea) => void;
-  onViewDay: () => void;
-}) {
-  const { rows, expenses, totalIncome } = dayBreakdown(transactions, date);
-  return (
-    <div className="panel day-panel" aria-live="polite">
-      <div className="day-panel-heading">
-        <h3>
-          {dateLabelShort(date)}
-          {status?.isWorshipDay ? " · Culto" : ""}
-        </h3>
-        {status?.missingCashAreas.length ? (
-          <p className="day-panel-status status-warning">
-            <TriangleAlert size={15} aria-hidden="true" />
-            {status.missingCashAreas.length === 2
-              ? "Falta efectivo · 2 áreas"
-              : `Falta efectivo · ${status.missingCashAreas[0]}`}
-          </p>
-        ) : status?.noRecords ? (
-          <p className="day-panel-status status-muted">
-            <CircleDashed size={15} aria-hidden="true" />
-            Sin registros de Ofrendas o Cafetería
-          </p>
-        ) : null}
-      </div>
-
-      {rows.length ? (
-        <table className="day-panel-table">
-          <thead>
-            <tr>
-              <th scope="col">Fuente</th>
-              <th scope="col">SumUp bruto</th>
-              <th scope="col">Efectivo</th>
-              <th scope="col">Otros</th>
-              <th scope="col">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.label}>
-                <th scope="row">{row.label}</th>
-                <td className="tabular-nums">{row.sumUp ? clp(row.sumUp) : "—"}</td>
-                <td className="tabular-nums">{row.cash ? clp(row.cash) : "—"}</td>
-                <td className="tabular-nums">{row.other ? clp(row.other) : "—"}</td>
-                <td className="tabular-nums">{clp(row.total)}</td>
+    <div className="fin-income-tables">
+      <div className="fin-income-tables-grid">
+        <section className="panel" aria-labelledby="fin-income-method-title">
+          <h3 id="fin-income-method-title">Ingresos por tipo de dinero</h3>
+          <table className="fin-amount-table">
+            <colgroup>
+              <col />
+              <col className="is-amount" />
+              <col className="is-pct" />
+              <col className="is-count" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Tipo</th>
+                <th scope="col" className="is-num">Monto</th>
+                <th scope="col" className="is-num">%</th>
+                <th scope="col" className="is-num">Mov.</th>
               </tr>
+            </thead>
+            <tbody>
+              {income.rows.map((row) => (
+                <Fragment key={row.key}>
+                  <tr>
+                    <th scope="row">{row.label}</th>
+                    <td className="is-num">{clp(row.amount)}</td>
+                    <td className="is-num">
+                      {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
+                    </td>
+                    <td className="is-num">{row.count}</td>
+                  </tr>
+                  {row.key === "sumup" && row.amount > 0 && (
+                    <tr className="is-breakdown">
+                      <td colSpan={4}>
+                        {orderedSumUpEntries(income.sumUpByCategory)
+                          .map(([category, amount]) => `${sumUpCategoryLabel(category)} ${clp(amount)}`)
+                          .join(" · ")}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+              <tr className="is-total">
+                <th scope="row">Total ingresos</th>
+                <td className="is-num">{clp(income.total)}</td>
+                <td className="is-num">100%</td>
+                <td className="is-num">{income.count}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="fin-table-help">SumUp en bruto: la comisión aún no está disponible.</p>
+          {income.total !== incomeTotal &&
+            (truncated ? (
+              <p className="fin-table-warning">
+                <TriangleAlert size={16} aria-hidden="true" />
+                Resultado truncado: el período supera 10.000 movimientos.
+              </p>
+            ) : (
+              <p className="notice success">
+                Los datos se están sincronizando; los totales pueden cambiar en segundos.
+              </p>
             ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th scope="row">Gastos</th>
-              <td colSpan={3} />
-              <td className="tabular-nums">{clp(expenses)}</td>
-            </tr>
-            <tr>
-              <th scope="row">Total ingresos del día</th>
-              <td colSpan={3} />
-              <td className="tabular-nums font-semibold">{clp(totalIncome)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      ) : (
-        <p className="field-help">Sin movimientos activos este día.</p>
-      )}
-
-      <div className="day-panel-actions">
-        {onRegisterCash && (status?.missingCashAreas || []).map((area) => (
-          <button
-            key={area}
-            type="button"
-            className="button-secondary"
-            onClick={() => onRegisterCash(AREA_TO_KEY[area])}
-          >
-            <Banknote size={16} aria-hidden="true" />
-            Registrar efectivo · {area}
-          </button>
-        ))}
-        <button type="button" className="button-secondary" onClick={onViewDay}>
-          Ver movimientos del día
-        </button>
+        </section>
+        <section className="panel" aria-labelledby="fin-income-source-title">
+          <h3 id="fin-income-source-title">Ingresos por fuente</h3>
+          <table className="fin-amount-table">
+            <colgroup>
+              <col />
+              <col className="is-amount" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Fuente</th>
+                <th scope="col" className="is-num">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(incomeByCategory)
+                .sort(([, a], [, b]) => b - a)
+                .map(([category, amount]) => (
+                  <tr key={category}>
+                    <th scope="row">{category}</th>
+                    <td className="is-num">{clp(amount)}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </section>
       </div>
     </div>
   );
 }
 
-function MonthCalendar({
-  year,
-  month,
-  transactions,
-  selected,
-  onSelect,
-}: {
-  year: number;
-  month: number;
-  transactions: FinanceTransaction[];
-  selected: string;
-  onSelect: (date: string) => void;
-}) {
-  const { weeks } = buildMonthCalendar(transactions, year, month, today());
-  return (
-    <table className="calendar-table" aria-label={`Calendario de ${MONTHS[month - 1]} ${year}`}>
-      <thead>
-        <tr>
-          {["lun", "mar", "mié", "jue", "vie", "sáb", "dom"].map((label) => (
-            <th scope="col" key={label}>
-              {label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {weeks.map((week, i) => (
-          <tr key={i}>
-            {week.map((day, j) =>
-              day ? (
-                <td key={day.date}>
-                  <button
-                    type="button"
-                    className={`calendar-cell${day.isToday ? " is-today" : ""}${day.isFuture ? " is-future" : ""}${day.missingCashAreas.length ? " has-warning" : day.noRecords ? " has-empty" : ""}`}
-                    aria-pressed={selected === day.date}
-                    aria-current={day.isToday ? "date" : undefined}
-                    onClick={() => onSelect(day.date)}
-                    aria-label={`${dateLabelShort(day.date)}${day.isWorshipDay ? ", culto" : ""}${day.calendarCash ? `, efectivo de Ofrendas y Cafetería ${clp(day.calendarCash)}` : ""}${day.missingCashAreas.length ? `, falta efectivo ${day.missingCashAreas.join(" y ")}` : ""}${day.noRecords ? ", sin registros de Ofrendas o Cafetería" : ""}`}
-                  >
-                    <span className="calendar-cell-day">{Number(day.date.slice(8, 10))}</span>
-                    {day.statusLabel && (
-                      <span className="calendar-cell-status">
-                        {day.missingCashAreas.length ? (
-                          <TriangleAlert size={12} aria-hidden="true" />
-                        ) : day.noRecords ? (
-                          <CircleDashed size={12} aria-hidden="true" />
-                        ) : null}
-                        {day.noRecords
-                          ? ""
-                          : day.missingCashAreas.length
-                            ? day.calendarCash > 0 ? clpShort(day.calendarCash) : ""
-                            : day.statusLabel}
-                      </span>
-                    )}
-                  </button>
-                </td>
-              ) : (
-                <td key={`blank-${i}-${j}`} aria-hidden="true" />
-              ),
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+export interface SummaryDashboardProps {
+  /**
+   * PR D: tile "Saldo bancario estimado" para "Posición de fondos". Sin él la
+   * sección no se renderiza (decisión 10 del Tech Lead). Solo se muestra a
+   * quien tiene finance.details.read.
+   */
+  fundsBankTile?: ReactNode;
+  /** PR C/D: tiles adicionales ("Efectivo en caja", "SumUp pendiente de abono"). */
+  fundsTiles?: ReactNode[];
 }
 
+// Ruta /finanzas (sin props: la ruta la exporta tal cual). El PR D monta el
+// tile de saldo cambiando esta línea por
+// `<SummaryDashboard fundsBankTile={<BankBalanceCard … />} />`.
 export function SummaryPage() {
+  return <SummaryDashboard />;
+}
+
+export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboardProps = {}) {
   const [period, setPeriod] = usePeriod();
   const [summaryView, setSummaryView] =
     useState<SummaryView>(period.view);
@@ -377,6 +240,7 @@ export function SummaryPage() {
     details && actionModal === "cash",
   );
 
+  const todayStr = today();
   const total = combineSummaries(summaries.data);
   const dailyMonth = combineSummaries(dailySummaries.data);
   const dailyDay = String(Number(dailyDate.slice(8, 10)));
@@ -416,6 +280,7 @@ export function SummaryPage() {
     .slice(0, 6);
 
   const isMonthCalendarView = summaryView === "month" && period.view === "month";
+  const viewedPeriodId = periodId(period.year, period.month);
 
   // M2 (Atlas): income/review/calendar must only be computed once `latest`
   // has actually loaded without error for this period — otherwise a leader
@@ -428,17 +293,34 @@ export function SummaryPage() {
   const income = detailReady && summaryView !== "day" ? incomeByMethod(latest.data) : null;
   const review =
     isMonthCalendarView && detailReady
-      ? reviewDays(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
+      ? reviewDays(latest.data, period.year, period.month, todayStr, WORSHIP_WEEKDAYS)
       : [];
   const calendar =
     isMonthCalendarView && detailReady
-      ? buildMonthCalendar(latest.data, period.year, period.month, today(), WORSHIP_WEEKDAYS)
+      ? buildMonthCalendar(latest.data, period.year, period.month, todayStr, WORSHIP_WEEKDAYS)
       : null;
+  // A day picked in another month never leaks into this month's panel.
+  const selectedInView =
+    selectedDay && selectedDay.startsWith(`${viewedPeriodId}-`) ? selectedDay : null;
   const effectiveSelectedDay =
-    selectedDay ||
-    (calendar ? defaultSelectedDay(calendar, review, today()) : undefined) ||
-    today();
-  const selectedDayStatus = calendar?.days.find((d) => d.date === effectiveSelectedDay);
+    selectedInView ||
+    (calendar ? defaultSelectedDay(calendar, review, todayStr) : undefined) ||
+    `${viewedPeriodId}-01`;
+
+  const periodName = periodLabel(period).toLowerCase();
+  const before = previousPeriod(period);
+  const previousName =
+    period.view === "year" ? String(before.year) : MONTHS[before.month - 1].toLowerCase();
+  const previousSummary =
+    !previous.error && previous.data.some((summary) => summary.transactionCount > 0)
+      ? combineSummaries(previous.data)
+      : undefined;
+  const isCurrentPeriod =
+    summaryView === "day"
+      ? dailyDate === todayStr
+      : period.view === "year"
+        ? String(period.year) === todayStr.slice(0, 4)
+        : viewedPeriodId === todayStr.slice(0, 7);
 
   function selectView(view: SummaryView) {
     setSummaryView(view);
@@ -460,8 +342,26 @@ export function SummaryPage() {
       : "offerings";
   }
 
+  const fundsPosition = details && fundsBankTile ? (
+    <FundsPosition
+      bankTile={fundsBankTile}
+      tiles={fundsTiles}
+      isCurrentPeriod={isCurrentPeriod}
+      todayLabel={shortDayMonth(todayStr)}
+    />
+  ) : null;
+
+  const movementCount =
+    summaryView === "day"
+      ? dailyTransactions.loading
+        ? null
+        : activeDailyRows.length
+      : summaries.loading || summaries.error
+        ? null
+        : total.transactionCount;
+
   return (
-    <>
+    <div className="fin-summary">
       <FinancePageHeader
         title="Resumen financiero"
         subtitle="Totales calculados a partir de los movimientos registrados."
@@ -569,218 +469,109 @@ export function SummaryPage() {
       {summaryView === "day" ? (
         dailySummaries.loading ||
         (details && dailyTransactions.loading) ? (
-          <Loading />
+          <BalanceBandSkeleton title={`Resultado del ${dateLabelShort(dailyDate)}`} />
         ) : dailySummaries.error ? null : (
           <>
-            <DailyKpis
+            <BalanceBand
+              title={`Resultado del ${dateLabelShort(dailyDate)}`}
+              resultLabel="Resultado del día"
               income={dailyIncome}
               expense={dailyExpense}
-              tithe={dailyTithe}
-              movements={activeDailyRows.length}
-              showDetails={details}
+              result={dailyIncome - dailyExpense}
+              tithe={details ? dailyTithe : undefined}
+              sumUpFeePending={details && activeDailyRows.some(isSumUpIncome)}
+              showMissingExpenses={details}
+              emptyNote={
+                !dailyIncome && !dailyExpense
+                  ? "No hay movimientos registrados para esta fecha."
+                  : undefined
+              }
             />
 
-            <p className="mb-6 text-xs text-muted">
-              Vista del {dailyDate}. El resultado del día es ingresos menos
-              gastos y no representa el saldo bancario.
-            </p>
+            {fundsPosition}
 
-            {details ? (
-              <DayPanel
+            {details && (
+              <CashDayPanel
                 date={dailyDate}
-                status={dayStatus(dailyDate, dailyTransactions.data, today(), WORSHIP_WEEKDAYS)}
+                status={dayStatus(dailyDate, dailyTransactions.data, todayStr, WORSHIP_WEEKDAYS)}
                 transactions={dailyTransactions.data}
                 onRegisterCash={manage ? (area) => openCashModal(area, dailyDate) : undefined}
-                onViewDay={() => {}}
               />
-            ) : !dailyIncome && !dailyExpense ? (
-              <Empty>
-                <h3>No hay movimientos registrados para esta fecha.</h3>
-                <p className="mt-2">
-                  Cambia la fecha o registra un nuevo movimiento.
-                </p>
-              </Empty>
-            ) : (
-              <div className="summary-day-balance panel">
-                <div>
-                  <span>Ingresos del día</span>
-                  <strong>{clp(dailyIncome)}</strong>
-                </div>
-                <div>
-                  <span>Gastos del día</span>
-                  <strong>{clp(dailyExpense)}</strong>
-                </div>
-                <div>
-                  <span>Resultado</span>
-                  <strong
-                    className={
-                      dailyIncome - dailyExpense < 0 ? "text-danger" : ""
-                    }
-                  >
-                    {clp(dailyIncome - dailyExpense)}
-                  </strong>
-                </div>
-              </div>
             )}
           </>
         )
       ) : summaries.loading ? (
-        <Loading />
+        <BalanceBandSkeleton title={`Resultado de ${periodName}`} />
       ) : summaries.error ? null : (
         <>
-          <Kpis
-            summary={total}
+          <BalanceBand
+            title={`Resultado de ${periodName}`}
+            income={total.incomeTotal}
+            expense={total.expenseTotal}
+            result={total.result}
+            tithe={total.titheTotal}
             previous={
-              !previous.error &&
-              previous.data.some((summary) => summary.transactionCount > 0)
-                ? combineSummaries(previous.data)
+              previousSummary
+                ? {
+                    income: previousSummary.incomeTotal,
+                    result: previousSummary.result,
+                    label: previousName,
+                  }
                 : undefined
+            }
+            sumUpFeePending={Boolean(income && income.sumUpAmount > 0)}
+            showMissingExpenses={details}
+            emptyNote={
+              !total.transactionCount ? `Aún no hay movimientos en ${periodName}.` : undefined
             }
           />
 
+          {fundsPosition}
+
+          {/* El calendario depende de los días de culto del mes, no de si ya
+              hay movimientos registrados: debe poder mostrar "Sin registros"
+              incluso en un mes vacío. Solo se calcula/muestra para roles con
+              detalle (M2, Atlas): leader nunca ve calendario ni "Días por
+              revisar". */}
           {details &&
             (latest.loading ? (
-              <Loading />
+              isMonthCalendarView ? (
+                <CashCalendarSkeleton year={period.year} month={period.month} />
+              ) : (
+                <Loading />
+              )
             ) : latest.error ? (
               <Notice error={latest.error} />
             ) : (
-              income && (
-            <section className="panel income-method-panel">
-              <h3>Ingresos por tipo de dinero</h3>
-              <table className="income-method-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Tipo</th>
-                    <th scope="col">Monto</th>
-                    <th scope="col">%</th>
-                    <th scope="col">Mov.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {income.rows.map((row) => (
-                    <Fragment key={row.key}>
-                      <tr>
-                        <th scope="row">{row.label}</th>
-                        <td className="tabular-nums">{clp(row.amount)}</td>
-                        <td className="tabular-nums">
-                          {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
-                        </td>
-                        <td className="tabular-nums">{row.count}</td>
-                      </tr>
-                      {row.key === "sumup" && row.amount > 0 && (
-                        <tr className="income-method-breakdown">
-                          <td colSpan={4}>
-                            {orderedSumUpEntries(income.sumUpByCategory)
-                              .map(([category, amount]) => `${sumUpCategoryLabel(category)} ${clp(amount)}`)
-                              .join(" · ")}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))}
-                  <tr className="income-method-total">
-                    <th scope="row">Total ingresos</th>
-                    <td className="tabular-nums font-semibold">{clp(income.total)}</td>
-                    <td className="tabular-nums font-semibold">100%</td>
-                    <td className="tabular-nums font-semibold">{income.count}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="field-help">
-                SumUp en bruto: la comisión aún no está disponible.
-              </p>
-              {income.total !== total.incomeTotal &&
-                (latest.data.length >= MAX_PERIOD_RECORDS ? (
-                  <p className="notice-warning">
-                    <TriangleAlert size={15} aria-hidden="true" />
-                    Resultado truncado: el período supera 10.000 movimientos.
-                  </p>
-                ) : (
-                  <p className="notice success">
-                    Los datos se están sincronizando; los totales pueden
-                    cambiar en segundos.
-                  </p>
-                ))}
-            </section>
-              )
-            ))}
-
-          <p className="mb-6 text-xs text-muted">
-            El resultado del período es ingresos menos gastos; no representa el
-            saldo bancario.
-          </p>
-
-          {/* Días por revisar y el calendario dependen de los días de culto
-              del mes, no de si ya hay movimientos registrados: deben poder
-              mostrar "Sin registros" incluso en un mes vacío. Solo se
-              calculan/muestran para roles con detalle (M2, Atlas): leader
-              nunca ve calendario ni "Días por revisar". */}
-          {details && isMonthCalendarView && (latest.loading ? (
-            <Loading />
-          ) : latest.error ? (
-            <Notice error={latest.error} />
-          ) : (
-            <>
-            <section className="panel review-days">
-              <h3>Días por revisar ({review.length})</h3>
-              {review.length ? (
-                <ul>
-                  {review.map((item) => (
-                    <li key={`${item.date}-${item.kind}-${item.area || ""}`}>
-                      {item.kind === "missing-cash" ? (
-                        <TriangleAlert size={15} aria-hidden="true" />
-                      ) : (
-                        <CircleDashed size={15} aria-hidden="true" />
-                      )}
-                      <span>
-                        {item.label} — {dateLabelShort(item.date)}
-                      </span>
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        onClick={() => setSelectedDay(item.date)}
-                      >
-                        Ver día
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="notice-ok">
-                  <CircleCheck size={15} aria-hidden="true" />
-                  Todo registrado en los días de culto de este mes.
-                </p>
-              )}
-            </section>
-
-              <section className="calendar-section">
-                <div className="calendar-wrap">
-                  <p className="field-help mb-2">
-                    Montos: solo efectivo de Ofrendas y Cafetería. Selecciona un día para ver también los diezmos.
-                  </p>
-                  <MonthCalendar
+              <>
+                {calendar && (
+                  <CashCalendarSection
                     year={period.year}
                     month={period.month}
+                    calendar={calendar}
+                    review={review}
                     transactions={latest.data}
                     selected={effectiveSelectedDay}
                     onSelect={setSelectedDay}
+                    onRegisterCash={manage ? openCashModal : undefined}
+                    onViewDay={(date) => {
+                      setDailyDate(date);
+                      setSummaryView("day");
+                    }}
                   />
-                </div>
-                <DayPanel
-                  date={effectiveSelectedDay}
-                  status={selectedDayStatus}
-                  transactions={latest.data}
-                  onRegisterCash={manage ? (area) => openCashModal(area, effectiveSelectedDay) : undefined}
-                  onViewDay={() => {
-                    setDailyDate(effectiveSelectedDay);
-                    setSummaryView("day");
-                  }}
-                />
-              </section>
-            </>
-          ))}
+                )}
+                {income && (income.count > 0 || total.transactionCount > 0) && (
+                  <IncomeTables
+                    income={income}
+                    incomeByCategory={total.incomeByCategory}
+                    incomeTotal={total.incomeTotal}
+                    truncated={latest.data.length >= MAX_PERIOD_RECORDS}
+                  />
+                )}
+              </>
+            ))}
 
-          {summaryView === "year" && (
+          {summaryView === "year" && details && (
             <p className="field-help mb-6">
               Selecciona Mensual para ver el calendario.
             </p>
@@ -788,10 +579,7 @@ export function SummaryPage() {
 
           {!total.transactionCount ? (
             <Empty>
-              <h3>
-                Aún no hay movimientos en {periodLabel(period).toLowerCase()}.
-              </h3>
-              <p className="mt-2">
+              <p>
                 Los indicadores y gráficos se completarán al registrar
                 movimientos.
               </p>
@@ -805,77 +593,25 @@ export function SummaryPage() {
               )}
             </Empty>
           ) : (
-            <>
-              {details && (
-                <section className="panel source-block">
-                  <div className="source-block-income">
-                    <h3>Ingresos por fuente</h3>
-                    <table className="income-method-table">
-                      <tbody>
-                        {Object.entries(total.incomeByCategory)
-                          .sort(([, a], [, b]) => b - a)
-                          .map(([category, amount]) => (
-                            <tr key={category}>
-                              <th scope="row">{category}</th>
-                              <td className="tabular-nums">{clp(amount)}</td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="source-block-expense">
-                    <h3>Gastos y resultado</h3>
-                    <p>
-                      <span>Gastos</span>
-                      <strong className="tabular-nums">{clp(total.expenseTotal)}</strong>
-                    </p>
-                    {income && income.sumUpAmount > 0 && (
-                      <>
-                        <p>
-                          <span>Comisión SumUp</span>
-                          <strong className="tabular-nums sumup-fee-pending">
-                            <Clock size={14} aria-hidden="true" />
-                            Pendiente de datos de SumUp
-                          </strong>
-                        </p>
-                        <p className="field-help">
-                          La comisión se registrará como gasto cuando se
-                          conecten los payouts de SumUp. El resultado aún no
-                          la descuenta.
-                        </p>
-                      </>
-                    )}
-                    <p>
-                      <span>Resultado</span>
-                      <strong className={`tabular-nums ${total.result < 0 ? "text-danger" : ""}`}>
-                        {clp(total.result)}
-                      </strong>
-                    </p>
-                    <p className="field-help">No representa el saldo bancario.</p>
-                    {total.expenseTotal === 0 && total.incomeTotal > 0 && (
-                      <p className="notice-warning">
-                        <TriangleAlert size={15} aria-hidden="true" />
-                        No se registraron gastos en el período. ¿Faltan
-                        egresos?
-                      </p>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              <FinanceCharts summaries={summaries.data} period={period} />
-            </>
+            <FinanceCharts summaries={summaries.data} period={period} />
           )}
         </>
       )}
 
       {details && (
-        <section className="mt-8">
+        <section className="mt-8" id="fin-movements" aria-labelledby="fin-movements-title">
           <div className="section-heading">
-            <h2>
-              {summaryView === "day"
-                ? "Movimientos del día"
-                : "Últimos movimientos"}
+            <h2 id="fin-movements-title">
+              {summaryView === "day" ? "Movimientos del día" : "Últimos movimientos"}
+              {movementCount !== null && " "}
+              {movementCount !== null && (
+                <span className="fin-movements-count">
+                  {"· "}
+                  {summaryView === "day"
+                    ? movementCount.toLocaleString("es-CL")
+                    : `${movementCount.toLocaleString("es-CL")} en el período`}
+                </span>
+              )}
             </h2>
             <Link className="button-secondary" href="/finanzas/movimientos">
               Ver todos
@@ -943,6 +679,6 @@ export function SummaryPage() {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
