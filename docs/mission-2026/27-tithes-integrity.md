@@ -33,6 +33,8 @@ Ejemplos: "Juan Pérez", "juan perez", "JUAN PÉREZ", "Juan  Pérez", " Juan Pé
 
 `NAME_KEY_VERSION = 1`: cambiar el algoritmo cambia las claves ya guardadas. Exige migrar el registro.
 
+**Alfabetos mixtos:** la clave solo conserva `[a-z0-9]` tras plegar tildes. Las letras de otros alfabetos (griego, cirílico, árabe, hebreo, CJK) y los emoji se descartan, así que «Juan Иван» y «Juan» tienen la misma clave (`juan`). Además, las homoglifas (la «а» cirílica frente a la «a» latina) no se unifican: «Аna» con A cirílica da `na`. Hoy no afecta a los nombres de la iglesia (español). Si algún día importa, hay que transliterar antes de normalizar, lo que obliga a subir `NAME_KEY_VERSION`.
+
 ### 2.2 Registro de identidad (backend, transaccional)
 
 Colección nueva `titheProfileKeys/{identityKey}` = `{ profileId, createdAt, createdBy }`. Es inmutable. La ficha guarda `identityKey` (opcional en Fase 1).
@@ -46,10 +48,12 @@ Colección nueva `titheProfileKeys/{identityKey}` = `{ profileId, createdAt, cre
 | Reintento de un alta confirmada (mismo id) | no hace nada (idempotente) |
 | Edición sin cambio de clave (también archivar/reactivar) | no toca el registro |
 | Cambio de nombre | registra la clave nueva y borra la anterior en el mismo commit; si la nueva es de otra ficha → `DuplicateProfileError` |
-| Ficha antigua sin clave | registra su clave si está libre (o si ya apunta a ella); si es de otra ficha guarda **sin** clave y devuelve `possibleDuplicateOf` → aviso «Posible ficha duplicada». **Nunca bloquea editar un registro antiguo** |
+| Ficha antigua sin clave, **activa** | registra su clave si está libre (o si ya apunta a ella). Si la tiene una **gemela archivada** con el mismo nombre, esa gemela la **cede** (commit aparte: se le quita `identityKey` y se borra el registro) y la activa la toma. Si la tiene otra ficha **activa**, guarda **sin** clave y devuelve `possibleDuplicateOf` → aviso «Posible ficha duplicada». **Nunca bloquea editar un registro antiguo** |
+| Ficha antigua sin clave, **archivada** (o que se archiva ahora) | **no toma** la clave aunque esté libre, para que la gemela activa pueda tomarla en su próxima edición |
+| Ficha guardada sin clave con registros «huérfanos» | antes de la transacción consulta `titheProfileKeys where profileId == id` (≤ 10). Dentro de la transacción vuelve a leer cada uno y borra los que siguen apuntando a ella y no son la clave que conserva. Esos huérfanos los deja el cliente anterior cuando cambia el nombre y reescribe la ficha sin `identityKey` |
 | Nombre sin letras latinas | se guarda sin clave |
 
-Una ficha archivada **sigue reservando su nombre**: al crear otra igual se ofrece «Revisar y reactivar».
+Una ficha **con clave** que se archiva **sigue reservando su nombre**: al crear otra igual se ofrece «Revisar y reactivar», salvo que exista una ficha activa con ese nombre, en cuyo caso se ofrece «Usar ficha existente» (las coincidencias exactas se ordenan activas primero). La reserva cede solo ante una gemela antigua **activa** con el mismo nombre (tabla anterior).
 
 ### 2.3 Reglas (texto exacto agregado)
 
@@ -95,7 +99,12 @@ Por qué es seguro ante concurrencia: escribir sobre una clave existente es un *
 
 ### 2.4 Fase 1 / Fase 2
 
-- **Fase 1 (esta rama):** `identityKey` es **opcional**. El cliente hoy desplegado (que no la envía) sigue creando y editando fichas. Si ese cliente reescribe una ficha con clave, la deja sin el campo; las reglas lo permiten (`nk == ''`). El registro **sigue existiendo**, así que el nombre sigue bloqueado. El cliente nuevo lo vuelve a enlazar en la siguiente edición.
+- **Fase 1 (esta rama):** `identityKey` es **opcional**. El cliente hoy desplegado (que no la envía) sigue creando y editando fichas.
+  - Si ese cliente reescribe una ficha con clave **sin cambiar el nombre**, la deja sin el campo; las reglas lo permiten (`nk == ''`). El registro **sigue existiendo**, así que el nombre sigue bloqueado, y el cliente nuevo lo vuelve a enlazar en la siguiente edición.
+  - Si ese cliente **cambia el nombre**, el registro del nombre anterior queda huérfano: sigue apuntando a la ficha y bloqueando ese nombre. El cliente nuevo lo borra en la siguiente edición de esa ficha (§2.2). Mientras nadie la edite, el nombre anterior sigue reservado.
+- **Límites conocidos de Fase 1** (solo un usuario con `finance.records.manage`, rol de confianza; los cierra la Fase 2):
+  - **P2 · toma de clave en dos commits:** quitar `identityKey` a una ficha (permitido en Fase 1) y borrar su registro en el mismo commit libera el nombre; en un segundo commit otra ficha puede tomarlo. Es el mismo mecanismo que usa la cesión desde una gemela archivada.
+  - **P4 · acumulación de registros huérfanos:** cada cambio de nombre hecho con el cliente anterior deja un registro huérfano hasta la próxima edición con el cliente nuevo.
 - **Fase 2 (cambio futuro, aparte):** cuando todo el tráfico use el cliente nuevo, se puede exigir `identityKey` al crear y prohibir quitarla, salvo para nombres sin letras latinas, que hoy no tienen clave. Antes conviene un script (solo lectura + informe) que liste las fichas antiguas sin clave y sus colisiones.
 
 ## 3. UX
@@ -121,10 +130,10 @@ Por qué es seguro ante concurrencia: escribir sobre una clave existente es un *
   - «Revisar aportes» despliega fecha, monto, método y referencia. El método sale de un `documentId in` de ≤ 30 movimientos, **solo al expandir**.
   - «Registrar otro diezmo» confirma el aviso y se continúa.
   - Nunca bloquea.
-- **Coincidencia exacta** (misma ficha, fecha, monto y método, activa): al guardar aparece un paso de confirmación con semántica `alertdialog`: «Encontramos un aporte con los mismos datos. Comprueba que no estés registrándolo dos veces.»
+- **Coincidencia exacta** (misma ficha, fecha, monto y método, activa; la búsqueda es por **fecha exacta**, no por el mes): al guardar aparece un paso de confirmación con semántica `alertdialog`: «Encontramos un aporte con los mismos datos. Comprueba que no estés registrándolo dos veces.»
   - Muestra el aporte existente con «Registrado el dd-mm-aaaa hh:mm» y su referencia.
   - «Volver y revisar» recibe el foco, y Escape equivale a esa opción. «Sí, es otro aporte» guarda.
-  - La comprobación hace una lectura del mes y, solo si hay candidatos de misma fecha y monto, otra de su método. Si la consulta falla, no bloquea.
+  - La comprobación consulta `titheAttributions where profileId == X, status == "active", date == fecha` (≤ 30, mismo índice). No reutiliza la consulta del mes (tope 20), así no se pierden duplicados en meses con muchos aportes. Solo si hay candidatos del mismo monto lee su método. Si la consulta falla, no bloquea.
 - **Doble clic / doble envío / reintento:**
   - id estable por formulario y bloqueo síncrono (`useRef`) mientras se guarda;
   - `saveTransaction` lee el id dentro de la transacción y rechaza un segundo alta («Este movimiento ya fue registrado»).
@@ -139,7 +148,8 @@ Por qué es seguro ante concurrencia: escribir sobre una clave existente es un *
 - **Panel «Posibles fichas duplicadas»:**
   - visible con `finance.records.manage`, el mismo permiso que gestiona fichas;
   - plegado: solo al abrirlo lee la lista acotada;
-  - grupos por misma clave o similitud ≥ 0,8, cada ficha con su estado, fecha de creación y conteo de diezmos activos (agregación);
+  - grupos por misma clave o similitud ≥ 0,8 (los mismos pares que marca el formulario, incluidos los de subconjunto de palabras como «Ana Soto» ⊂ «Ana María Soto»). Cada ficha muestra su estado, fecha de creación y conteo de diezmos activos (agregación), con las activas primero;
+  - un grupo con **como máximo una ficha activa** queda «Resuelto» y se oculta por defecto («Mostrar resueltos (N)»);
   - acciones: «Abrir ficha» y «Archivar». «Archivar» pide confirmación y usa `saveProfile`, la ruta normal con auditoría.
   - **Sin fusionar, sin borrar, sin cambios automáticos.**
 
@@ -168,7 +178,8 @@ Por qué es seguro ante concurrencia: escribir sobre una clave existente es un *
 | Abrir formulario de ficha / registrar diezmo | 1 consulta, ≤ 501 docs (compartida entre el buscador y el formulario de alta) |
 | Escribir en el nombre | 0 (cliente) |
 | Aviso de diezmo repetido | 1 listener, ≤ 20 docs, solo al cambiar de mes |
-| Guardar diezmo nuevo | +1 consulta (≤ 20) y, solo si hay misma fecha y monto, +1 `in` (≤ 30) |
+| Guardar diezmo nuevo | +1 consulta por fecha exacta (≤ 30) y, solo si hay mismo monto, +1 `in` (≤ 30) |
+| Guardar ficha antigua sin clave | +1 consulta `titheProfileKeys where profileId` (≤ 10), para limpiar huérfanos |
 | «Revisar aportes» | +1 `in` (≤ 30) |
 | Lista de fichas | +1 agregación (conteo de archivadas) |
 | Panel de duplicados (solo al abrir) | ≤ 501 docs + 1 agregación por ficha en grupo |
@@ -186,14 +197,17 @@ Por qué es seguro ante concurrencia: escribir sobre una clave existente es un *
 
 | Suite | Qué cubre |
 |---|---|
-| `tests/platform/shared-names.test.ts` | normalización (13 variantes de «Juan Pérez»), ñ/ß/ø, emoji/RTL/vacío/no-string, id válido ≤ 120, similitud, ranking, grupos, rendimiento con 500, paridad TS ↔ CJS |
-| `tests/tithes-integrity-ui.test.tsx` | bloqueo por nombre exacto (UI) y «Usar ficha existente»; similar no bloquea; archivada → «Revisar y reactivar»; reactivar; texto de archivo; ficha antigua no se bloquea; cambio de nombre a uno usado se bloquea; `DuplicateProfileError` del servidor; búsqueda «perez»; aviso con cantidad, total y último; re-consulta solo al cambiar de mes; confirmación exacta (alertdialog, foco, Escape, confirmar guarda una vez); doble envío → un guardado; `dateTimeLabel`/`shortReference` |
-| `tests/rules/tithes-integrity.test.ts` | alta con clave; duplicado (cliente y reglas); altas concurrentes → una gana; nombres parecidos no se bloquean; registro sin ficha / formato inválido / auditoría falsa → denegado; cambio de nombre mueve la clave; cambio de nombre sin borrar la anterior → denegado; cambio de nombre a una clave ocupada → denegado; registro inmutable; ficha antigua sin clave (registra o avisa); Fase 1 con el cliente desplegado; archivar/reactivar; reintento idempotente; nombre sin letras; permisos de lectura y escritura; diezmos idénticos con distinto id permitidos; doble envío concurrente → 1 movimiento, 1 atribución, resumen una vez; no se atribuye a una ficha archivada |
+| `tests/platform/shared-names.test.ts` | normalización (13 variantes de «Juan Pérez»), ñ/ß/ø, emoji/RTL/vacío/no-string, id válido ≤ 120, similitud, ranking (exactas activas primero), grupos (activas primero, «resuelto»), subconjunto de palabras con largo muy distinto, **acuerdo `duplicateGroups` ↔ `similarProfiles`**, rendimiento con 500, paridad TS ↔ CJS |
+| `tests/tithes-integrity-ui.test.tsx` | bloqueo por nombre exacto (UI) y «Usar ficha existente»; similar no bloquea; archivada → «Revisar y reactivar»; reactivar; texto de archivo; ficha antigua no se bloquea; cambio de nombre a uno usado se bloquea; `DuplicateProfileError` del servidor (lee la ficha dueña y muestra su estado real); con gemela archivada y activa ofrece «Usar ficha existente» sobre la activa; panel de duplicados (oculta resueltos, «Mostrar resueltos», conteos, «Archivar» con doble toque → un solo guardado); búsqueda «perez»; aviso con cantidad, total y último; re-consulta solo al cambiar de mes; confirmación exacta (alertdialog, foco, Escape, confirmar guarda una vez); doble envío → un guardado; `dateTimeLabel`/`shortReference` |
+| `tests/rules/tithes-integrity.test.ts` | alta con clave; duplicado (cliente y reglas); altas concurrentes → una gana; nombres parecidos no se bloquean; registro sin ficha / formato inválido / auditoría falsa → denegado; cambio de nombre mueve la clave; cambio de nombre sin borrar la anterior → denegado; cambio de nombre a una clave ocupada → denegado; registro inmutable; ficha antigua sin clave (registra o avisa); **gemelas antiguas**: archivar una no le entrega la clave y la activa la toma en su próxima edición; si la archivada ya tenía la clave, la cede a la activa; **registro huérfano** de un cambio de nombre del cliente anterior se borra en la siguiente edición; **coincidencia exacta por fecha** con más de 20 diezmos en el mes; Fase 1 con el cliente desplegado; archivar/reactivar; reintento idempotente; nombre sin letras; permisos de lectura y escritura; diezmos idénticos con distinto id permitidos; doble envío concurrente → 1 movimiento, 1 atribución, resumen una vez; no se atribuye a una ficha archivada |
 | `tests/emulator/tithe-edit-month.e2e.test.ts` | flujo **Editar** real: diezmo de octubre movido a septiembre. Septiembre suma el monto y +1, octubre resta el monto y −1, `titheTotal` se mueve, la atribución cambia de período y fecha, ambos siguen activos, revisión 2 y no se crea ningún documento nuevo |
 
 ## 8. Plan de despliegue (requiere aprobación humana en cada paso)
 
-1. **Reglas primero.** Van en la misma secuencia del rollout de reglas C‑A1.2 (doc 26): esta rama agrega bloques a `firestore.rules` y debe integrarse sobre la versión de reglas que se vaya a desplegar. Correr `npm run test:rules`, incluido `budget.test.ts`. Las reglas de Fase 1 aceptan al cliente desplegado sin cambios.
+1. **Reglas primero, y solo junto con C‑A1.2 o después.** Esta rama parte de las reglas de `18925d6` (C‑A1.2, doc 26), pero producción sigue con el ruleset `2d9939ab`. Estas reglas no se despliegan solas: salen con el rollout de C‑A1.2 o después de él.
+   - Tras integrar con las ramas de Consolidación (miembros) y de bancos/payouts, volver a correr `npm run test:rules`, incluido `budget.test.ts`, y la medición del doc 26 con `PAD_AT=summary`.
+   - Las reglas de Fase 1 aceptan al cliente desplegado sin cambios.
+   - `scripts/build-shared.mjs` (`SHARED_FILES`) tendrá un conflicto trivial con las ramas de miembros y de payouts de SumUp: **conservar todas las entradas**.
 2. **Hosting después**, con el cliente nuevo.
 3. **Índices:** ninguno nuevo.
 4. **Functions:** no se despliegan. `functions/shared/names.js` solo se agrega como código compartido y no lo usa ninguna Function todavía.
@@ -201,7 +215,7 @@ Por qué es seguro ante concurrencia: escribir sobre una clave existente es un *
 
 ## 9. Rollback
 
-- **Hosting:** volver a la versión anterior. Los registros creados quedan, pero el cliente viejo los ignora, y las reglas de Fase 1 siguen aceptando sus escrituras.
+- **Hosting:** volver a la versión anterior. Los registros creados quedan, pero el cliente viejo los ignora, y las reglas de Fase 1 siguen aceptando sus escrituras. Cada cambio de nombre que haga el cliente viejo durante el rollback deja un registro huérfano que sigue reservando el nombre anterior; el cliente nuevo los limpia al volver a editar esas fichas.
 - **Reglas:** volver al ruleset anterior.
   - El `validProfile` anterior no admite `identityKey`. Con las reglas viejas:
     - el cliente viejo sigue funcionando, porque reescribe la ficha completa sin el campo;
@@ -239,7 +253,8 @@ Ruta: **Diezmos › Posibles fichas duplicadas › Revisar posibles duplicados**
 La ficha archivada:
 - conserva todo su historial y sigue en los reportes;
 - deja de aparecer al registrar diezmos;
-- sigue reservando su nombre.
+- no le quita el nombre a la gemela activa. Si la archivada era antigua (sin clave), no toma la clave. Si ya la tenía, la cede cuando se edita la activa, y la próxima edición de la activa registra su clave;
+- el grupo pasa a «Resuelto» en el panel.
 
 Se puede reactivar en **Editar ficha** marcando «Ficha activa».
 
@@ -255,4 +270,8 @@ Los diezmos que ya están en la ficha archivada **no se mueven**. No hay fusión
 
 - Más de 500 fichas: las coincidencias similares en el cliente son parciales. Los nombres exactos siguen protegidos en el servidor para las fichas con clave.
 - Las fichas antiguas sin clave no bloquean altas nuevas con su nombre hasta que alguien las edite. La UI igual avisa si están dentro de las 500 cargadas. Un backfill del registro sería un cambio aparte, con revisión.
-- Si el cliente viejo, ya cacheado en un navegador, edita una ficha con clave, deja el registro «huérfano» apuntando a ella. Es inofensivo, porque sigue reservando el nombre, y se vuelve a enlazar en la siguiente edición con el cliente nuevo.
+- **Cliente viejo cacheado en un navegador** (o tras un rollback de Hosting):
+  - si edita una ficha con clave sin cambiar el nombre, deja el registro sin enlazar; el cliente nuevo lo vuelve a enlazar;
+  - si cambia el nombre, el nombre anterior queda reservado por un registro huérfano hasta la próxima edición con el cliente nuevo, que lo borra.
+
+  Son los límites P2 y P4 de Fase 1 (§2.4), y los cierra la Fase 2.
