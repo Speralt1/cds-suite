@@ -178,6 +178,21 @@ describe("BankBalanceView variante funds (Posición de fondos)", () => {
   });
 });
 
+describe("BankBalanceView mientras cargan los abonos SumUp", () => {
+  it("muestra banco y caja con 'Cargando abonos SumUp…', nunca como completo", () => {
+    const st = stateFrom({ payouts: { status: "unavailable", reason: "cargando los abonos SumUp…" } }, { payoutsLoading: true });
+    render(<BankBalanceView variant="funds" state={st} canConfigure />);
+    const bank = screen.getByTestId("bank-figure");
+    expect(within(bank).getByText("$1.400.000")).toBeInTheDocument();
+    expect(within(bank).getByText("Cargando abonos SumUp…")).toBeInTheDocument();
+    expect(within(bank).queryByText(/Incompleto/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("sumup-figure")).getByText("Cargando abonos SumUp…")).toBeInTheDocument();
+    expect(st.result?.status).toBe("partial");
+    fireEvent.click(screen.getByRole("button", { name: /Cómo se calcula/ }));
+    expect(within(screen.getByRole("dialog")).getByText("Abonos SumUp recibidos (neto)").parentElement).toHaveTextContent("Cargando…");
+  });
+});
+
 describe("BankBalanceCard (conectada)", () => {
   beforeEach(() => {
     state.payoutArgs = [];

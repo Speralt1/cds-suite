@@ -208,7 +208,8 @@ conciliación tampoco se puede guardar mientras el estimado tenga error.
 5. **Abonos SumUp** (contrato del PR C, doc 29): `useSumupPayoutsForBank(openingDate, hoy)`
    (`lib/finance/sumup-payouts-client.ts`) llama `httpsCallable("sumupPayoutsReconciliation")` con
    `{account: "both", startDate, endDate}` en ventanas contiguas de ≤ 35 días desde el día siguiente al
-   corte hasta hoy (máximo 11 ventanas; más allá, parcial), con caché de 10 minutos por sesión.
+   corte hasta hoy (máximo 11 ventanas; más allá, parcial), **2 ventanas en paralelo como máximo**, con
+   caché de 10 minutos por sesión de navegador.
    `adaptSumupReconciliationResponse` (`lib/finance/sumup-payouts-adapter.ts`, puro) convierte la
    respuesta:
    - cualquier cuenta `ok: false` → no disponible (con su `errorClass`);
@@ -216,13 +217,31 @@ conciliación tampoco se puede guardar mientras el estimado tenga error.
      devolvió, deduplicados por cuenta + id entre ventanas; el resto se cuenta en avisos;
    - `pendingDeposit` = Σ `pendingAmount` de las cuentas; cobertura = primer `period.startDate` y último
      `period.endDate`;
-   - parcial si alguna `basis.basis === "indeterminate"`, si un abono exitoso `REQUIERE_REVISION` por
-     `currency_issue`/`amount_mismatch` (y ese abono no suma), si hay huecos entre ventanas o si la
-     cobertura empieza después de hoy o termina antes;
+   - parcial si alguna `basis.basis === "indeterminate"` (sus abonos exitosos sí suman), si una cuenta
+     trae `rowLimitReached`, si hay abonos con `statusClass "unknown"` (no suman), si un abono exitoso
+     `REQUIERE_REVISION` por `currency_issue`/`amount_mismatch` (no suma), si un abono exitoso tiene
+     neto negativo — contracargo o devolución — (no suma; nunca oculta los demás), si hay huecos entre
+     ventanas, si la cobertura empieza después de hoy o si el `asOfDate` del servidor es anterior a hoy
+     (la cobertura termina ahí);
+   - `in_progress`, `failed` o sin fecha de abono: no suman y se cuentan en avisos;
    - vocabulario o forma desconocidos (otro `status`, `statusClass` o `basis`, abonos sin id, montos
      inválidos) → no disponible: nunca un 0 silencioso.
    Si la función no existe, no responde o falla, el resultado es "no disponible" y el saldo queda
    "Incompleto: faltan abonos SumUp". **Requiere el deploy de la Function del PR C** (con su propio GO).
+
+   **Carga progresiva:** mientras los abonos cargan, la tarjeta ya muestra banco y caja con la insignia
+   "Cargando abonos SumUp…" y el estado es `partial` (nunca `complete` antes de que lleguen); la
+   conciliación no se puede guardar hasta entonces.
+
+   **Costo y límites:** cada ventana es una llamada a la Function, que pide los abonos de las 2 cuentas
+   a la API de SumUp (1 petición por cuenta, hasta 10 días de margen) y lee de Firestore las ventas de
+   ambas cuentas del período más 10 días hacia atrás y hasta 10 días hacia adelante (≈ 55 días de
+   `sumupIntegrations/*/transactions` por ventana). Con un corte a fin de septiembre, un Resumen abierto
+   en octubre hace 1 llamada; a los 6 meses, 6 llamadas (≈ 6 × 2 peticiones a SumUp). La caché de 10
+   minutos evita repetirlas al navegar dentro de la sesión; con 2 llamadas en paralelo no se supera
+   `maxInstances: 3` de la Function. Si SumUp limita o falla una ventana, todo el insumo queda "no
+   disponible" (falla cerrado) hasta la siguiente consulta. Si el volumen crece, la opción es fijar un
+   corte más reciente (nueva cartola).
 
 ## 11. Rollback
 

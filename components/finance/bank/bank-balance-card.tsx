@@ -68,7 +68,17 @@ function Figure({
   );
 }
 
-function Lines({ lines, totalLabel, total }: { lines: BreakdownLine[]; totalLabel: string; total: number }) {
+function Lines({
+  lines,
+  totalLabel,
+  total,
+  payoutsLoading = false,
+}: {
+  lines: BreakdownLine[];
+  totalLabel: string;
+  total: number;
+  payoutsLoading?: boolean;
+}) {
   return (
     <div className={styles.lines} role="list">
       {lines.map((l) => (
@@ -79,7 +89,7 @@ function Lines({ lines, totalLabel, total }: { lines: BreakdownLine[]; totalLabe
           </span>
           <span className={styles.lineLabel}>{l.label}</span>
           <span className={styles.lineAmount}>
-            {l.missing ? "No disponible" : clp(l.amount)}
+            {l.missing ? (payoutsLoading && l.source === "sumup" ? "Cargando…" : "No disponible") : clp(l.amount)}
           </span>
           <span className={styles.lineDetail}>
             {l.detail}
@@ -116,7 +126,12 @@ export function BankBalanceBreakdown({ state }: { state: BankBalanceState }) {
       </p>
       <section className={styles.sheetSection}>
         <h3>Banco</h3>
-        <Lines lines={r.bank.lines} totalLabel="Saldo bancario estimado" total={r.bank.estimated} />
+        <Lines
+          lines={r.bank.lines}
+          totalLabel="Saldo bancario estimado"
+          total={r.bank.estimated}
+          payoutsLoading={state.payoutsLoading}
+        />
       </section>
       <section className={styles.sheetSection}>
         <h3>Caja (efectivo)</h3>
@@ -238,11 +253,17 @@ export function BankBalanceView({
                   <div className={styles.badges}>
                     <span className={styles.badge}>Estimado</span>
                     <span className={styles.badgeInfo}>Corte {ymdLabel(r.openingDate)}</span>
-                    {partial && (
-                      <span className={styles.badgeWarn}>
-                        <TriangleAlert size={12} aria-hidden="true" />
-                        {payoutsMissing ? "Incompleto: faltan abonos SumUp" : "Incompleto"}
+                    {state.payoutsLoading ? (
+                      <span className={styles.badgeInfo} role="status">
+                        Cargando abonos SumUp…
                       </span>
+                    ) : (
+                      partial && (
+                        <span className={styles.badgeWarn}>
+                          <TriangleAlert size={12} aria-hidden="true" />
+                          {payoutsMissing ? "Incompleto: faltan abonos SumUp" : "Incompleto"}
+                        </span>
+                      )
                     )}
                   </div>
                 </>
@@ -287,7 +308,7 @@ export function BankBalanceView({
               {r && r.sumupPending !== null ? (
                 <Money value={r.sumupPending} />
               ) : (
-                <p className={styles.valueMuted}>Sin dato de SumUp</p>
+                <p className={styles.valueMuted}>{state.payoutsLoading ? "Cargando abonos SumUp…" : "Sin dato de SumUp"}</p>
               )}
             </Figure>
 

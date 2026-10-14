@@ -45,11 +45,12 @@ vi.mock("@/lib/finance/bank-hooks", () => {
             error: "",
             account: s.account,
             limitReached: false,
+            payoutsLoading: payouts === null,
             result: computeBankBalance({
               account: s.account as never,
               ledger: [],
               treasury: [],
-              payouts: (payouts as never) ?? PAYOUTS_NOT_CONNECTED,
+              payouts: payouts === null ? { status: "unavailable", reason: "cargando" } : ((payouts as never) ?? PAYOUTS_NOT_CONNECTED),
               asOf: asOf ?? "2026-10-13",
             }),
           },
@@ -219,6 +220,14 @@ describe("Tesorería y conciliación", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar conciliación" }));
     expect(await screen.findByText(/corrige el saldo inicial/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preparar ajuste manual" })).not.toBeInTheDocument();
+  });
+
+  it("mientras cargan los abonos SumUp no se puede guardar la conciliación", () => {
+    s.payouts = null;
+    render(<BankCashSettingsPanel />);
+    fireEvent.change(screen.getByLabelText("Saldo que muestra el banco (CLP)"), { target: { value: "990.000" } });
+    expect(screen.getByText(/La conciliación se habilita cuando terminen de cargar/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar conciliación" })).toBeDisabled();
   });
 
   it("si el estimado falló (p. ej. índice faltante) no se puede conciliar", () => {

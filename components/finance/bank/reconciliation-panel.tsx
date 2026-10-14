@@ -60,7 +60,7 @@ export function ReconciliationPanel({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     // Nunca se guarda un esperado calculado sobre una consulta fallida.
-    if (!user || busy || !estimate.account || expected === null || estimate.error || !r) return;
+    if (!user || busy || !estimate.account || expected === null || estimate.error || estimate.payoutsLoading || !r) return;
     setError("");
     setSaved(null);
     const input = {
@@ -138,7 +138,12 @@ export function ReconciliationPanel({
               </dd>
             </div>
           </dl>
-          {r.status === "partial" && (
+          {estimate.payoutsLoading && (
+            <p className={`${styles.help} ${styles.full}`} role="status">
+              Cargando abonos SumUp… La conciliación se habilita cuando terminen de cargar.
+            </p>
+          )}
+          {r.status === "partial" && !estimate.payoutsLoading && (
             <p className={`${styles.help} ${styles.full}`} role="note">
               El estimado está incompleto ({r.incompleteReasons.join(" ")}). La diferencia puede deberse a eso: revisa
               antes de ajustar.
@@ -148,7 +153,10 @@ export function ReconciliationPanel({
             {(p) => <input {...p} value={note} maxLength={500} placeholder="Ej. Cartola web al cierre del día" onChange={(e) => setNote(e.target.value)} />}
           </Field>
           <div className={`${styles.actions} ${styles.full}`}>
-            <button className="button-primary" disabled={busy || reportedValue === null || !!estimate.error}>
+            <button
+              className="button-primary"
+              disabled={busy || reportedValue === null || !!estimate.error || !!estimate.payoutsLoading}
+            >
               {busy ? "Guardando…" : "Guardar conciliación"}
             </button>
           </div>

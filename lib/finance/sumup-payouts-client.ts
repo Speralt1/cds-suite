@@ -40,20 +40,37 @@ export function payoutWindows(openingDate: Ymd, today: Ymd, max = SUMUP_MAX_WIND
 
 export type ReconciliationCall = (input: { account: "both"; startDate: Ymd; endDate: Ymd }) => Promise<unknown>;
 
-export async function fetchSumupPayoutsForBank(call: ReconciliationCall, openingDate: Ymd, today: Ymd): Promise<SumupPayoutsInput> {
+/** Ventanas en paralelo como máximo (la Function de C tiene maxInstances 3). */
+export const SUMUP_WINDOW_CONCURRENCY = 2;
+
+export async function fetchSumupPayoutsForBank(
+  call: ReconciliationCall,
+  openingDate: Ymd,
+  today: Ymd,
+  concurrency = SUMUP_WINDOW_CONCURRENCY,
+): Promise<SumupPayoutsInput> {
   const windows = payoutWindows(openingDate, today);
   if (!windows.length) return { status: "available", payouts: [], pendingDeposit: null, coverageFrom: null, coverageTo: null };
-  const responses: unknown[] = [];
-  for (const w of windows) {
-    try {
-      responses.push(await call({ account: "both", ...w }));
-    } catch (error) {
-      const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
-      return {
-        status: "unavailable",
-        reason: `la consulta de abonos SumUp no está disponible${code ? ` (${code.replace(/^functions\//, "")})` : ""}.`,
-      };
+  const responses: unknown[] = new Array(windows.length);
+  let next = 0;
+  let failure: unknown = null;
+  async function worker() {
+    while (failure === null && next < windows.length) {
+      const i = next++;
+      try {
+        responses[i] = await call({ account: "both", ...windows[i] });
+      } catch (error) {
+        failure = error ?? new Error("unavailable");
+      }
     }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, windows.length)) }, worker));
+  if (failure !== null) {
+    const code = typeof failure === "object" && "code" in (failure as object) ? String((failure as { code: unknown }).code) : "";
+    return {
+      status: "unavailable",
+      reason: `la consulta de abonos SumUp no está disponible${code ? ` (${code.replace(/^functions\//, "")})` : ""}.`,
+    };
   }
   return adaptSumupReconciliationResponse(responses, today);
 }

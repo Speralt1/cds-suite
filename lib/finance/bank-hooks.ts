@@ -40,7 +40,15 @@ export interface BankBalanceState {
   result: BankBalanceResult | null;
   /** Se alcanzó el tope de alguna consulta. */
   limitReached: boolean;
+  /**
+   * Los abonos SumUp aún cargan: hay cifras de banco/caja, pero el estado es
+   * "partial" (nunca "complete") hasta que lleguen.
+   */
+  payoutsLoading?: boolean;
 }
+
+/** Insumo provisional mientras cargan los abonos: el estimado queda parcial. */
+export const PAYOUTS_LOADING: SumupPayoutsInput = { status: "unavailable", reason: "cargando los abonos SumUp…" };
 
 export function useBankAccount(accountId = DEFAULT_BANK_ACCOUNT_ID, enabled = true) {
   return useDocument<BankAccountDoc>("bankAccounts", accountId, enabled);
@@ -83,8 +91,9 @@ export function resolveBankBalanceState({
   const treasuryTruncated = treasury.data.length >= BANK_TREASURY_LIMIT;
   const limitReached = ready && (ledgerTruncated || treasuryTruncated);
   if (error) return { loading: false, error, account: account.data, result: null, limitReached };
-  const loading = account.loading || sources.some((x) => x.loading) || (ready && payouts === null);
+  const loading = account.loading || sources.some((x) => x.loading);
   if (loading) return { loading: true, error: "", account: account.data, result: null, limitReached: false };
+  const payoutsLoading = ready && payouts === null;
   try {
     const result = computeBankBalance({
       account: account.data
@@ -96,13 +105,13 @@ export function resolveBankBalanceState({
         : null,
       ledger: ready ? ledger.flatMap((x) => x.data) : [],
       treasury: ready ? treasury.data : [],
-      payouts: payouts ?? PAYOUTS_NOT_CONNECTED,
+      payouts: payouts ?? (payoutsLoading ? PAYOUTS_LOADING : PAYOUTS_NOT_CONNECTED),
       asOf,
       accountId,
       ledgerTruncated: ready && ledgerTruncated,
       treasuryTruncated: ready && treasuryTruncated,
     });
-    return { loading: false, error: "", account: account.data, result, limitReached };
+    return { loading: false, error: "", account: account.data, result, limitReached, payoutsLoading };
   } catch {
     return { loading: false, error: "No pudimos calcular el saldo estimado.", account: account.data, result: null, limitReached };
   }
