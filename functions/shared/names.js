@@ -131,10 +131,25 @@ function nameSimilarity(a, b) {
     // Nunca 1 si las claves difieren: "exacto" queda reservado a la misma clave.
     return Math.min(score, 0.99);
 }
+/** false solo si el registro declara `active: false` (archivado); sin el campo cuenta como activo. */
+function isActiveRecord(p) {
+    return p.active !== false;
+}
+/** true si las ≥ 2 palabras (sin repetir) del conjunto más chico están todas en el otro. */
+function tokenSubset(sa, sb) {
+    const [small, big] = sa.size <= sb.size ? [sa, sb] : [sb, sa];
+    if (small.size < 2)
+        return false;
+    for (const t of small)
+        if (!big.has(t))
+            return false;
+    return true;
+}
 /**
  * Fichas cuyo nombre coincide con `candidate`: "exact" (misma clave de identidad) o
- * "similar" (similitud ≥ threshold). Orden: exactas primero, luego por similitud
- * descendente y por nombre. `excludeId` omite la ficha que se está editando.
+ * "similar" (similitud ≥ threshold). Orden: exactas primero; dentro de cada grupo, las
+ * activas antes que las archivadas (`active: false`); luego por similitud descendente y
+ * por nombre. `excludeId` omite la ficha que se está editando.
  */
 function similarProfiles(candidate, profiles, threshold = exports.DEFAULT_SIMILARITY_THRESHOLD, excludeId) {
     const key = identityKey(candidate);
@@ -153,6 +168,7 @@ function similarProfiles(candidate, profiles, threshold = exports.DEFAULT_SIMILA
             out.push({ profile, score, reason: "similar" });
     }
     return out.sort((x, y) => (x.reason === y.reason ? 0 : x.reason === "exact" ? -1 : 1) ||
+        Number(isActiveRecord(y.profile)) - Number(isActiveRecord(x.profile)) ||
         y.score - x.score ||
         x.profile.displayName.localeCompare(y.profile.displayName, "es"));
 }
@@ -161,7 +177,11 @@ function similarProfiles(candidate, profiles, threshold = exports.DEFAULT_SIMILA
  * Determinista. Para ~500 fichas descarta pares cuyo largo ya impide llegar al umbral.
  */
 function duplicateGroups(profiles, threshold = exports.DEFAULT_SIMILARITY_THRESHOLD) {
-    const items = profiles.map((p) => ({ p, key: identityKey(p.displayName) }));
+    const items = profiles.map((p) => ({
+        p,
+        key: identityKey(p.displayName),
+        tokens: new Set(nameTokens(p.displayName)),
+    }));
     const parent = items.map((_, i) => i);
     const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
     const byKey = new Map();
@@ -183,8 +203,13 @@ function duplicateGroups(profiles, threshold = exports.DEFAULT_SIMILARITY_THRESH
             if (!b || a === b)
                 continue;
             const longest = Math.max(a.length, b.length);
-            // Sin contención posible y con largo demasiado distinto: no llega al umbral.
-            if (Math.abs(a.length - b.length) > (1 - threshold) * longest && !a.includes(b) && !b.includes(a))
+            // Largo demasiado distinto: no llega al umbral por edición. Igual se comparan los pares
+            // con contención de texto o de palabras (regla 3 de nameSimilarity: "Ana Soto" ⊂
+            // "Ana María Soto"), para coincidir siempre con similarProfiles.
+            if (Math.abs(a.length - b.length) > (1 - threshold) * longest &&
+                !a.includes(b) &&
+                !b.includes(a) &&
+                !tokenSubset(items[i].tokens, items[j].tokens))
                 continue;
             if (nameSimilarity(items[i].p.displayName, items[j].p.displayName) >= threshold) {
                 parent[find(j)] = find(i);
@@ -202,13 +227,14 @@ function duplicateGroups(profiles, threshold = exports.DEFAULT_SIMILARITY_THRESH
             continue;
         const keys = new Set(members.map((i) => items[i].key));
         const reason = keys.size === 1 ? "exact" : "similar";
-        out.push({
-            reason,
-            profiles: members
-                .map((i) => items[i].p)
-                .sort((x, y) => x.displayName.localeCompare(y.displayName, "es")),
-        });
+        const list = members
+            .map((i) => items[i].p)
+            .sort((x, y) => Number(isActiveRecord(y)) - Number(isActiveRecord(x)) ||
+            x.displayName.localeCompare(y.displayName, "es"));
+        const activeCount = list.filter(isActiveRecord).length;
+        out.push({ reason, profiles: list, activeCount, resolved: activeCount <= 1 });
     }
-    return out.sort((x, y) => (x.reason === y.reason ? 0 : x.reason === "exact" ? -1 : 1) ||
+    return out.sort((x, y) => Number(x.resolved) - Number(y.resolved) ||
+        (x.reason === y.reason ? 0 : x.reason === "exact" ? -1 : 1) ||
         x.profiles[0].displayName.localeCompare(y.profiles[0].displayName, "es"));
 }

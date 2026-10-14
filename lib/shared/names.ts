@@ -127,10 +127,23 @@ export interface NameMatch<T> {
   reason: NameMatchReason;
 }
 
+/** false solo si el registro declara `active: false` (archivado); sin el campo cuenta como activo. */
+function isActiveRecord(p: unknown) {
+  return (p as { active?: unknown }).active !== false;
+}
+/** true si las ≥ 2 palabras (sin repetir) del conjunto más chico están todas en el otro. */
+function tokenSubset(sa: ReadonlySet<string>, sb: ReadonlySet<string>) {
+  const [small, big] = sa.size <= sb.size ? [sa, sb] : [sb, sa];
+  if (small.size < 2) return false;
+  for (const t of small) if (!big.has(t)) return false;
+  return true;
+}
+
 /**
  * Fichas cuyo nombre coincide con `candidate`: "exact" (misma clave de identidad) o
- * "similar" (similitud ≥ threshold). Orden: exactas primero, luego por similitud
- * descendente y por nombre. `excludeId` omite la ficha que se está editando.
+ * "similar" (similitud ≥ threshold). Orden: exactas primero; dentro de cada grupo, las
+ * activas antes que las archivadas (`active: false`); luego por similitud descendente y
+ * por nombre. `excludeId` omite la ficha que se está editando.
  */
 export function similarProfiles<T extends { id?: string; displayName: string }>(
   candidate: string,
@@ -153,6 +166,7 @@ export function similarProfiles<T extends { id?: string; displayName: string }>(
   return out.sort(
     (x, y) =>
       (x.reason === y.reason ? 0 : x.reason === "exact" ? -1 : 1) ||
+      Number(isActiveRecord(y.profile)) - Number(isActiveRecord(x.profile)) ||
       y.score - x.score ||
       x.profile.displayName.localeCompare(y.profile.displayName, "es"),
   );
@@ -161,7 +175,12 @@ export function similarProfiles<T extends { id?: string; displayName: string }>(
 export interface DuplicateGroup<T> {
   /** "exact": todas comparten la clave; "similar": unidas por similitud ≥ threshold. */
   reason: NameMatchReason;
+  /** Activas primero (`active: false` = archivada), luego por nombre. */
   profiles: T[];
+  /** Cantidad de registros activos del grupo (sin el campo `active` cuentan como activos). */
+  activeCount: number;
+  /** true si queda como máximo 1 activo: el duplicado ya se resolvió archivando. */
+  resolved: boolean;
 }
 
 /**
@@ -172,7 +191,11 @@ export function duplicateGroups<T extends { displayName: string }>(
   profiles: readonly T[],
   threshold = DEFAULT_SIMILARITY_THRESHOLD,
 ): DuplicateGroup<T>[] {
-  const items = profiles.map((p) => ({ p, key: identityKey(p.displayName) }));
+  const items = profiles.map((p) => ({
+    p,
+    key: identityKey(p.displayName),
+    tokens: new Set(nameTokens(p.displayName)),
+  }));
   const parent = items.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   const byKey = new Map<string, number>();
@@ -189,8 +212,16 @@ export function duplicateGroups<T extends { displayName: string }>(
       const b = items[j].key;
       if (!b || a === b) continue;
       const longest = Math.max(a.length, b.length);
-      // Sin contención posible y con largo demasiado distinto: no llega al umbral.
-      if (Math.abs(a.length - b.length) > (1 - threshold) * longest && !a.includes(b) && !b.includes(a)) continue;
+      // Largo demasiado distinto: no llega al umbral por edición. Igual se comparan los pares
+      // con contención de texto o de palabras (regla 3 de nameSimilarity: "Ana Soto" ⊂
+      // "Ana María Soto"), para coincidir siempre con similarProfiles.
+      if (
+        Math.abs(a.length - b.length) > (1 - threshold) * longest &&
+        !a.includes(b) &&
+        !b.includes(a) &&
+        !tokenSubset(items[i].tokens, items[j].tokens)
+      )
+        continue;
       if (nameSimilarity(items[i].p.displayName, items[j].p.displayName) >= threshold) {
         parent[find(j)] = find(i);
       }
@@ -206,15 +237,19 @@ export function duplicateGroups<T extends { displayName: string }>(
     if (members.length < 2) continue;
     const keys = new Set(members.map((i) => items[i].key));
     const reason: NameMatchReason = keys.size === 1 ? "exact" : "similar";
-    out.push({
-      reason,
-      profiles: members
-        .map((i) => items[i].p)
-        .sort((x, y) => x.displayName.localeCompare(y.displayName, "es")),
-    });
+    const list = members
+      .map((i) => items[i].p)
+      .sort(
+        (x, y) =>
+          Number(isActiveRecord(y)) - Number(isActiveRecord(x)) ||
+          x.displayName.localeCompare(y.displayName, "es"),
+      );
+    const activeCount = list.filter(isActiveRecord).length;
+    out.push({ reason, profiles: list, activeCount, resolved: activeCount <= 1 });
   }
   return out.sort(
     (x, y) =>
+      Number(x.resolved) - Number(y.resolved) ||
       (x.reason === y.reason ? 0 : x.reason === "exact" ? -1 : 1) ||
       x.profiles[0].displayName.localeCompare(y.profiles[0].displayName, "es"),
   );

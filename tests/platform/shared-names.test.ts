@@ -156,6 +156,53 @@ describe("nameSimilarity / similarProfiles", () => {
     ]);
   });
 
+  it("exactas: activas antes que archivadas", () => {
+    const r = similarProfiles("Juan Pérez", [
+      { id: "arch", displayName: "Juan Pérez", active: false },
+      { id: "act", displayName: "JUAN PEREZ", active: true },
+      { id: "sim", displayName: "Juana Pérez", active: true },
+    ]);
+    expect(r.map((m) => m.profile.id)).toEqual(["act", "arch", "sim"]);
+  });
+
+  it("duplicateGroups: activas primero, conteo de activas y grupos resueltos al final", () => {
+    const groups = duplicateGroups([
+      { id: "l1", displayName: "Rosa Díaz", active: true },
+      { id: "l2", displayName: "ROSA DIAZ", active: false },
+      { id: "m1", displayName: "Marta Gil", active: true },
+      { id: "m2", displayName: "Marta Gil.", active: true },
+    ]);
+    expect(groups.map((g) => [g.profiles.map((p) => p.id), g.activeCount, g.resolved])).toEqual([
+      [["m1", "m2"], 2, false],
+      [["l1", "l2"], 1, true],
+    ]);
+  });
+
+  it("duplicateGroups incluye pares por subconjunto de palabras aunque el largo difiera mucho", () => {
+    const groups = duplicateGroups([
+      { id: "1", displayName: "Ana Soto" },
+      { id: "2", displayName: "Ana María José Soto Rivera" },
+    ]);
+    expect(groups.map((g) => g.profiles.map((p) => p.id).sort())).toEqual([["1", "2"]]);
+  });
+
+  it("duplicateGroups coincide con similarProfiles: todo par marcado por el formulario queda en un grupo", () => {
+    const names = [
+      "Juan Pérez", "Juana Pérez", "Juan Pérez Soto", "Pérez Juan", "Ana Soto", "Ana María Soto",
+      "Ana María José Soto Rivera", "Pedro Rojas", "Pedro Rojas Gil", "María Soto", "Mario Soto",
+      "Familia Muñoz", "Familia Munoz Díaz", "Rosa", "Rosa Díaz", "😀", "José Luis Pérez Soto",
+    ];
+    const profiles = names.map((displayName, i) => ({ id: String(i), displayName }));
+    const groups = duplicateGroups(profiles);
+    const groupOf = new Map<string, number>();
+    groups.forEach((g, gi) => g.profiles.forEach((p) => groupOf.set(p.id, gi)));
+    for (const p of profiles)
+      for (const m of similarProfiles(p.displayName, profiles, undefined, p.id)) {
+        expect(groupOf.get(p.id), `${p.displayName} ~ ${m.profile.displayName}`).toBeDefined();
+        expect(groupOf.get(p.id)).toBe(groupOf.get(m.profile.id));
+      }
+  });
+
   it("duplicateGroups con 500 fichas termina rápido (prefiltro por largo)", () => {
     const many = Array.from({ length: 500 }, (_, i) => ({ id: String(i), displayName: `Persona ${i} Apellido${i % 7}` }));
     const t = performance.now();

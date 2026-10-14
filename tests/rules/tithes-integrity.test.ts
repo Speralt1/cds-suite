@@ -26,6 +26,7 @@ import {
   saveProfile,
 } from "../../lib/finance/profiles";
 import { saveTransaction } from "../../lib/finance/transactions";
+import { findExactTitheMatches } from "../../lib/finance/tithe-integrity";
 import type {
   ProfileInput,
   TitheProfile,
@@ -261,6 +262,56 @@ describe("registro de identidad de fichas (titheProfileKeys)", () => {
     expect((await profileDoc("p1")).identityKey).toBe("juan_perez");
   });
 
+  it("gemelas antiguas: archivar una NO le entrega la clave; la activa la toma en su próxima edición", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const now = Timestamp.now();
+      await setDoc(doc(ctx.firestore(), "titheProfiles", "L1"), profileData("finance", "Rosa Díaz", { createdAt: now, updatedAt: now }));
+      await setDoc(doc(ctx.firestore(), "titheProfiles", "L2"), profileData("finance", "ROSA DIAZ", { createdAt: now, updatedAt: now }));
+    });
+    // Tesorería archiva L2 desde el panel (ruta normal saveProfile).
+    await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", active: false }, await profileDoc("L2"));
+    expect(await profileDoc("L2")).not.toHaveProperty("identityKey");
+    expect(await keyDoc("rosa_diaz")).toBeUndefined();
+    // La siguiente edición de la activa toma la clave, sin aviso de duplicado.
+    expect(await saveProfile(db, "finance", { ...base, displayName: "Rosa Díaz", phone: "1" }, await profileDoc("L1"))).toEqual({ id: "L1" });
+    expect((await profileDoc("L1")).identityKey).toBe("rosa_diaz");
+    expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L1");
+  });
+
+  it("gemelas antiguas: si la archivada ya tenía la clave, la cede a la activa (sin borrar nada)", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const now = Timestamp.now();
+      await setDoc(doc(ctx.firestore(), "titheProfiles", "L1"), profileData("finance", "Rosa Díaz", { createdAt: now, updatedAt: now }));
+      await setDoc(doc(ctx.firestore(), "titheProfiles", "L2"), profileData("finance", "ROSA DIAZ", { createdAt: now, updatedAt: now }));
+    });
+    // L2 se editó primero estando activa (tomó la clave) y luego se archivó (la conserva).
+    await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ" }, await profileDoc("L2"));
+    await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", active: false }, await profileDoc("L2"));
+    expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L2");
+    const r = await saveProfile(db, "finance", { ...base, displayName: "Rosa Díaz", phone: "1" }, await profileDoc("L1"));
+    expect(r).toEqual({ id: "L1" });
+    expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L1");
+    const l2 = await profileDoc("L2");
+    expect(l2).not.toHaveProperty("identityKey");
+    expect(l2).toMatchObject({ active: false, displayName: "ROSA DIAZ", updatedBy: "finance" });
+    // Con la gemela ACTIVA dueña de la clave no hay cesión: solo aviso.
+    await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", active: true }, l2);
+    expect(await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", phone: "2" }, await profileDoc("L2"))).toEqual({ id: "L2", possibleDuplicateOf: "L1" });
+    expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L1");
+  });
+
+  it("registro huérfano: un cambio de nombre del cliente anterior se limpia en la siguiente edición", async () => {
+    await saveProfile(db, "finance", base, undefined, "A");
+    // Cliente cacheado anterior: cambia el nombre y reescribe la ficha sin identityKey.
+    await assertSucceeds(legacyClientWrite(await profileDoc("A"), "finance", { displayName: "Juan Pérez Soto" }));
+    expect((await keyDoc("juan_perez"))!.profileId).toBe("A");
+    await saveProfile(db, "finance", { ...base, displayName: "Juan Pérez Soto", phone: "9" }, await profileDoc("A"));
+    expect((await profileDoc("A")).identityKey).toBe("juan_perez_soto");
+    expect((await keyDoc("juan_perez_soto"))!.profileId).toBe("A");
+    expect(await keyDoc("juan_perez")).toBeUndefined();
+    await assertSucceeds(saveProfile(db, "finance", base, undefined, "B"));
+  });
+
   it("archivar y reactivar no tocan el registro; la ficha archivada sigue reservando el nombre", async () => {
     await saveProfile(db, "finance", base, undefined, "p1");
     const created = (await getDoc(doc(db, "titheProfileKeys", "juan_perez"))).data()!;
@@ -330,6 +381,16 @@ describe("diezmos repetidos y doble envío", () => {
     // Reintento posterior del navegador con el mismo id: rechazado, nada cambia.
     await expect(saveTransaction(db, "finance", "same-id", tithe, { profileId: "p1" })).rejects.toThrow(/ya fue registrado/);
     expect((await getDoc(doc(db, "financeMonthlySummaries", "2026-10"))).data()!.transactionCount).toBe(1);
+  });
+
+  it("coincidencia exacta al guardar: se detecta aunque el mes tenga más de 20 diezmos", async () => {
+    for (let d = 1; d <= 22; d++)
+      await saveTransaction(db, "finance", `m${d}`, { ...tithe, amount: 1000 + d, date: `2026-10-${String(d + 3).padStart(2, "0")}` }, { profileId: "p1" });
+    await saveTransaction(db, "finance", "target", { ...tithe, date: "2026-10-01" }, { profileId: "p1" });
+    const found = await findExactTitheMatches(db, "p1", { date: "2026-10-01", amount: 145000, paymentMethod: "transfer" });
+    expect(found.map((a) => a.id)).toEqual(["target"]);
+    expect(await findExactTitheMatches(db, "p1", { date: "2026-10-01", amount: 145000, paymentMethod: "cash" })).toEqual([]);
+    expect(await findExactTitheMatches(db, "p1", { date: "2026-10-01", amount: 1, paymentMethod: "transfer" })).toEqual([]);
   });
 
   it("no se atribuye a una ficha archivada", async () => {
