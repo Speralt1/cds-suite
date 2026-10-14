@@ -12,8 +12,10 @@ import { seed, signIn } from "./helpers";
 
 const require = createRequire(import.meta.url);
 const read = require("../../functions/sumup-payouts/read.js");
-const adminApp = require("../../functions/node_modules/firebase-admin/app");
-const adminFirestore = require("../../functions/node_modules/firebase-admin/firestore");
+// Mismo patrón que el seed: firebase-admin se resuelve desde functions/.
+const requireFromFunctions = createRequire(new URL("../../functions/package.json", import.meta.url));
+const adminApp = requireFromFunctions("firebase-admin/app");
+const adminFirestore = requireFromFunctions("firebase-admin/firestore");
 const FEE_DOC = "sumup_fee_offerings_2026-10-13_aaaaaaaaaaaa";
 
 const URL_ = `${SEED_FUNCTIONS_ORIGIN}/${SEED_PROJECT}/${SEED_REGION}/sumupPayoutsReconciliation`;
