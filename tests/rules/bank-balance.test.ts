@@ -7,6 +7,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -24,6 +25,8 @@ import {
   type TreasuryTransferDoc,
 } from "../../lib/finance/bank-accounts";
 import type { BankAccountInput, TreasuryInput } from "../../lib/finance/bank-model";
+import { computeBankBalance, PAYOUTS_NOT_CONNECTED } from "../../lib/finance/bank-balance";
+import { bankBalanceQueries } from "../../lib/finance/bank-queries";
 import { addDays, allowed, createRulesEnv, dbOf, P, seedBase, TODAY, USERS, v1User } from "./helpers/platform-fixtures";
 
 let env: RulesTestEnvironment;
@@ -373,4 +376,51 @@ describe("bankReconciliations (solo creación, nunca ajusta)", () => {
 
 it("los perfiles del test existen (sanity)", () => {
   expect(Object.keys(USERS)).toEqual(expect.arrayContaining(["admin", "v1-admin", "v1-inactive"]));
+});
+
+describe("consultas reales del saldo estimado (emulador, reglas activas)", () => {
+  it("traen solo efectivo/transferencia/otro y gastos con tarjeta desde el corte; el cálculo cuadra", async () => {
+    const noon = (ymd: string) => Timestamp.fromDate(new Date(`${ymd}T12:00:00.000Z`));
+    const row = (id: string, type: string, paymentMethod: string, amount: number, ymd: string, status = "active", date = noon(ymd)) => [
+      id,
+      { type, paymentMethod, amount, status, date, period: ymd.slice(0, 7), day: String(Number(ymd.slice(8, 10))), source: "general" },
+    ] as const;
+    const after = addDays(CUTOFF, 1);
+    const rows = [
+      row("t-in", "income", "transfer", 100_000, after),
+      row("c-in", "income", "cash", 40_000, after),
+      row("card-in", "income", "card", 999_999, after),
+      row("card-out", "expense", "card", 12_000, after),
+      row("t-out", "expense", "transfer", 30_000, after),
+      row("before", "income", "transfer", 777_777, addDays(CUTOFF, -1)),
+      row("cutoff", "income", "transfer", 555_555, CUTOFF),
+      row("voided", "income", "transfer", 444_444, after, "voided"),
+      // SumUp en efectivo a las 23:30 de Santiago del día de corte (02:30Z del día siguiente).
+      row("sumup-late", "income", "cash", 3_333, CUTOFF, "active", Timestamp.fromDate(new Date(`${after}T02:30:00.000Z`))),
+    ];
+    await seedAccount();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const [id, data] of rows) await setDoc(doc(ctx.firestore(), "financeTransactions", id), data);
+    });
+    await seedTransfer("dep", { date: after, amount: 5_000 });
+    const db = dbOf(env, "v1-details");
+    const q = bankBalanceQueries(CUTOFF);
+    const a = await getDocs(query(collection(db, "financeTransactions"), ...q.cashTransfer));
+    const b = await getDocs(query(collection(db, "financeTransactions"), ...q.cardExpense));
+    const t = await getDocs(query(collection(db, "treasuryTransfers"), ...q.treasury));
+    const ids = [...a.docs, ...b.docs].map((d) => d.id).sort();
+    expect(ids).toEqual(["c-in", "card-out", "cutoff", "sumup-late", "t-in", "t-out", "voided"]);
+    expect(t.docs.map((d) => d.id)).toEqual(["dep"]);
+    const result = computeBankBalance({
+      account: { openingBalance: ACCOUNT.openingBalance, openingDate: CUTOFF, openingCash: null },
+      ledger: [...a.docs, ...b.docs].map((d) => ({ id: d.id, ...d.data() }) as never),
+      treasury: t.docs.map((d) => ({ id: d.id, ...d.data() }) as never),
+      payouts: PAYOUTS_NOT_CONNECTED,
+      asOf: TODAY,
+      accountId: "main",
+    });
+    expect(result.status).toBe("partial");
+    expect(result.bank!.estimated).toBe(1_250_000 + 100_000 - 12_000 - 30_000 + 5_000);
+    expect(result.cash!.amount).toBe(40_000 - 5_000);
+  });
 });

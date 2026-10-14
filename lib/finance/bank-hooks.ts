@@ -8,10 +8,10 @@
 //   financeTransactions (type ASC, paymentMethod ASC, date ASC)
 // Cada consulta está acotada; si se alcanza el tope se informa "límite alcanzado".
 import { useMemo } from "react";
-import { limit, orderBy, where } from "firebase/firestore";
+import { limit, orderBy, type QueryConstraint } from "firebase/firestore";
 import { localToday } from "../shared/dates";
 import { useCollection, useDocument } from "./hooks";
-import { parseDate } from "./formatters";
+import { BANK_LEDGER_LIMIT, BANK_TREASURY_LIMIT, bankBalanceQueries } from "./bank-queries";
 import { computeBankBalance, PAYOUTS_NOT_CONNECTED, type BankBalanceResult, type SumupPayoutsInput } from "./bank-balance";
 import { DEFAULT_BANK_ACCOUNT_ID, isYmd, type Ymd } from "./bank-model";
 import type {
@@ -22,14 +22,16 @@ import type {
 } from "./bank-accounts";
 import type { FinanceTransaction } from "./types";
 
-export const BANK_LEDGER_LIMIT = 5000;
-export const BANK_TREASURY_LIMIT = 1000;
+export { BANK_LEDGER_LIMIT, BANK_TREASURY_LIMIT, bankBalanceQueries };
+
 export const BANK_LIST_LIMIT = 30;
 
 /** Fecha local de hoy en America/Santiago. */
 export function santiagoToday(now: Date = new Date()): Ymd {
   return localToday(now);
 }
+
+const EMPTY: QueryConstraint[] = [];
 
 export interface BankBalanceState {
   loading: boolean;
@@ -58,38 +60,10 @@ export function useBankBalance({
   const account = useBankAccount(accountId, enabled);
   const openingDate = account.data && isYmd(account.data.openingDate) ? account.data.openingDate : null;
   const ready = enabled && !!openingDate;
-  const cashTransfer = useMemo(
-    () =>
-      openingDate
-        ? [
-            where("type", "in", ["income", "expense"]),
-            where("paymentMethod", "in", ["cash", "transfer", "other"]),
-            // Mediodía UTC del día de corte: todo instante de un día local posterior es mayor.
-            // El filtro exacto por fecha local (period + day) lo hace computeBankBalance.
-            where("date", ">=", parseDate(openingDate)),
-            orderBy("date"),
-            limit(BANK_LEDGER_LIMIT),
-          ]
-        : [],
-    [openingDate],
-  );
-  const cardExpense = useMemo(
-    () =>
-      openingDate
-        ? [
-            where("type", "==", "expense"),
-            where("paymentMethod", "==", "card"),
-            where("date", ">=", parseDate(openingDate)),
-            orderBy("date"),
-            limit(BANK_LEDGER_LIMIT),
-          ]
-        : [],
-    [openingDate],
-  );
-  const treasuryQuery = useMemo(
-    () => (openingDate ? [where("date", ">", openingDate), orderBy("date"), limit(BANK_TREASURY_LIMIT)] : []),
-    [openingDate],
-  );
+  const queries = useMemo(() => (openingDate ? bankBalanceQueries(openingDate) : null), [openingDate]);
+  const cashTransfer = queries?.cashTransfer ?? EMPTY;
+  const cardExpense = queries?.cardExpense ?? EMPTY;
+  const treasuryQuery = queries?.treasury ?? EMPTY;
   const a = useCollection<FinanceTransaction>("financeTransactions", cashTransfer, ready);
   const b = useCollection<FinanceTransaction>("financeTransactions", cardExpense, ready);
   const t = useCollection<TreasuryTransferDoc>("treasuryTransfers", treasuryQuery, ready);
