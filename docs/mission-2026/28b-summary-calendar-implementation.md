@@ -16,7 +16,7 @@ Solo presentación: ninguna cifra nueva. Todo sale de `useSummaries`, `useTransa
 - Si el día seleccionado pertenece a otro mes, el panel ya no lo muestra. El respaldo es el día 1 del mes en vez de "hoy".
 - En Diario no aparece el chip "Sin gastos registrados": un día sin gastos es normal (todos los domingos). El panel del día y el conteo "Movimientos del día · N" solo se muestran cuando los movimientos del mes cargaron sin error. Se usa la misma regla que en la vista mensual, y así no aparecen "Sin registros" ni ceros falsos.
 - `FundsPosition` se renderiza una sola vez, en una posición fija después de la banda y fuera de las ramas de carga y error. El tile del PR D no se remonta al cambiar de vista o de período, y sigue visible si fallan los resúmenes.
-- Hay un solo `role="status"` de carga a la vez. El skeleton del calendario y el "Consultando…" de la lista de movimientos no lo repiten.
+- Hay un solo `role="status"` de carga a la vez: el del skeleton de la banda. El skeleton del calendario y los "Consultando…" de la vista Anual y de la lista de movimientos se muestran como texto, sin `role`.
 
 **`BalanceBand` (`balance-band.tsx`)**
 - Usa `<section aria-labelledby>` con un `<dl>` y un resumen para lector de pantalla ("Ingresos … pesos menos gastos … pesos, resultado … pesos").
@@ -55,7 +55,7 @@ Solo presentación: ninguna cifra nueva. Todo sale de `useSummaries`, `useTransa
   - **<52rem (modo apilado):** al tocar un día se abre un `<dialog>` (lateral de 27,5rem en ≥768px; hoja de 92dvh en <768px) con las medidas y la animación de `CalDialog`, duplicadas en `cash-calendar.css`. El foco vuelve a la celda del día seleccionado. Debajo de la grilla queda "Días por revisar", con "Ver las N advertencias" cuando hay más de 5.
   - JavaScript necesita saber si está en modo apilado. Lo mide con `ResizeObserver` sobre la sección (mismo umbral que la container query) y vuelve a medir cuando cambia `data-text-size` en `<html>` (el "Aa" de B1). Sin `ResizeObserver`, se queda en el modo en línea.
 - **Foco:**
-  - "Revisar movimientos" y "Ver los N movimientos" pasan a Diario y llevan el foco al título de la banda de Diario (cuando termina de cargar).
+  - "Revisar movimientos" y "Ver los N movimientos" pasan a Diario y llevan el foco al título de la banda de Diario (cuando termina de cargar). Si la banda falla, el foco va al botón "Diario" activo.
   - "Advertencia anterior" y "Siguiente advertencia" usan `aria-disabled` en los extremos, así que el botón conserva el foco y no hace nada.
   - El diálogo también se cierra con el evento nativo `close`.
 - **"Revisar movimientos":** Movimientos no acepta filtros por URL, así que se usa `onViewDay`, que lleva a la vista Diario de esa fecha (decisión 9). En la vista Diario, el mismo botón enlaza a `#fin-movements`.
@@ -63,7 +63,9 @@ Solo presentación: ninguna cifra nueva. Todo sale de `useSummaries`, `useTransa
 
 **Tablas:** "Ingresos por tipo de dinero" y "por fuente" quedan lado a lado desde un contenedor de 52rem. Las columnas son de ancho fijo en rem (Monto 9, % 4,5, Mov. 4) con `max-width` de 44rem. Las tablas se ocultan en un período sin movimientos.
 
-Los anchos fijos solo se aplican cuando el panel mide más de 30rem (container query `fin-table`). En un panel más angosto (teléfono, 125 % o dos columnas en tablet), la tabla vuelve a `table-layout: auto`, con un mínimo de 7rem para la columna de texto.
+Los anchos fijos solo se aplican cuando el panel mide más de 30rem (container query `fin-table`). En un panel más angosto (teléfono, 125 % o dos columnas en tablet), la tabla vuelve a `table-layout: auto`, con un mínimo de `min(7rem, 40cqi)` para la columna de texto.
+
+Con un panel de menos de 26rem, "% · N mov." pasa a una línea secundaria bajo el tipo, y las columnas % y Mov. se ocultan con `display: none` (también para el lector de pantalla). Así, en cada diseño las cifras se leen una sola vez y ningún monto se corta ni desborda el panel.
 
 **Banda angosta (<24rem):** queda en una sola columna. La cifra va en su propia fila, la etiqueta puede pasar de línea y "Déficit" va debajo de "Resultado del período", así que nada se superpone a 375 px ni al 125 %.
 
@@ -127,7 +129,8 @@ A 375 px el calendario tiene 7 columnas, el gap de 0,25rem del Design Lock y el 
 
 - Se acepta un ancho de ≥24 px, el mínimo de WCAG 2.2 AA (2.5.8). El alto sigue en ≥3,25rem (52 px o más).
 - En modo compacto, el padding de la celda baja a 0,125rem.
-- El número (y el círculo de "Hoy") mide `min(1.5rem, 100%)`, así que nunca se recorta. En los modos medio y completo vuelve a 1,75rem.
+- El número (y el círculo de "Hoy") mide `min(1.5rem, 100%)` con `aspect-ratio: 1`, así que nunca se recorta ni se ovala. En los modos medio y completo vuelve a 1,75rem.
+- **El Tech Lead aceptó esta desviación (revisión Atlas, ronda 2):** se midieron entre 34 y 40 px de ancho a 375 y 390 px. Siete columnas no llegan a 44 px en 375, y el alto sigue en ≥52 px.
 
 ## Dependencias con B1
 
