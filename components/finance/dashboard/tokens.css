@@ -1,0 +1,45 @@
+/* Resumen financiero · tokens de color y de toque (Design Lock 28 §B).
+   B2 los define con alcance local en las raíces de sus componentes para no
+   tocar app/globals.css. B1 agrega los mismos tokens globalmente en un
+   bloque @theme inline con los mismos valores; cuando ambos PR estén
+   integrados, este bloque se puede eliminar (deduplicación pendiente). */
+.fin-summary,
+.fin-balance,
+.fin-funds,
+.fin-income-tables,
+.fin-cal-section,
+.fin-cal-skeleton,
+.fin-day-panel,
+.fin-day-dialog {
+  --color-income: #256b47;
+  --color-income-soft: #e8f2ec;
+  --color-expense: #a4482f;
+  --color-expense-soft: #f8ece6;
+  --color-chart-income: #285b45;
+  --color-chart-expense: #c0694c;
+  --color-chart-result: #60746b;
+  --color-result-ink: #233c33;
+  --color-result-surface: #f0ece2;
+  --color-result-line: #ddd5c3;
+  --color-warning: #9a6a1f;
+  --color-warning-ink: #7a5216;
+  --color-warning-soft: #fbf1de;
+  --color-info: #245a86;
+  --color-info-soft: #e5eef6;
+  --color-muted-strong: #5f6d65;
+  --tap-min: 2.75rem;
+  --tap-touch: 3rem;
+}
+
+/* Skeleton compartido (cargando): altura final, sin animar el tamaño. */
+.fin-skeleton {
+  display: block;
+  border-radius: 6px;
+  background: #e9ede6;
+  animation: fin-skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes fin-skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}

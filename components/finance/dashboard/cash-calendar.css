@@ -1,0 +1,799 @@
+/* Calendario de caja, leyenda, panel del día y diálogo (Design Lock 28 §C2).
+   Reemplaza en el Resumen a .calendar-* / .day-panel-* / .review-days de
+   app/globals.css (esas reglas quedan sin uso y se limpian después). Todo en
+   rem; container queries en rem; bordes y radios en px. */
+
+/* ---------- Layout ---------- */
+.fin-cal-section {
+  container: fin-cal-section / inline-size;
+  margin-bottom: 1.5rem;
+}
+.fin-cal-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+@container fin-cal-section (min-width: 52rem) {
+  .fin-cal-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(18rem, 32%, 22rem);
+  }
+  .fin-cal-aside {
+    position: sticky;
+    top: calc(var(--finance-nav-top, 0px) + var(--subnav-h, 2.75rem) + 1rem);
+    max-height: calc(100dvh - 8rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 16px;
+  }
+}
+.fin-cal-main {
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: white;
+}
+
+/* ---------- Encabezado ---------- */
+.fin-cal-title {
+  color: var(--color-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.fin-cal-help {
+  margin-top: 0.25rem;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.fin-cal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap-min);
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+}
+.fin-cal-status svg {
+  flex: 0 0 auto;
+}
+.fin-cal-status.is-warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+}
+.fin-cal-status.is-warning svg {
+  color: var(--color-warning);
+}
+.fin-cal-status.is-warning:hover {
+  background: #f7e7c8;
+}
+.fin-cal-status.is-ok {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.fin-cal-status-action {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---------- Leyenda ---------- */
+.fin-cal-legend {
+  margin-top: 0.75rem;
+}
+.fin-cal-legend-toggle {
+  display: none;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: var(--tap-min);
+  padding: 0 0.25rem;
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.fin-cal-legend-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-ink);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.fin-cal-legend-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fin-cal-legend-sample {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 3.25rem;
+  height: 1.75rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fin-cal-legend-sample.is-warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+}
+.fin-cal-legend-sample.is-warning svg {
+  color: var(--color-warning);
+}
+.fin-cal-legend-sample.is-empty {
+  border-style: dashed;
+  border-color: #98a39b;
+  background: var(--color-canvas);
+  color: var(--color-muted-strong);
+}
+.fin-cal-legend-sample.is-cash {
+  border-color: transparent;
+  color: var(--color-income);
+  font-size: 0.8125rem;
+}
+.fin-cal-legend-sample.is-today span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+}
+.fin-cal-legend-sample.is-today {
+  border-color: transparent;
+}
+.fin-cal-legend-sample.is-selected {
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.fin-cal-legend-sample.is-worship {
+  border-color: transparent;
+  color: var(--color-muted-strong);
+  font-weight: 500;
+}
+@media (max-width: 767px) {
+  .fin-cal-legend-toggle {
+    display: inline-flex;
+  }
+  .fin-cal-legend.is-collapsed .fin-cal-legend-list {
+    display: none;
+  }
+}
+
+/* ---------- Grilla ---------- */
+.fin-cal-grid-wrap {
+  container: fin-cal-grid / inline-size;
+  margin-top: 1rem;
+}
+.fin-cal-table {
+  width: calc(100% + 0.5rem);
+  margin: 0 -0.25rem;
+  border-collapse: separate;
+  border-spacing: 0.25rem;
+  table-layout: fixed;
+}
+.fin-cal-table th {
+  padding: 0.25rem 0;
+  color: var(--color-muted-strong);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.fin-cal-table td {
+  padding: 0;
+  vertical-align: top;
+}
+.fin-cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.3125rem;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: white;
+  color: var(--color-ink);
+  text-align: left;
+  transition:
+    background-color 120ms,
+    border-color 120ms;
+}
+.fin-cal-cell:hover {
+  border-color: #b9c4b8;
+}
+/* Con el gap de 0,25rem el offset global de 4px quedaría bajo la celda vecina. */
+.fin-cal-cell:focus-visible {
+  z-index: 1;
+  outline-offset: 2px;
+}
+.fin-cal-cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.fin-cal-num {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fin-cal-cell.is-future .fin-cal-num {
+  color: var(--color-muted-strong);
+  font-weight: 500;
+}
+.fin-cal-cell.is-today .fin-cal-num {
+  background: var(--color-primary);
+  color: white;
+}
+.fin-cal-worship {
+  display: none;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-muted-strong);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.fin-cal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.fin-cal-chip svg {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+}
+.fin-cal-chip-full,
+.fin-cal-chip-mid,
+.fin-cal-amount {
+  display: none;
+}
+.fin-cal-amount {
+  color: var(--color-income);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Estados (las señales no dependen solo del color: icono, texto, barra). */
+.fin-cal-cell.has-warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+}
+.fin-cal-cell.has-warning::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--color-warning);
+  content: "";
+}
+.fin-cal-cell.has-warning .fin-cal-chip svg {
+  color: var(--color-warning);
+}
+.fin-cal-cell.has-empty {
+  border-style: dashed;
+  border-color: #98a39b;
+  background: var(--color-canvas);
+  color: var(--color-muted-strong);
+}
+/* Compacto: sin montos; una barra de 3px marca el efectivo registrado. */
+.fin-cal-cell.has-cash:not(.has-warning)::after {
+  position: absolute;
+  inset: auto 0.375rem 0.25rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-income);
+  content: "";
+}
+.fin-cal-cell[aria-pressed="true"] {
+  padding: calc(0.3125rem - 1px);
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.fin-cal-cell[aria-pressed="true"]:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Medio: 28–42rem. */
+@container fin-cal-grid (min-width: 28rem) {
+  .fin-cal-cell {
+    min-height: 4.5rem;
+  }
+  .fin-cal-chip-mid,
+  .fin-cal-amount {
+    display: inline;
+  }
+  .fin-cal-cell.has-cash:not(.has-warning)::after {
+    display: none;
+  }
+}
+
+/* Completo: ≥42rem. */
+@container fin-cal-grid (min-width: 42rem) {
+  .fin-cal-cell {
+    min-height: 5.5rem;
+    padding: 0.4375rem;
+  }
+  .fin-cal-cell[aria-pressed="true"] {
+    padding: calc(0.4375rem - 1px);
+  }
+  .fin-cal-num {
+    font-size: 1rem;
+  }
+  .fin-cal-worship {
+    display: inline;
+  }
+  .fin-cal-chip-mid {
+    display: none;
+  }
+  .fin-cal-chip-full {
+    display: inline;
+  }
+  .fin-cal-amount {
+    font-size: 0.8125rem;
+  }
+}
+
+/* ---------- "Días por revisar" (modo apilado) ---------- */
+.fin-review {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-line);
+}
+.fin-review-title {
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.fin-review-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fin-review-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--color-ink);
+  font-size: 0.8125rem;
+}
+.fin-review-list li > svg {
+  flex: 0 0 auto;
+  color: var(--color-warning);
+}
+.fin-review-list li > span {
+  flex: 1;
+  min-width: 0;
+}
+.fin-review-more {
+  margin-top: 0.75rem;
+}
+
+/* ---------- Skeleton 5×7 ---------- */
+.fin-cal-skeleton {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: white;
+}
+.fin-cal-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin-top: 1rem;
+}
+.fin-cal-skeleton-grid .fin-skeleton {
+  height: 3.25rem;
+  border-radius: 10px;
+}
+
+/* ---------- Panel del día ---------- */
+.fin-day-panel {
+  container: fin-day-panel / inline-size;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: white;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+}
+.fin-day-panel.is-plain {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.fin-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fin-day-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.fin-day-title:focus {
+  outline: none;
+}
+.fin-day-title:focus-visible {
+  outline: 3px solid #7b9d56;
+  outline-offset: 4px;
+}
+.fin-day-today {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.fin-day-section {
+  margin-top: 1.125rem;
+}
+.fin-day-section-title {
+  margin-bottom: 0.5rem;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.fin-day-empty {
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+}
+.fin-warning-list {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fin-warning-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--color-line);
+  border-left: 4px solid var(--color-warning);
+  border-radius: 10px;
+  background: white;
+}
+.fin-warning-type {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-warning-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.fin-warning-type svg {
+  flex: 0 0 auto;
+  color: var(--color-warning);
+}
+.fin-warning-cause {
+  color: var(--color-ink);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.fin-warning-label {
+  display: block;
+  margin-bottom: 0.125rem;
+  color: var(--color-muted-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.fin-warning-movs {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+.fin-warning-movs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.fin-warning-movs li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fin-warning-movs li > span:last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fin-warning-link {
+  justify-self: start;
+  min-height: var(--tap-min);
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fin-warning-state {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid var(--color-warning);
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.fin-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.fin-warning-actions .button-secondary {
+  flex: 1 1 auto;
+  min-height: var(--tap-min);
+}
+.fin-readonly-note {
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.fin-day-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.fin-day-table th,
+.fin-day-table td {
+  padding: 0.4375rem 0.25rem;
+  border-bottom: 1px solid var(--color-line);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.fin-day-table thead th {
+  color: var(--color-muted-strong);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.fin-day-table th[scope="row"] {
+  font-weight: 500;
+  text-align: left;
+}
+.fin-day-table tfoot th,
+.fin-day-table tfoot td {
+  border-top: 2px solid var(--color-line);
+  border-bottom: 0;
+}
+.fin-day-table .is-strong {
+  font-weight: 600;
+}
+/* Panel angosto (<24rem): la tabla pasa a filas, sin perder la semántica. */
+@container fin-day-panel (max-width: 23.99rem) {
+  .fin-day-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .fin-day-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .fin-day-table th,
+  .fin-day-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.125rem 0;
+    border: 0;
+  }
+  .fin-day-table td[data-label]::before {
+    color: var(--color-muted-strong);
+    content: attr(data-label);
+    font-weight: 400;
+  }
+  .fin-day-table td.is-blank {
+    display: none;
+  }
+  .fin-day-table tfoot th,
+  .fin-day-table tfoot td {
+    border: 0;
+  }
+}
+
+.fin-day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-line);
+}
+.fin-day-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: var(--tap-min);
+  padding: 0 0.5rem;
+  border-radius: 10px;
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.fin-day-nav button:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+}
+.fin-day-nav button:disabled {
+  color: var(--color-muted-strong);
+  opacity: 0.6;
+}
+.fin-day-nav-count {
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ---------- Diálogo del día (modo apilado). Medidas y animación de
+   CalDialog (components/calendar), duplicadas en rem para no tocarlo. ---------- */
+.fin-day-dialog {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: 27.5rem;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-line);
+  background: white;
+  color: var(--color-ink);
+  box-shadow: -8px 0 24px rgba(20, 35, 29, 0.12);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.43;
+}
+.fin-day-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  animation: fin-slide-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.fin-day-dialog::backdrop {
+  background: rgba(20, 35, 29, 0.32);
+}
+@keyframes fin-slide-in {
+  from {
+    transform: translateX(1.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes fin-slide-up {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.fin-day-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--color-line);
+}
+.fin-day-dialog-titles {
+  min-width: 0;
+  padding-top: 0.5rem;
+}
+.fin-day-dialog-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  overflow-wrap: anywhere;
+}
+.fin-day-dialog-title:focus {
+  outline: none;
+}
+.fin-day-dialog-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: 8px;
+  color: var(--color-muted);
+}
+.fin-day-dialog-close:hover {
+  background: var(--color-canvas);
+}
+.fin-day-dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+@media (max-width: 767px) {
+  .fin-day-dialog {
+    inset: auto 0 0;
+    width: 100vw;
+    height: auto;
+    max-height: 92dvh;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 24px rgba(20, 35, 29, 0.16);
+  }
+  .fin-day-dialog[open] {
+    animation: fin-slide-up 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+@media (max-width: 640px) {
+  .fin-cal-main,
+  .fin-cal-skeleton {
+    padding: 1.125rem;
+  }
+}

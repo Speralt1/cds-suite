@@ -8,6 +8,19 @@ export function clp(value: number) {
     maximumFractionDigits: 0,
   }).format(Number.isFinite(value) ? value : 0);
 }
+// Signed CLP for the Resumen ledger (28 §B): real minus sign U+2212 and a
+// thin space (U+2009) between the sign and the amount, so a negative never
+// reads as "$-20.400". Zero has no sign. `plus: false` omits the "+" (the
+// period result shows "$4.109.132" but "− $20.400").
+export const MINUS_SIGN = "\u2212";
+export const THIN_SPACE = "\u2009";
+export function clpSigned(value: number, { plus = true }: { plus?: boolean } = {}) {
+  const n = Number.isFinite(value) ? value : 0;
+  if (n === 0) return clp(0);
+  const amount = clp(Math.abs(n));
+  if (n < 0) return `${MINUS_SIGN}${THIN_SPACE}${amount}`;
+  return plus ? `+${THIN_SPACE}${amount}` : amount;
+}
 // Compact CLP for tight spaces (calendar cells): "$165 mil", "$1,2 M".
 export function clpShort(value: number) {
   const n = Number.isFinite(value) ? value : 0;
