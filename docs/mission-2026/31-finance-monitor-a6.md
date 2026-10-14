@@ -63,12 +63,13 @@ Principios:
      - `amount` debe ser entero ≥ 0 (un texto no vale);
      - `period` debe ser `YYYY-MM` válido y `day` un día real de ese mes;
      - `revision`, si viene, debe ser entero ≥ 1;
-     - los timestamps deben ser ISO con zona;
+     - `createTime` y `updateTime` son **obligatorios** (ISO con zona) en cada fila del ledger, de `previous.ledger` y de `baseline.ledger` (cuando es una lista de filas); `voidedAt` es opcional. Sin ellos, la ventana de escrituras y los retroactivos se apagarían en silencio;
      - no puede haber ids repetidos.
    - Resúmenes: los 5 escalares son obligatorios y numéricos, y los mapas solo pueden tener valores numéricos.
    - También se validan baseline, snapshot previo, perfiles, atribuciones y SumUp.
    - Un ledger o un `summaries` vacío es STOP salvo con `--allow-empty` explícito.
    - Las opciones desconocidas o con tipo erróneo también son STOP.
+   - Los mensajes de `INPUT_INVALID` nunca repiten datos: indican la posición (por ejemplo `summaries[posición 3]`), no la clave ni el valor del resumen. Los errores de fecha tampoco incluyen fragmentos del valor.
 6. **Cobertura visible: OK nunca significa "nada revisado".**
    - El reporte imprime una línea `Cobertura:` con lo que se revisó: ledger, resúmenes, baseline (y su fuente de estado previo), snapshot previo y SumUp.
    - Si falta el baseline o el snapshot previo → `COVERAGE_PARTIAL` (REVISAR).
@@ -127,20 +128,21 @@ Principios:
 | Diezmos duplicados | `TITHE_DUPLICATE_EXACT` | REVISAR | Mismo perfil + fecha contable + monto + medio, entre diezmos activos atribuidos |
 | | `TITHE_REPEAT_MONTH` | INFORMATIVO | Mismo perfil + monto en el mismo mes, con fechas distintas |
 | | (perfiles gemelos) | — | Las dos claves anteriores agrupan por **clave de identidad del nombre del perfil**: un duplicado repartido entre dos fichas gemelas también se detecta (`twinProfiles`) |
-| | `TITHE_ATTRIBUTION_INTEGRITY` | REVISAR | Diezmo activo con 0 o con 2 o más atribuciones activas |
+| | `TITHE_ATTRIBUTION_INTEGRITY` | REVISAR | Diezmo activo con 0 o con 2 o más atribuciones activas; atribución activa huérfana (movimiento inexistente, anulado o que no es diezmo); atribución cuyo monto, mes o fecha (fecha local de Santiago si viene como ISO) no coincide con su diezmo |
 | Fecha futura | `FUTURE_DATED` | REVISAR | Fecha contable posterior a hoy en America/Santiago (solo activos) |
 | Retroactivos | `BACKDATED_ENTRY` | INFORMATIVO | Mes local de creación posterior al mes contable, con atraso ≤ `backdate.maxLagDays` (31 por defecto) |
 | | `BACKDATED_ENTRY_LATE` | REVISAR | Atraso mayor al margen. Si hay snapshot previo, solo se mira lo creado en la ventana |
 | Meses vs baseline (a, b, e) | `BASELINE_DELTA_EXPLAINED` | INFORMATIVO | Delta (resumen actual − baseline) = Σ de las escrituras listadas desde `baseline.takenAt` (creaciones, anulaciones, reactivaciones, ediciones) |
 | | `BASELINE_DELTA_UNEXPLAINED` | **STOP** | El delta no cuadra con esas escrituras |
 | | `BASELINE_EDIT_UNVERIFIABLE` | REVISAR | El delta cuadra, pero hay ediciones posteriores al baseline sin estado previo. Una edición sin estado previo nunca es INFORMATIVO: si el delta no cuadra es STOP, y si cuadra es REVISAR. Para verificarla, incluir `baseline.ledger` |
+| | `BASELINE_CLOSED_MONTH_HUMAN_CHANGE` | REVISAR (por defecto) | Mes cerrado con delta explicado que incluye anulaciones, ediciones, reactivaciones o movimientos de mes **humanos** sobre docs existentes. Las creaciones retroactivas no cuentan. Ver la decisión de diseño más abajo |
 | | `BASELINE_ROW_DELETED` | **STOP** | Un doc de `baseline.ledger` ya no existe. Es STOP **sin importar el delta**, aunque el resumen se haya ajustado: el ledger solo anula, nunca borra |
 | | `BASELINE_MONTH_MISSING` | REVISAR | Mes cerrado con escrituras desde el baseline que no está en el baseline |
 | | `BASELINE_OPEN_MONTH_ABSENT` | INFORMATIVO | Falta el mes abierto en el baseline |
 | Resumen vs ledger | `SUMMARY_LEDGER_MISMATCH` | **STOP** | Cualquiera de los 9 campos difiere, en **todos** los meses |
 | | `SUMMARY_MISSING` | **STOP** | Mes con movimientos activos y sin resumen |
 | | `SUMMARY_ZERO_KEYS` | INFORMATIVO | Claves en 0 (estructurales) |
-| Escrituras (semántica A5 + f) | `SUMUP_POS_MUTATION` | REVISAR | `system:sumup` modificó un doc POS existente |
+| Escrituras (semántica A5 + f) | `SUMUP_POS_MUTATION` | REVISAR | `system:sumup` modificó un doc POS existente. Se detecta por la ventana de timestamps y, con snapshot previo, por **diferencia real** de campos contables o `status` (amount, type, category, paymentMethod, period, day, source, status), aunque `updateTime` no haya avanzado. Un doc no efectivo antes o después (incluido card → cash) cuenta como POS; efectivo → efectivo es `SUMUP_CASH_MUTATION` (INFORMATIVO) |
 | | `SYSTEM_WRITE_FOREIGN_DOC` | REVISAR | `system:sumup` escribió sobre un doc que no es `sumup_*` |
 | | `HUMAN_WRITE_ON_SUMUP_DOC` | REVISAR | Un humano editó un doc `sumup_*` |
 | | `SUMUP_CREATIONS`, `SUMUP_CASH_MUTATION`, `HUMAN_WRITES` | INFORMATIVO | Conteos de la ventana |
@@ -176,6 +178,12 @@ Principios:
   - `amount` entero > 0;
   - categoría de la cuenta.
   Cualquier otra escritura de `system:sumup` es una mutación.
+- **Decisión de diseño: cambios humanos en meses cerrados.**
+  - Un humano puede anular, editar o mover de mes un movimiento de un mes cerrado, y el delta del baseline cuadra con esas escrituras. Por defecto (`closedMonthHumanChanges: "revisar"`, conservador), A6 lo reporta como `BASELINE_CLOSED_MONTH_HUMAN_CHANGE` (REVISAR), porque cambia un cierre ya revisado.
+  - Si Salvador prefiere tratarlo como actividad legítima de Tesorería, basta con poner `"closedMonthHumanChanges": "informativo"` en la config: esos meses quedan como `BASELINE_DELTA_EXPLAINED` (INFORMATIVO).
+  - Un caso puntual también se puede reconocer con `acknowledged` (`code` + ids completos).
+  - Las creaciones retroactivas (por ejemplo, el incidente de diezmos de septiembre) siguen siendo INFORMATIVO cuando el delta cuadra.
+- **Homónimos (fail-safe).** Dos personas distintas con el mismo nombre normalizado, el mismo monto, la misma fecha y el mismo medio dan `TITHE_DUPLICATE_EXACT` (REVISAR). Es intencional: el monitor prefiere un falso positivo revisable a perder un duplicado real. Tras confirmarlo con Tesorería, se reconoce con `acknowledged`, y conviene diferenciar las fichas (por ejemplo, con segundo apellido).
 - **Cambio deliberado respecto de A5.** Las creaciones POS legítimas, con la definición estricta anterior, pasan a INFORMATIVO: en la auditoría, un veredicto REVISAR causado solo por ventas POS nuevas era ruido. Las **mutaciones** POS de `system:sumup` siguen en REVISAR.
 - **Normalización de nombres.**
   - Replica el algoritmo de `lib/shared/names.ts`, que llega en la rama de integridad de diezmos (doc 27): minúsculas, NFKD sin marcas, letras plegadas, puntuación → espacio y espacios colapsados.
@@ -206,6 +214,7 @@ node scripts/ops/finance-monitor/run.mjs --snapshot actual.json \
   "backdate": { "maxLagDays": 31 },
   "payouts": { "pendingBusinessDays": 3, "holidays": ["2026-10-12"] },
   "profileSimilarityThreshold": 0.8,
+  "closedMonthHumanChanges": "revisar",
   "acknowledged": [{ "code": "BACKDATED_ENTRY_LATE", "ids": ["<id completo del movimiento>"], "note": "regularización aprobada", "until": "2026-11-30" }]
 }
 ```
@@ -232,7 +241,7 @@ node scripts/ops/finance-monitor/run.mjs --snapshot actual.json \
 
 ## 6. Tests
 
-Tests en entorno node, solo con fixtures (`tests/ops/finance-monitor-fixtures.ts`, que construye snapshots con cobertura completa por defecto). Son 99 en total:
+Tests en entorno node, solo con fixtures (`tests/ops/finance-monitor-fixtures.ts`, que construye snapshots con cobertura completa por defecto). Son 120 en total:
 
 - `tests/ops/finance-monitor.test.ts`: 36 tests, uno o más por detector.
 - `tests/ops/finance-monitor-hardening.test.ts`: 63 tests con los arreglos de la revisión Atlas:
@@ -246,6 +255,12 @@ Tests en entorno node, solo con fixtures (`tests/ops/finance-monitor-fixtures.ts
   - DST de America/Santiago (2026-04-05 y 2026-09-06);
   - regresión de privacidad con 10+ códigos (sin ids completos, nombres, correos, teléfonos ni uids en texto ni JSON);
   - paridad de normalización con `lib/shared/names.ts`.
+- `tests/ops/finance-monitor-rereview.test.ts`: 21 tests con los arreglos de la re-revisión:
+  - timestamps obligatorios en ledger, snapshot previo y `baseline.ledger`;
+  - mutaciones `system:sumup` por diferencia: el caso de Atlas (POS 10000 → 1 sin timestamps nuevos), card → cash, anulación, cash → cash, sin duplicar;
+  - atribuciones huérfanas o incoherentes;
+  - `closedMonthHumanChanges`;
+  - errores sin eco de claves o valores.
 
 El archivo principal cubre: Cubren todos los detectores y los patrones reales anonimizados:
 
