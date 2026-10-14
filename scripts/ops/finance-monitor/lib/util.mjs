@@ -63,9 +63,12 @@ export function localDate(iso, timeZone = DEFAULT_TIME_ZONE) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+/** Día UTC de una fecha "YYYY-MM-DD" real; lanza si no lo es (nunca NaN silencioso). */
 const utcDay = (ymd) => {
-  const [y, m, d] = String(ymd).split("-").map(Number);
-  return Date.UTC(y, m - 1, d) / 86400e3;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd));
+  const t = m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
+  if (!m || new Date(t).getUTCDate() !== Number(m[3]) || new Date(t).getUTCMonth() !== Number(m[2]) - 1) throw new Error(`fecha inválida: ${String(ymd).slice(0, 10)}`);
+  return t / 86400e3;
 };
 
 /** Días calendario de `a` a `b` (b − a), ambos "YYYY-MM-DD". */

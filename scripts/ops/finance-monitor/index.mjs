@@ -1,6 +1,7 @@
 // Monitor financiero A6 (doc 31): orquestación pura de los detectores.
 // Sin I/O: recibe snapshots como objetos JS y devuelve hallazgos + veredicto.
 // La recolección de datos de producción NO vive en el repo (paso privado aparte).
+// Falla cerrada: entrada u opciones inválidas, o cualquier excepción → STOP.
 import { detectBaselineDeltas } from "./detectors/baseline.mjs";
 import { detectBackdated, detectFutureDated } from "./detectors/dates.mjs";
 import { detectDuplicateProfiles } from "./detectors/profiles.mjs";
@@ -8,7 +9,8 @@ import { detectSummaryLedgerMismatch } from "./detectors/summaries.mjs";
 import { detectSumup } from "./detectors/sumup.mjs";
 import { detectDuplicateTithes } from "./detectors/tithes.mjs";
 import { detectWrites } from "./detectors/writes.mjs";
-import { DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_TIME_ZONE, LEVELS, LEVEL_ORDER, finding, localDate, shortId } from "./lib/util.mjs";
+import { DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_TIME_ZONE, LEVELS, LEVEL_ORDER, finding, localDate } from "./lib/util.mjs";
+import { validateOptions, validateSnapshot } from "./lib/validate.mjs";
 
 export { LEVELS } from "./lib/util.mjs";
 
@@ -31,90 +33,100 @@ export const DEFAULT_OPTIONS = Object.freeze({
   acknowledged: [],
 });
 
-export function resolveOptions(options = {}) {
-  return {
+/** Valida y completa las opciones. Devuelve { options, problems }. */
+export function resolveOptions(opts = {}) {
+  const problems = validateOptions(opts);
+  if (problems.length) return { options: null, problems };
+  const options = {
     ...DEFAULT_OPTIONS,
-    ...options,
-    backdate: { ...DEFAULT_OPTIONS.backdate, ...(options.backdate || {}) },
-    payouts: { ...DEFAULT_OPTIONS.payouts, ...(options.payouts || {}) },
-    acknowledged: Array.isArray(options.acknowledged) ? options.acknowledged : [],
+    ...opts,
+    backdate: { ...DEFAULT_OPTIONS.backdate, ...(opts.backdate || {}) },
+    payouts: { ...DEFAULT_OPTIONS.payouts, ...(opts.payouts || {}) },
+    acknowledged: opts.acknowledged || [],
   };
+  return { options, problems };
 }
 
-const arr = (v) => (Array.isArray(v) ? v : []);
-
-/** Valida la forma mínima. Devuelve { snapshot, problems }. */
-export function normalizeSnapshot(raw = {}) {
-  const problems = [];
-  if (!raw || typeof raw !== "object") return { snapshot: null, problems: ["el snapshot no es un objeto JSON"] };
-  if (!Array.isArray(raw.ledger)) problems.push("falta ledger[]");
-  const ledger = arr(raw.ledger);
-  ledger.forEach((t, i) => {
-    if (!t || typeof t.id !== "string" || !/^\d{4}-\d{2}$/.test(String(t.period)) || !Number.isFinite(Number(t.amount)))
-      problems.push(`movimiento #${i} sin id/period/amount válidos`);
-  });
-  const snapshot = {
-    takenAt: raw.takenAt || null,
-    ledger,
-    attributions: arr(raw.attributions),
-    profiles: arr(raw.profiles),
-    summaries: raw.summaries && typeof raw.summaries === "object" ? raw.summaries : {},
-    baseline: raw.baseline || null,
-    previous: raw.previous || null,
-    sumup: raw.sumup || null,
-  };
-  return { snapshot, problems: problems.slice(0, 20) };
-}
-
-/** Rebaja a INFORMATIVO los REVISAR reconocidos por un humano (config.acknowledged). STOP nunca se rebaja. */
-export function applyAcknowledgements(findings, acknowledged = []) {
-  const matches = (ack, ref) => (ack.ids || []).some((id) => id === ref || shortId(ref) === id || shortId(ref) === `…${id}`);
-  return findings.map((f) => {
+/**
+ * Rebaja a INFORMATIVO los REVISAR reconocidos por un humano. Exige `code` igual al
+ * del hallazgo y que TODOS sus ids completos estén listados; `until` (YYYY-MM-DD)
+ * vence el reconocimiento. Un STOP nunca se rebaja.
+ */
+export function applyAcknowledgements(findings, acknowledged = [], today = "") {
+  const live = acknowledged.filter((a) => !a.until || !today || a.until >= today);
+  const out = findings.map((f) => {
     if (f.level !== LEVELS.REVIEW || !f.refs.length) return f;
-    const ack = acknowledged.find((a) => (!a.code || a.code === f.code) && f.refs.every((ref) => matches(a, ref)));
+    const ack = live.find((a) => a.code === f.code && f.refs.every((ref) => a.ids.includes(ref)));
     if (!ack) return f;
-    return { ...f, level: LEVELS.INFO, acknowledged: true, message: `${f.message} [reconocido: ${ack.note || "sin nota"}]` };
+    return { ...f, level: LEVELS.INFO, acknowledged: true, message: `${f.message} [reconocido${ack.until ? ` hasta ${ack.until}` : ""}: ${ack.note || "sin nota"}]` };
   });
+  const expired = acknowledged.length - live.length;
+  if (expired)
+    out.push({ ...finding("ACK_EXPIRED", LEVELS.INFO, `${expired} reconocimiento(s) vencido(s) en la config: ya no rebajan hallazgos. Revisar y renovar o eliminar.`, { count: expired }), detector: "config" });
+  return out;
+}
+
+const stop = (code, message, evidence = {}) => {
+  const findings = [{ ...finding(code, LEVELS.STOP, message, evidence), detector: "entrada" }];
+  return { findings, verdict: LEVELS.STOP, exitCode: 2, context: null };
+};
+
+/** Qué se pudo verificar. Baseline o snapshot previo ausente → REVISAR (OK nunca significa "nada revisado"). */
+function coverageOf(snapshot, since) {
+  const coverage = {
+    ledger: snapshot.ledger.length,
+    summaries: Object.keys(snapshot.summaries).length,
+    baseline: snapshot.baseline ? `sí (estado previo: ${snapshot.baseline.priorState})` : "no",
+    previous: snapshot.previous ? "sí" : "no",
+    window: since || "sin ventana",
+    sumup: snapshot.sumup ? `sí (${snapshot.sumup.sales.length} ventas, ${snapshot.sumup.payouts.length} filas de payout)` : "no",
+  };
+  const missing = [];
+  if (!snapshot.baseline) missing.push("baseline (no se verifican cambios de meses cerrados)");
+  if (!snapshot.previous) missing.push("snapshot previo (no se detectan modificaciones, anulaciones ni borrados)");
+  const findings = [];
+  if (missing.length)
+    findings.push(
+      finding("COVERAGE_PARTIAL", LEVELS.REVIEW, `Cobertura parcial: falta ${missing.join(" y ")}. El resultado no cubre esos controles.`, { missing: missing.map((m) => m.split(" (")[0]) }),
+    );
+  if (!snapshot.sumup)
+    findings.push(finding("COVERAGE_SUMUP_ABSENT", LEVELS.INFO, "Sin datos SumUp (ventas/payouts/comisiones): no se verificaron payouts ni comisiones.", {}));
+  return { coverage, findings: findings.map((f) => ({ ...f, detector: "cobertura" })) };
 }
 
 /**
  * Ejecuta todos los detectores.
  * @param raw snapshot { takenAt, ledger, attributions, profiles, summaries, baseline?, previous?, sumup? }
- * @param opts { today?, since?, now?, ...options }
+ * @param opts { today?, since?, now?, allowEmpty?, ...options }
  */
 export function runMonitor(raw, opts = {}) {
-  const options = resolveOptions(opts);
-  const { snapshot, problems } = normalizeSnapshot(raw);
-  if (!snapshot || problems.length) {
-    const f = finding("INPUT_INVALID", LEVELS.STOP, `Snapshot inválido: ${problems.join("; ")}. No se evaluó nada (falla cerrada).`, { problems });
-    return { findings: [f], verdict: LEVELS.STOP, exitCode: 2, context: null };
-  }
-  const reference = opts.now || snapshot.takenAt;
-  const today = opts.today || localDate(reference, options.timeZone);
-  if (!today) {
-    const f = finding("INPUT_INVALID", LEVELS.STOP, "No hay fecha de referencia: falta takenAt en el snapshot o --today.", {});
-    return { findings: [f], verdict: LEVELS.STOP, exitCode: 2, context: null };
-  }
-  const ctx = {
-    snapshot,
-    options,
-    today,
-    todayPeriod: today.slice(0, 7),
-    since: opts.since || snapshot.previous?.takenAt || null,
-  };
-  let findings = [];
-  for (const [name, detect] of DETECTORS) {
-    try {
-      findings.push(...detect(ctx).map((f) => ({ ...f, detector: name })));
-    } catch (e) {
-      findings.push({ ...finding("DETECTOR_ERROR", LEVELS.STOP, `El detector ${name} falló: ${e instanceof Error ? e.message : String(e)}.`, {}), detector: name });
+  try {
+    const { options, problems: optionProblems } = resolveOptions(opts);
+    if (!options) return stop("INPUT_INVALID", `Opciones inválidas: ${optionProblems.join("; ")}. No se evaluó nada (falla cerrada).`, { problems: optionProblems });
+    const { snapshot, problems } = validateSnapshot(raw, { allowEmpty: options.allowEmpty === true });
+    if (!snapshot || problems.length) return stop("INPUT_INVALID", `Snapshot inválido: ${problems.join("; ")}. No se evaluó nada (falla cerrada).`, { problems });
+    const reference = options.now || snapshot.takenAt;
+    const today = options.today || (reference ? localDate(reference, options.timeZone) : "");
+    if (!today) return stop("INPUT_INVALID", "No hay fecha de referencia: falta takenAt en el snapshot o --today.");
+    const since = options.since || snapshot.previous?.takenAt || null;
+    const ctx = { snapshot, options, today, todayPeriod: today.slice(0, 7), since };
+    const { coverage, findings: coverageFindings } = coverageOf(snapshot, since);
+    let findings = [...coverageFindings];
+    for (const [name, detect] of DETECTORS) {
+      try {
+        findings.push(...detect(ctx).map((f) => ({ ...f, detector: name })));
+      } catch (e) {
+        findings.push({ ...finding("DETECTOR_ERROR", LEVELS.STOP, `El detector ${name} falló: ${e instanceof Error ? e.message : String(e)}.`, {}), detector: name });
+      }
     }
+    findings = applyAcknowledgements(findings, options.acknowledged, today).sort(
+      (a, b) => LEVEL_ORDER[b.level] - LEVEL_ORDER[a.level] || a.code.localeCompare(b.code),
+    );
+    const verdict = verdictOf(findings);
+    return { findings, verdict, exitCode: exitCodeOf(verdict), context: { today, since, takenAt: snapshot.takenAt, timeZone: options.timeZone, coverage } };
+  } catch (e) {
+    return stop("INTERNAL_ERROR", `Error interno del monitor (${e instanceof Error ? e.name : "desconocido"}). No se evaluó nada (falla cerrada).`);
   }
-  findings = applyAcknowledgements(findings, options.acknowledged).sort(
-    (a, b) => LEVEL_ORDER[b.level] - LEVEL_ORDER[a.level] || a.code.localeCompare(b.code),
-  );
-  const verdict = verdictOf(findings);
-  return { findings, verdict, exitCode: exitCodeOf(verdict), context: { today: ctx.today, since: ctx.since, takenAt: snapshot.takenAt } };
 }
 
 export function verdictOf(findings) {
@@ -138,12 +150,15 @@ const fmtEvidence = (e) =>
     .map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`)
     .join("; ");
 
-export function formatReport(result, meta = {}) {
+export function formatReport(result) {
   const out = [];
   out.push(`Monitor financiero A6 (modo observación; A5 sigue siendo el monitor oficial)`);
-  if (result.context)
-    out.push(`Snapshot ${result.context.takenAt || "?"} · hoy ${result.context.today} (${meta.timeZone || DEFAULT_TIME_ZONE}) · ventana de escrituras desde ${result.context.since || "—"}`);
-  if (meta.inputs) out.push(`Entradas: ${meta.inputs}`);
+  const c = result.context;
+  if (c) {
+    out.push(`Snapshot ${c.takenAt || "?"} · hoy ${c.today} (${c.timeZone || DEFAULT_TIME_ZONE}) · ventana de escrituras desde ${c.since || "—"}`);
+    const v = c.coverage;
+    out.push(`Cobertura: ledger ${v.ledger} movimiento(s) · resúmenes ${v.summaries} · baseline ${v.baseline} · snapshot previo ${v.previous} · SumUp ${v.sumup}`);
+  }
   for (const level of [LEVELS.STOP, LEVELS.REVIEW, LEVELS.INFO]) {
     const fs = result.findings.filter((f) => f.level === level);
     out.push("", `${level} (${fs.length})`);

@@ -7,7 +7,9 @@
 // El estado previo de cada escritura sale de baseline.ledger cuando existe; si no,
 // se infiere (creación posterior al baseline → no existía; anulación posterior →
 // estaba activo con el mismo monto). Una edición sin estado previo no se puede
-// explicar y queda listada como tal.
+// explicar: si el delta no cuadra → STOP; si cuadra → REVISAR (no verificable),
+// nunca INFORMATIVO. Un doc del baseline.ledger que ya no existe (borrado) → STOP
+// BASELINE_ROW_DELETED, sin importar el delta: el ledger solo anula, nunca borra.
 import { classifyWrite, isHumanClass } from "../lib/classify.mjs";
 import {
   LEVELS,
@@ -37,7 +39,7 @@ const describe = (agg, fields) =>
 export function writesSinceBaseline(ledger, baseline) {
   const takenAt = baseline.takenAt;
   const hasPrior = Array.isArray(baseline.ledger);
-  const prior = new Map((baseline.ledger || []).map((r) => [r.id, r]));
+  const prior = new Map((hasPrior ? baseline.ledger : []).map((r) => [r.id, r]));
   const current = new Set(ledger.map((t) => t.id));
   const writes = [];
   for (const t of ledger) {
@@ -90,9 +92,8 @@ const KIND_ES = { creation: "creación", void: "anulación", reactivation: "reac
 
 export function detectBaselineDeltas(ctx) {
   const base = ctx.snapshot.baseline;
-  if (!base) return [finding("BASELINE_ABSENT", LEVELS.INFO, "Sin baseline: no se verificaron cambios de meses cerrados contra un punto de referencia.", {})];
-  if (!base.takenAt || !base.months || typeof base.months !== "object")
-    return [finding("BASELINE_INVALID", LEVELS.REVIEW, "El baseline no tiene takenAt o months: no se pueden explicar cambios de meses.", {})];
+  // Sin baseline: la ausencia se reporta como COVERAGE_PARTIAL (REVISAR) en index.mjs.
+  if (!base) return [];
 
   const ledger = ctx.snapshot.ledger;
   const writes = writesSinceBaseline(ledger, base);
@@ -118,6 +119,7 @@ export function detectBaselineDeltas(ctx) {
       period,
       closed,
       baselineTakenAt: base.takenAt,
+      priorState: base.priorState || (Array.isArray(base.ledger) ? "ledger" : "inferido"),
       fieldsCompared: fields,
       delta: Object.fromEntries(fields.map((f) => [f, delta[f]])),
       explainedBy: Object.fromEntries(fields.map((f) => [f, explained[f]])),
@@ -125,6 +127,18 @@ export function detectBaselineDeltas(ctx) {
       writeList: list,
     };
     const refs = ws.map((w) => (w.row || w.before).id);
+    const deleted = ws.filter((w) => w.kind === "deleted");
+    const unknownEdits = ws.filter((w) => w.kind === "edit-unknown");
+    if (deleted.length)
+      findings.push(
+        finding(
+          "BASELINE_ROW_DELETED",
+          LEVELS.STOP,
+          `${monthLabel}: ${deleted.length} movimiento(s) presentes en el baseline ya no existen (${clp(deleted.reduce((a, w) => a + Number(w.before.amount || 0), 0))}). El ledger solo anula, nunca borra: posible borrado directo o corrupción.`,
+          { period, count: deleted.length, ids: deleted.map((w) => shortId(w.before.id)), deltaMatchesWrites: !bad.length },
+          deleted.map((w) => w.before.id),
+        ),
+      );
     if (bad.length) {
       const unexplained = subtractAggregates(delta, explained);
       findings.push(
@@ -136,7 +150,17 @@ export function detectBaselineDeltas(ctx) {
           refs,
         ),
       );
-    } else if (ws.length) {
+    } else if (unknownEdits.length) {
+      findings.push(
+        finding(
+          "BASELINE_EDIT_UNVERIFIABLE",
+          LEVELS.REVIEW,
+          `${monthLabel}: el delta respecto del baseline cuadra, pero ${unknownEdits.length} edición(es) posteriores al baseline no tienen estado previo (${unknownEdits.map((w) => shortId(w.row.id)).join(", ")}); no se puede verificar su efecto. Incluir el ledger en el baseline.`,
+          { ...evidence, unverifiable: unknownEdits.map((w) => shortId(w.row.id)) },
+          unknownEdits.map((w) => w.row.id),
+        ),
+      );
+    } else if (ws.length && !deleted.length) {
       const s = evidence.writes;
       findings.push(
         finding(
@@ -152,7 +176,19 @@ export function detectBaselineDeltas(ctx) {
   // Meses cerrados con escrituras desde el baseline pero ausentes del baseline.
   const periodsWithWrites = new Set(writes.flatMap((w) => [w.row?.period, w.before?.period]).filter(Boolean));
   for (const period of [...periodsWithWrites].sort()) {
-    if (period in base.months || period >= ctx.todayPeriod) continue;
+    if (period in base.months) continue;
+    const gone = writes.filter((w) => w.kind === "deleted" && w.before.period === period);
+    if (gone.length)
+      findings.push(
+        finding(
+          "BASELINE_ROW_DELETED",
+          LEVELS.STOP,
+          `Mes ${period}: ${gone.length} movimiento(s) presentes en el baseline ya no existen. El ledger solo anula, nunca borra: posible borrado directo o corrupción.`,
+          { period, count: gone.length, ids: gone.map((w) => shortId(w.before.id)) },
+          gone.map((w) => w.before.id),
+        ),
+      );
+    if (period >= ctx.todayPeriod) continue;
     const ws = writes.filter((w) => touchesPeriod(w, period) && w.kind !== "touch");
     if (!ws.length) continue;
     findings.push(

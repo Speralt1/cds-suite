@@ -16,7 +16,8 @@ const ACCOUNTING_FIELDS = ["type", "amount", "category", "paymentMethod", "perio
 
 export function detectWrites(ctx) {
   const since = ctx.since;
-  if (!since) return [finding("WRITES_NO_WINDOW", LEVELS.INFO, "Sin snapshot previo ni --since: no se clasificaron escrituras recientes.", {})];
+  // Sin ventana: la falta de cobertura se reporta como COVERAGE_PARTIAL en index.mjs.
+  if (!since) return [];
   const recent = ctx.snapshot.ledger.filter((t) => isoAfter(t.updateTime, since) || isoAfter(t.createTime, since));
   const by = {};
   for (const t of recent) (by[classifyWrite(t)] ||= []).push(t);

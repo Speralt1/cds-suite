@@ -33,7 +33,8 @@ export interface MonthSummary {
   dailyIncome?: Record<string, number>;
   dailyExpense?: Record<string, number>;
 }
-export interface Baseline { takenAt: string; months: Record<string, MonthSummary>; year?: MonthSummary; ledger?: LedgerRow[] }
+/** Acepta baselines A9/A10: `createdAt` como respaldo de `takenAt`; `ledger` solo si es arreglo de filas. */
+export interface Baseline { takenAt?: string; createdAt?: string; months: Record<string, MonthSummary>; year?: MonthSummary; ledger?: LedgerRow[] | Record<string, unknown> }
 export interface PreviousSnapshot { takenAt: string; ledger: LedgerRow[] }
 export interface SumupSale { transactionCode: string; account?: string; date: string; gross: number; refunded?: number; paymentType?: "POS" | "CASH"; status?: string }
 export interface PayoutRow { id: string; account?: string; type?: string; transactionCode?: string; amount: number; fee?: number; deduction?: number; date?: string; status?: string; reference?: string }
@@ -50,11 +51,12 @@ export interface Snapshot {
   previous?: PreviousSnapshot | null;
   sumup?: SumupData | null;
 }
-export interface Acknowledgement { code?: string; ids: string[]; note?: string }
+export interface Acknowledgement { code: string; ids: string[]; note?: string; until?: string }
 export interface MonitorOptions {
   today?: string;
   since?: string;
   now?: string;
+  allowEmpty?: boolean;
   timeZone?: string;
   backdate?: { maxLagDays?: number };
   payouts?: { pendingBusinessDays?: number; holidays?: string[] };
@@ -74,12 +76,18 @@ export interface MonitorResult {
   findings: Finding[];
   verdict: Verdict;
   exitCode: 0 | 1 | 2;
-  context: { today: string; since: string | null; takenAt: string | null } | null;
+  context: {
+    today: string;
+    since: string | null;
+    takenAt: string | null;
+    timeZone: string;
+    coverage: { ledger: number; summaries: number; baseline: string; previous: string; window: string; sumup: string };
+  } | null;
 }
 export declare const DETECTORS: ReadonlyArray<readonly [string, (ctx: unknown) => Finding[]]>;
 export declare function runMonitor(snapshot: Snapshot | unknown, opts?: MonitorOptions): MonitorResult;
-export declare function applyAcknowledgements(findings: Finding[], acknowledged?: Acknowledgement[]): Finding[];
+export declare function applyAcknowledgements(findings: Finding[], acknowledged?: Acknowledgement[], today?: string): Finding[];
 export declare function verdictOf(findings: Finding[]): Verdict;
 export declare function exitCodeOf(verdict: Verdict): 0 | 1 | 2;
 export declare function publicFindings(findings: Finding[]): Omit<Finding, "refs">[];
-export declare function formatReport(result: MonitorResult, meta?: { inputs?: string; timeZone?: string }): string;
+export declare function formatReport(result: MonitorResult): string;
