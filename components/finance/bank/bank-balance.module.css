@@ -288,9 +288,14 @@
 
 /* Variante "funds" (dentro de Posición de fondos, B2): sin borde propio pesado
    y 3 cifras. Colores alineados con components/finance/dashboard/tokens.css. */
+/* Dentro de "Posición de fondos" la sección ya es la tarjeta: sin borde, fondo ni
+   relleno propios, para no dibujar un recuadro dentro de otro. Las cifras quedan
+   como tiles directamente en la sección (Design Lock 28 §C1). */
 .cardFunds {
-  padding: 14px;
-  border-radius: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .cardFunds .header {
