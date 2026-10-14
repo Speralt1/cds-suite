@@ -132,16 +132,18 @@ describe("rail (1024–1279) con etiquetas cortas visibles", () => {
     shell();
     const nav = screen.getByRole("navigation", { name: "Módulos" });
     const links = within(nav).getAllByRole("link");
+    // Admin: 5 módulos con Integrantes (doc 23).
     expect(links.map((a) => a.querySelector(".app-nav-short")?.textContent)).toEqual([
       "Finanzas",
       "Calendario",
+      "Integrantes",
       "Reportes",
       "Ajustes",
     ]);
     for (const a of links) expect(a.querySelector(".app-nav-short")).toHaveAttribute("aria-hidden", "true");
     // WCAG 2.5.3: el nombre accesible contiene la palabra visible ("Ajustes").
     expect(within(nav).getByRole("link", { name: "Ajustes · Configuración" })).toHaveAttribute("href", "/configuracion");
-    for (const name of ["Finanzas", "Calendario", "Reportes"]) {
+    for (const name of ["Finanzas", "Calendario", "Integrantes", "Reportes"]) {
       expect(within(nav).getByRole("link", { name })).not.toHaveAttribute("aria-label");
     }
     expect(within(nav).getByRole("link", { name: "Finanzas" })).toHaveAttribute("aria-current", "page");
@@ -168,12 +170,15 @@ describe("rail (1024–1279) con etiquetas cortas visibles", () => {
     expect(within(banner).getByRole("button", { name: /^Tamaño del texto/ })).toBeInTheDocument();
   });
 
-  it("barra inferior: la etiqueta corta lleva la clase que la muestra con texto grande", () => {
+  it("barra inferior: con 5 módulos la etiqueta visible es siempre la corta; el CSS de texto grande sigue para 4", () => {
     shell();
     const bar = screen.getByRole("navigation", { name: "Barra de módulos" });
     const settings = within(bar).getByRole("link", { name: "Ajustes · Configuración" });
-    expect(settings.querySelector(".bar-label-full")).toHaveTextContent("Configuración");
-    expect(settings.querySelector(".bar-label-short")).toHaveTextContent("Ajustes");
+    // settings.manage solo existe para admin y admin siempre ve Integrantes: la barra
+    // con Configuración tiene 5 columnas y muestra "Ajustes" a cualquier tamaño de texto.
+    expect(settings.querySelector(".bar-label-full")).toBeNull();
+    expect(within(settings).getByText("Ajustes")).toBeInTheDocument();
+    expect(within(settings).queryByText("Configuración")).toBeNull();
     const css = fs.readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
     expect(css).toMatch(/html\[data-text-size="xlarge"\] \.bar-label-full \{\s*display: none;/);
     expect(css).toMatch(/html\[data-text-size="xlarge"\] \.bar-label-short \{\s*display: block;/);
@@ -215,6 +220,7 @@ describe("hamburguesa y cajón (<1280)", () => {
     expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual([
       "Finanzas",
       "Calendario",
+      "Integrantes",
       "Reportes",
       "Configuración",
     ]);
