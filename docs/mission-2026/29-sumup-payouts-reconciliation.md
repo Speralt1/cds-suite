@@ -91,7 +91,10 @@ salida:  { readOnly: true, period, payoutFetch, salesRead, asOfDate, policy, dif
 
 **Ventana.** `startDate`/`endDate` son días de venta, como máximo 35, ambos inclusive.
 - **Abonos que se piden a SumUp:** `[startDate, min(endDate + 10 días, hoy)]`. Así se capturan los abonos de las últimas ventas de la ventana.
-- **Ventas que se leen** (de ambas cuentas, para detectar filas de la otra): `[startDate − 10 días, endDate]`. Así se vinculan abonos de inicio de mes que pagan ventas del mes anterior.
+- **Ventas que se leen** (de ambas cuentas, para detectar filas de la otra): `[startDate − 10 días, max(endDate, fin de abonos pedidos)]`.
+  - El lookback vincula abonos de inicio de mes que pagan ventas del mes anterior.
+  - Leer hasta el fin de los abonos pedidos vincula **todas** las filas de un abono de borde de mes. Por ejemplo, un abono del 03-11 que paga 31-10 + 01-11 (Ofrendas agrupa sábado y domingo, y el 31-10-2026 es sábado) queda CONCILIADO tanto en la vista de octubre como en la de noviembre, con la misma propuesta.
+  - Pendientes y totales siguen limitados a `[startDate, endDate]`.
 
 **Errores por cuenta.** Cada cuenta se procesa aislada: si una falla, la otra responde igual. Las clases de error son:
 - `config_error`
@@ -99,13 +102,15 @@ salida:  { readOnly: true, period, payoutFetch, salesRead, asOfDate, policy, dif
 - `scope_missing` (403)
 - `rate_limited`
 - `provider_unavailable`
-- `timeout` (15 s)
+- `timeout` (15 s, cubre la petición y la lectura del cuerpo)
 - `provider_bad_response`
 - `emulator_offline`
 
+**Límite de filas.** Se piden `limit=9999` filas. Si SumUp devuelve 9999 o más, la cuenta trae `rowLimitReached: true` y el panel avisa que puede haber abonos que no se muestran.
+
 **Solo lectura:**
 - El único llamado HTTP es `GET` a `/payouts`, con timeout de 15 s.
-- Firestore se envuelve en `readOnlyFirestore` (un Proxy), que **lanza** ante `set`, `update`, `delete`, `create`, `add`, `batch`, `runTransaction`, `bulkWriter` o `recursiveDelete`.
+- Firestore se envuelve en `readOnlyFirestore`, un Proxy **profundo**. Todo lo que sale de él vuelve envuelto: retornos de métodos, propiedades como `ref.firestore` y `ref.parent`, snapshots y su `ref`, `snap.docs[i].ref` y los datos leídos. Pedir `set`, `update`, `delete`, `create`, `add`, `batch`, `runTransaction`, `bulkWriter` o `recursiveDelete` **lanza** un error, y lo mismo pasa al asignar propiedades. Esto está probado con un db simulado y con el Admin SDK real sobre el emulador.
 - El store solo expone `getUser`, `listSales` y `getFinanceAmounts`, y está congelado.
 - Lee `financeTransactions/{idPropuesta}` con `getAll`, solo para saber si una comisión ya existe en el libro.
 
@@ -114,6 +119,94 @@ salida:  { readOnly: true, period, payoutFetch, salesRead, asOfDate, policy, dif
 - La apiKey y el merchantCode **nunca** se loguean ni se devuelven. Los logs solo llevan `{account, errorClass}`.
 - Los errores del proveedor no se reenvían.
 - En el emulador no se declaran secrets (no hay ninguna llamada a Secret Manager) y `fetch` nunca sale a la red.
+
+### 4.1 Contrato de respuesta (campos exactos, para adaptadores)
+
+Este contrato sirve, por ejemplo, al adaptador de `feature/bank-balance-estimate-v1`. La forma **no** se cambia para ese adaptador: es el adaptador el que mapea estos campos.
+
+**Raíz:**
+
+| Campo | Tipo |
+|---|---|
+| `readOnly` | `true` |
+| `period` | `{ startDate, endDate }`: días de venta pedidos, YYYY-MM-DD |
+| `payoutFetch` | `{ startDate, endDate }` o `null` (ventana futura): fechas de abono pedidas a SumUp |
+| `salesRead` | `{ startDate, endDate }` |
+| `asOfDate` | YYYY-MM-DD, hoy en Chile |
+| `policy` | `"payout_date"` o `"sale_date"` |
+| `differenceBusinessDays` | número |
+| `accounts` | `AccountResult[]`, en el orden pedido (`offerings`, `cafeteria`) |
+| `totals` | `Totals`: suma de las cuentas con `ok: true` |
+
+**`AccountResult`** puede tener dos formas:
+
+- **Error:** `{ ok: false, account: "offerings"|"cafeteria", errorClass: string }`. Las clases están en §4.
+- **Éxito:**
+
+  | Campo | Tipo |
+  |---|---|
+  | `ok` | `true` |
+  | `errorClass` | `null` |
+  | `rowLimitReached` | `boolean` |
+  | `account` | cuenta |
+  | `basis` | `{ basis: "net"\|"gross"\|"indeterminate", reason, tally }` |
+  | `settlements` | `Settlement[]` |
+  | `pendingDays` | `PendingDay[]` |
+  | `pendingAmount` | número: **SumUp pendiente de abono** de la cuenta, en CLP |
+  | `pendingSales` | número |
+  | `proposals` | `FeeProposal[]` |
+  | `totals` | `Totals` |
+  | `rowStats` | `{ fetched, used, duplicatesIgnored, duplicateConflicts, rounded }` |
+
+**`Settlement`** (un depósito de SumUp), con montos enteros en CLP:
+
+| Campo | Tipo / significado |
+|---|---|
+| `id` | `"stl_{cuenta}_{payoutDate}_{hash12}"`, estable |
+| `account` | cuenta |
+| `payoutDate` | YYYY-MM-DD o `null`: fecha del abono |
+| `reference` | string o `null` |
+| `referenceShort` | string |
+| `anchorRowId` | string o `null` |
+| `statusClass` | `"successful"`, `"in_progress"`, `"failed"` o `"unknown"`. Solo `successful` es dinero que llegó al banco. |
+| `status` | `"PENDIENTE"`, `"CONCILIADO"`, `"CON_DIFERENCIA"` o `"REQUIERE_REVISION"` |
+| `reasons` | `string[]`. Las claves están en `SettlementReason` de `lib/shared/sumup-payouts.ts`. |
+| `grossSales` | número |
+| `fee` | número o `null`: comisión SumUp del proveedor; `null` = desconocida |
+| `feeConfirmed` | `boolean` |
+| `refundsBeforePayout` | número ≥ 0 |
+| `deductions` | número ≤ 0 |
+| `adjustments` | número ≤ 0 |
+| `netPaid` | número: **abono neto depositado** |
+| `difference` | número: bruto − neto. No es la comisión. |
+| `residual` | número |
+| `saleDays` | YYYY-MM-DD[] |
+| `byDay` | `[{ saleDate, gross, fee, sales }]` |
+| `inWindow` | `boolean`: fecha de abono dentro de `period` |
+| `afterWindow` | `boolean` |
+| `businessDaysSincePayout` | número o `null` |
+| `rowCount`, `payoutRowCount`, `deductionRowCount`, `unlinkedRowCount`, `linkedSalesCount` | números |
+
+**`PendingDay`:** `{ account, saleDate, salesCount, amount, status: "PENDIENTE", inProgressCount, failedCount }`.
+
+**`FeeProposal`:** `{ id, account, type: "expense", category: "Comisiones SumUp", description, amount, accountingDate, policy, payoutDate, saleDate, saleDates, settlementId, referenceShort, state: "propuesta"|"ya_registrada"|"revision"|"sin_confirmar"|"excluida", reasons, previousAmount, writesLedger: false }`.
+
+**`Totals`:** `{ settlements, notCountedSettlements, grossSales, fee, feeComplete, adjustments, netPaid, difference, pendingAmount, pendingSales, byStatus: { PENDIENTE, CONCILIADO, CON_DIFERENCIA, REQUIERE_REVISION } }`. Los montos son solo de abonos exitosos con `inWindow`.
+
+**Mapeo sugerido al formato que espera `parseSumupPayoutsResponse`:**
+
+| Destino | Origen |
+|---|---|
+| `settlements[]` | `accounts[ok].settlements` filtrados por `statusClass === "successful"` (y, si se quiere solo el período, por `inWindow`) |
+| `id` | `id` |
+| `payoutDate` | `payoutDate` |
+| `netPaid` | `netPaid` |
+| `fee` | `fee` (puede ser `null`) |
+| `status` | `status` |
+| `pendingDeposit` | Σ `accounts[ok].pendingAmount` (= `totals.pendingAmount`) |
+| `coverageFrom` | `payoutFetch.startDate` |
+
+Una cuenta con `ok: false` significa cobertura desconocida para esa cuenta: no equivale a 0.
 
 ## 5. Modelo
 
@@ -165,10 +258,10 @@ Siempre se muestran con ícono y texto.
 
 | Estado | Cuándo |
 |---|---|
-| **REQUIERE REVISIÓN** | Hay deducciones, filas sin vincular (sin código, no encontradas o de otra cuenta), base indeterminada o `gross`, abono fallido o con estado desconocido, problema de moneda, duplicados en conflicto, una venta pagada dos veces, comisión ausente o un monto que no cuadra |
+| **REQUIERE REVISIÓN** | Hay deducciones, filas sin vincular (sin código, no encontradas o de otra cuenta), base indeterminada o `gross`, abono fallido o con estado desconocido, problema de moneda, duplicados en conflicto, una venta pagada dos veces, comisión ausente o un monto que no cuadra. Un abono fallido cuyas ventas tienen otro abono exitoso lleva además el motivo informativo `payout_retried` ("reintentado"). |
 | **PENDIENTE** | El abono está en proceso. O el `residual` no es 0 y aún no pasaron **N días hábiles** (parámetro `differenceBusinessDays`, 5 por defecto, con feriados como parámetro). Las ventas sin ninguna fila de abono exitosa se muestran como filas "Por abonar". |
-| **CONCILIADO** | `residual = 0`, todo vinculado y base `net` |
-| **CON DIFERENCIA** | `residual ≠ 0` después de N días hábiles |
+| **CONCILIADO** | `residual = 0`, todo vinculado y base `net`. También cuando `|residual|` ≤ número de filas redondeadas del abono, con el motivo informativo `rounding`: cada fila con decimales, al redondear monto y comisión por separado, puede desviar a lo más $1. |
+| **CON DIFERENCIA** | `residual ≠ 0` después de N días hábiles. El panel muestra "diferencia $X", que es el `residual`. |
 
 Una devolución previa al abono que cuadra exacto queda CONCILIADO, con el motivo informativo `refunds_before_payout` y el ajuste visible.
 
@@ -184,13 +277,17 @@ El efectivo registrado en SumUp **nunca** cuenta, porque SumUp no lo abona. Si u
 
 ### Totales
 
-Los totales suman solo los abonos con fecha dentro de la ventana (`inWindow`). Los abonos posteriores que pagan ventas del período se muestran, pero no se suman. Así un mes no cuenta dos veces lo que también verá el mes siguiente.
+Los montos de los totales suman solo los abonos **exitosos** (`statusClass = successful`) con fecha dentro de la ventana (`inWindow`).
+- Los abonos posteriores que pagan ventas del período se muestran, pero no se suman. Así un mes no cuenta dos veces lo que también verá el mes siguiente.
+- Los abonos fallidos, en proceso o con estado desconocido **no suman**: no llegaron al banco y sus ventas siguen en "pendiente de abono". Sumarlos contaría la misma venta dos veces. Se cuentan en `totals.notCountedSettlements` y en `totals.byStatus`.
+- Con un abono fallido y luego reintentado, el "Abono neto" total coincide con el banco.
 
 ## 6. Propuestas de comisión e idempotencia
 
 - **Categoría y tipo:** `Comisiones SumUp`, `type: "expense"`, `writesLedger: false`.
 - **Id determinista:** `sumup_fee_{cuenta}_{fechaAbono}_{hash12(referencia)}`, con un hash estable cyrb53 que es igual en el cliente y en Functions.
   - Si la fila no es exitosa, el hash incluye la clase de estado. Así un abono fallido nunca comparte id con uno exitoso.
+  - Si el abono no tiene referencia, cada fila es su propio abono y el hash incluye el `id` de la fila. Los ids de abono y de propuesta nunca chocan.
   - Con la política `sale_date`, al id se le agrega `_sYYYYMMDD` por cada día de venta.
 - **Sin doble conteo:** el mismo abono visto dos veces, en ventanas solapadas, en otro orden o con filas repetidas, da **el mismo id y el mismo monto**. Hay tests para cada caso.
 - **Estados de una propuesta:**
