@@ -16,6 +16,7 @@ import {
   LabelList,
 } from "recharts";
 import { clp, clpShort, periodLabel } from "@/lib/finance/formatters";
+import { useRemPx } from "@/lib/ui/preferences";
 import { combineSummaries, evolution } from "@/lib/finance/calculations";
 import type { MonthlySummary, PeriodSelection } from "@/lib/finance/types";
 const colors = [
@@ -49,6 +50,8 @@ const legendSorter = (item: { value?: unknown }) => {
   return index === -1 ? LEGEND_ORDER.length : index;
 };
 const tooltip = (value: unknown) => clp(Number(value));
+/** Ancho del eje Y: 3,5rem, en px porque recharts lo exige numérico. */
+const Y_AXIS_REM = 3.5;
 const valueLabel = (value: unknown) => clpShort(Number(value));
 const axis = (v: number) =>
   Math.abs(v) >= 1000000
@@ -65,6 +68,7 @@ export function EvolutionChart({
   annual?: boolean;
   tithe?: boolean;
 }) {
+  const yAxisWidth = Math.round(Y_AXIS_REM * useRemPx());
   return (
     <div
       className="chart-box"
@@ -83,10 +87,10 @@ export function EvolutionChart({
           margin={{ top: 12, right: 10, left: 0, bottom: 0 }}
         >
           <CartesianGrid vertical={false} stroke="#e2e7df" />
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={15} />
-          <YAxis tickFormatter={axis} width={48} tick={{ fontSize: 10 }} />
+          <XAxis dataKey="label" className="chart-axis-compact" minTickGap={15} />
+          <YAxis tickFormatter={axis} width={yAxisWidth} />
           <Tooltip formatter={tooltip} />
-          <Legend wrapperStyle={{ fontSize: 12 }} itemSorter={legendSorter} />
+          <Legend itemSorter={legendSorter} />
           <Line
             isAnimationActive={false}
             name={tithe ? "Diezmos" : "Ingresos"}
@@ -182,6 +186,7 @@ export function FinanceCharts({
   period: PeriodSelection;
 }) {
   const sum = combineSummaries(summaries);
+  const yAxisWidth = Math.round(Y_AXIS_REM * useRemPx());
   return (
     <div className="charts-grid">
       <section className="panel min-w-0">
@@ -205,9 +210,9 @@ export function FinanceCharts({
             >
               <CartesianGrid vertical={false} stroke="#e2e7df" />
               <XAxis dataKey="label" />
-              <YAxis width={48} tickFormatter={axis} tick={{ fontSize: 10 }} />
+              <YAxis width={yAxisWidth} tickFormatter={axis} />
               <Tooltip formatter={tooltip} />
-              <Legend wrapperStyle={{ fontSize: 12 }} itemSorter={legendSorter} />
+              <Legend itemSorter={legendSorter} />
               <Bar
                 isAnimationActive={false}
                 name="Ingresos"

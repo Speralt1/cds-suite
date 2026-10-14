@@ -90,7 +90,7 @@ function AreaPicker({
   const options = selectableAreas(areas, value);
   if (!options.length)
     return (
-      <p className="text-[13px] text-muted">
+      <p className="text-[0.8125rem] text-muted">
         Aún no hay áreas activas.{" "}
         <Link className="text-primary underline" href="/configuracion/areas">
           Crear áreas
@@ -104,7 +104,7 @@ function AreaPicker({
         return (
           <label
             key={area.id}
-            className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-[13px] font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary ${
+            className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-[0.8125rem] font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary ${
               on ? "border-ink bg-canvas" : "border-line bg-white"
             }`}
           >
@@ -292,7 +292,7 @@ function PermissionChecklist({
       )}
       {PERMISSION_GROUPS.map((group) => (
         <fieldset key={group.id} className="min-w-0">
-          <legend className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <legend className="mb-1 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted">
             {group.label}
           </legend>
           <ul>
@@ -520,13 +520,13 @@ function UserEditor({
     <Modal title={account.displayName} onClose={onClose} busy={busy} size="wide">
       <form onSubmit={save} className="flex flex-col">
         <div className="space-y-6 p-6">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
+          <div className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-muted">
             <span className="break-all">{account.email}</span>
             <StatusBadge active={draft.active} />
             {self && <span className="status-pill mt-0">Tu cuenta</span>}
           </div>
 
-          <section aria-label="Resumen del acceso" className="space-y-1 rounded-[12px] bg-primary-soft px-4 py-3 text-[13px] text-primary">
+          <section aria-label="Resumen del acceso" className="space-y-1 rounded-[12px] bg-primary-soft px-4 py-3 text-[0.8125rem] text-primary">
             <p>
               <strong className="font-semibold">Verá:</strong> {summary.length ? summary.join(" · ") : "ningún módulo"}
             </p>
@@ -559,14 +559,14 @@ function UserEditor({
 
           <fieldset disabled={busy} className="space-y-6">
             <section aria-labelledby={`${ids.active}-h`} className="space-y-3">
-              <h3 id={`${ids.active}-h`} className="text-[15px] font-semibold">
+              <h3 id={`${ids.active}-h`} className="text-[0.9375rem] font-semibold">
                 Acceso
               </h3>
               <label className="flex flex-col gap-1.5 text-xs font-medium" htmlFor={ids.name}>
                 Nombre
                 <input
                   id={ids.name}
-                  className="form-input min-h-[46px] text-base"
+                  className="form-input min-h-[2.875rem] text-base"
                   value={draft.displayName}
                   maxLength={120}
                   onChange={(e) => set({ displayName: e.target.value })}
@@ -617,14 +617,14 @@ function UserEditor({
             </section>
 
             <section aria-labelledby={`${ids.position}-h`} className="space-y-4">
-              <h3 id={`${ids.position}-h`} className="text-[15px] font-semibold">
+              <h3 id={`${ids.position}-h`} className="text-[0.9375rem] font-semibold">
                 Cargo, áreas y módulo inicial
               </h3>
               <div className="flex flex-col gap-1.5 text-xs font-medium">
                 <label htmlFor={ids.position}>Cargo</label>
                 <select
                   id={ids.position}
-                  className="form-input min-h-[46px] text-base"
+                  className="form-input min-h-[2.875rem] text-base"
                   value={customPosition ? CUSTOM_POSITION : draft.position}
                   aria-describedby={`${ids.position}-help`}
                   onChange={(e) => choosePosition(e.target.value)}
@@ -642,7 +642,7 @@ function UserEditor({
                 {customPosition && (
                   <input
                     aria-label="Nombre del cargo"
-                    className="form-input min-h-[46px] text-base"
+                    className="form-input min-h-[2.875rem] text-base"
                     value={draft.position}
                     maxLength={60}
                     placeholder="Ej.: Coordinación de jóvenes"
@@ -658,7 +658,7 @@ function UserEditor({
                 <div
                   role="group"
                   aria-label={`Permisos sugeridos para ${pendingPreset}`}
-                  className="space-y-3 rounded-[12px] border border-line bg-canvas p-4 text-[13px]"
+                  className="space-y-3 rounded-[12px] border border-line bg-canvas p-4 text-[0.8125rem]"
                 >
                   <p>
                     <strong>¿Aplicar los permisos sugeridos para {pendingPreset}?</strong> Se reemplazarán
@@ -708,7 +708,7 @@ function UserEditor({
                 <label htmlFor={ids.home}>Módulo inicial</label>
                 <select
                   id={ids.home}
-                  className="form-input min-h-[46px] text-base"
+                  className="form-input min-h-[2.875rem] text-base"
                   value={homeInvalid || !allowedHome.length ? "" : draft.homeModule}
                   disabled={!allowedHome.length}
                   aria-describedby={`${ids.home}-h`}
@@ -730,7 +730,7 @@ function UserEditor({
                   ))}
                 </select>
                 <div id={`${ids.home}-h`} className="space-y-0.5 font-normal">
-                  <p className="flex items-center gap-1 text-[13px]">
+                  <p className="flex items-center gap-1 text-[0.8125rem]">
                     <ArrowRight size={14} aria-hidden="true" /> Al ingresar abrirá:{" "}
                     <strong className="font-semibold">{landingText({ ...draft, active: true })}</strong>
                   </p>
@@ -740,7 +740,7 @@ function UserEditor({
             </section>
 
             <section aria-labelledby="perm-h" className="space-y-3">
-              <h3 id="perm-h" className="text-[15px] font-semibold">
+              <h3 id="perm-h" className="text-[0.9375rem] font-semibold">
                 Permisos
               </h3>
               <PermissionChecklist
@@ -751,7 +751,7 @@ function UserEditor({
           </fieldset>
 
           {confirmHome && resolvedHome && (
-            <div role="group" aria-label="Confirmar módulo inicial" className="space-y-3 rounded-[12px] border border-line bg-canvas p-4 text-[13px]">
+            <div role="group" aria-label="Confirmar módulo inicial" className="space-y-3 rounded-[12px] border border-line bg-canvas p-4 text-[0.8125rem]">
               <p>
                 El módulo inicial ({HOME_MODULE_LABEL[draft.homeModule]}) ya no está permitido. Se guardará{" "}
                 <strong>{HOME_MODULE_LABEL[resolvedHome]}</strong> como módulo inicial.
@@ -825,7 +825,7 @@ function UserEditor({
 // ---------- Lista ----------
 
 /** Estado con ícono + texto: check solo para activo; sin acceso con ícono "prohibido" en gris. */
-function StatusBadge({ active, className = "text-[13px]" }: { active: boolean; className?: string }) {
+function StatusBadge({ active, className = "text-[0.8125rem]" }: { active: boolean; className?: string }) {
   return active ? (
     <span className={`inline-flex items-center gap-1 text-primary ${className}`}>
       <CircleCheck size={14} aria-hidden="true" className="shrink-0" /> Activo
@@ -881,7 +881,7 @@ function UsersList({
 
   return (
     <div className="panel p-0">
-      <p className="border-b border-line px-5 py-3 text-[13px] text-muted">
+      <p className="border-b border-line px-5 py-3 text-[0.8125rem] text-muted">
         {users.length} {users.length === 1 ? "usuario" : "usuarios"}
         {withNotices > 0 && ` · ${withNotices} con avisos`}
       </p>

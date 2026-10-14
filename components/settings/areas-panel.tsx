@@ -61,7 +61,7 @@ function EventPreview({ name, color }: { name: string; color: AreaColor }) {
       <p className="text-xs font-medium text-muted">Así se verá:</p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <span
-          className="inline-flex max-w-full items-center gap-2 rounded-[8px] border-l-4 py-1.5 pl-2 pr-3 text-[13px]"
+          className="inline-flex max-w-full items-center gap-2 rounded-[8px] border-l-4 py-1.5 pl-2 pr-3 text-[0.8125rem]"
           style={{ borderColor: areaVar(color, "swatch"), background: areaVar(color, "soft"), color: areaVar(color, "ink") }}
         >
           <span className="font-semibold tabular-nums">19:00</span>
@@ -103,7 +103,7 @@ function ColorPicker({
             return (
               <label
                 key={color}
-                className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-[10px] border px-3 py-2 text-[13px] font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary ${
+                className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-[10px] border px-3 py-2 text-[0.8125rem] font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary ${
                   checked ? "border-ink bg-canvas" : "border-line bg-white"
                 }`}
               >
@@ -221,7 +221,7 @@ function AreaEditor({
   return (
     <Modal title={title} onClose={onClose} busy={busy}>
       <form className="space-y-5 p-6" onSubmit={save} noValidate>
-        <p className="text-[13px] text-muted">El color de cada actividad viene de su área responsable.</p>
+        <p className="text-[0.8125rem] text-muted">El color de cada actividad viene de su área responsable.</p>
         {activate && editing && (
           <InfoNote>
             Su color ({AREA_PALETTE[editing.color].label}) o su nombre lo usa otra área activa. Revisa los datos para
@@ -234,7 +234,7 @@ function AreaEditor({
             <input
               id={nameId}
               data-autofocus
-              className="form-input min-h-[46px] text-base"
+              className="form-input min-h-[2.875rem] text-base"
               value={name}
               maxLength={AREA_NAME_MAX}
               required
@@ -252,7 +252,7 @@ function AreaEditor({
             </span>
             <textarea
               id={descId}
-              className="form-input min-h-[72px] text-base"
+              className="form-input min-h-[4.5rem] text-base"
               rows={2}
               value={description}
               maxLength={AREA_DESCRIPTION_MAX}
@@ -349,7 +349,7 @@ function DeactivateDialog({
 }
 
 /** Estado con ícono + texto: check solo para activa; inactiva con ícono "prohibido" en gris. */
-function StatusText({ active, className = "text-[13px]" }: { active: boolean; className?: string }) {
+function StatusText({ active, className = "text-[0.8125rem]" }: { active: boolean; className?: string }) {
   return active ? (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <CircleCheck size={14} aria-hidden="true" className="shrink-0 text-primary" /> Activa
@@ -436,7 +436,7 @@ function AreasContent({ usage, onRetry }: { usage?: AreaUsageMap | null; onRetry
   else
     body = (
       <div className="panel p-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3 text-[13px] text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3 text-[0.8125rem] text-muted">
           <p>
             {activeCount} {activeCount === 1 ? "activa" : "activas"} · {inactiveCount}{" "}
             {inactiveCount === 1 ? "inactiva" : "inactivas"}
