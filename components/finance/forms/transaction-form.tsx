@@ -9,6 +9,8 @@ import {
   transactionInput,
 } from "@/lib/finance/transactions";
 import { PAYMENT_METHODS } from "@/lib/finance/constants";
+import { useMonthTithes } from "@/lib/finance/tithe-hooks";
+import { findExactTitheMatches } from "@/lib/finance/tithe-integrity";
 import {
   categoriesForTransaction,
   FALLBACK_INCOME_CATEGORIES,
@@ -21,8 +23,13 @@ import type {
   TransactionType,
   PaymentMethod,
   TitheProfile,
+  TitheAttribution,
 } from "@/lib/finance/types";
 import { Modal, Notice } from "../shared";
+import {
+  DuplicateTitheConfirm,
+  RepeatTitheWarning,
+} from "../tithes/repeat-tithe";
 export function TransactionForm({
   existing,
   profile,
@@ -62,7 +69,18 @@ export function TransactionForm({
   const [receipt, setReceipt] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Synchronous in-flight lock: a double click / double Enter never starts a second save.
   const lock = useRef(false);
+  const amountRef = useRef<HTMLInputElement>(null);
+  // Diezmo nuevo con ficha: aviso de diezmos del mismo mes (doc 27). Nunca bloquea.
+  const repeatCheck = !!profile && !existing;
+  const period = /^\d{4}-\d{2}-\d{2}$/.test(input.date)
+    ? input.date.slice(0, 7)
+    : "";
+  const monthTithes = useMonthTithes(repeatCheck ? profile.id : "", period);
+  const [confirming, setConfirming] = useState<TitheAttribution[] | null>(
+    null,
+  );
   const categoryOptions = categoriesForTransaction(
     settings.data,
     input.type,
@@ -72,6 +90,9 @@ export function TransactionForm({
     setInput({ ...input, [key]: value });
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    await submit(false);
+  }
+  async function submit(duplicateConfirmed: boolean) {
     if (lock.current || !user) return;
     lock.current = true;
     setBusy(true);
@@ -85,6 +106,18 @@ export function TransactionForm({
         throw new Error(
           "Ingresa el monto en pesos enteros, sin puntos ni decimales.",
         );
+
+      if (repeatCheck && !duplicateConfirmed) {
+        const exact = await findExactTitheMatches(services.db, profile.id, {
+          date: input.date,
+          amount: Number(amount),
+          paymentMethod: input.paymentMethod,
+        });
+        if (exact.length) {
+          setConfirming(exact);
+          return;
+        }
+      }
 
       if (receipt && tithe && !existing) {
         if (receipt.size > 10 * 1024 * 1024) {
@@ -167,7 +200,25 @@ export function TransactionForm({
       onClose={onClose}
       busy={busy}
     >
-      <form onSubmit={save} className="finance-form">
+      {confirming && (
+        <DuplicateTitheConfirm
+          matches={confirming}
+          methodLabelText={PAYMENT_METHODS[input.paymentMethod]}
+          onBack={() => {
+            setConfirming(null);
+            requestAnimationFrame(() => amountRef.current?.focus());
+          }}
+          onConfirm={() => {
+            setConfirming(null);
+            void submit(true);
+          }}
+        />
+      )}
+      <form
+        onSubmit={save}
+        className="finance-form"
+        hidden={!!confirming}
+      >
         <fieldset disabled={busy}>
           {profile && (
             <p className="notice success">
@@ -204,6 +255,7 @@ export function TransactionForm({
           <label>
             Monto CLP
             <input
+              ref={amountRef}
               autoFocus
               data-autofocus
               className="amount-input"
@@ -251,6 +303,13 @@ export function TransactionForm({
               </select>
             </label>
           </div>
+          {repeatCheck && period && !monthTithes.loading && (
+            <RepeatTitheWarning
+              key={period}
+              period={period}
+              items={monthTithes.data}
+            />
+          )}
           {!tithe && (
             <>
               <label>

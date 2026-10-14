@@ -4,19 +4,22 @@ import {
   collection,
   documentId,
   getCountFromServer,
+  getDocs,
   orderBy,
   query,
   startAfter,
   where,
   Timestamp,
+  type Firestore,
 } from "firebase/firestore";
 import { getFirebaseServices } from "../firebase";
 import { useCollection } from "./hooks";
 import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "./constants";
-import { errorMessage, periodId } from "./formatters";
+import { errorMessage, parseDate, periodId } from "./formatters";
 import { safeLimit } from "./query-limit";
+import { normalizeName } from "../shared/names";
 import type { TitheProfile, TitheAttribution } from "./types";
-export function useProfiles(search: string, cursor = "") {
+export function useProfiles(search: string, cursor = "", enabled = true) {
   const constraints = useMemo(() => {
     const term = search.trim().toLowerCase();
     return [
@@ -37,7 +40,7 @@ export function useProfiles(search: string, cursor = "") {
   return useCollection<TitheProfile>(
     "titheProfiles",
     constraints,
-    true,
+    enabled,
     `profiles:${search.trim().toLowerCase()}:${cursor}`,
   );
 }
@@ -113,4 +116,228 @@ export function useNewProfileCount(year: number, refresh: number) {
   return state?.year === year && state.refresh === refresh
     ? { ...state, loading: false }
     : { count: 0, error: "", loading: true };
+}
+
+// ── Integridad de diezmos (doc 27) ──────────────────────────────────────────
+
+/** Máximo de fichas que se cargan para buscar coincidencias de nombre en el cliente. */
+export const PROFILE_DIRECTORY_LIMIT = 500;
+export interface ProfileDirectoryState {
+  data: TitheProfile[];
+  loading: boolean;
+  error: string;
+  /** Hay más de PROFILE_DIRECTORY_LIMIT fichas: la comparación es parcial. */
+  truncated: boolean;
+}
+/**
+ * Lista acotada de fichas (activas y archivadas) leída UNA vez al montar (orderBy searchName,
+ * límite 500 + 1 para detectar el corte). Sobre ella se calculan en el cliente los nombres
+ * similares y la búsqueda normalizada; nunca se consulta por tecla.
+ */
+export function useProfileDirectory(enabled = true, refresh = 0): ProfileDirectoryState {
+  const [state, setState] = useState<
+    (ProfileDirectoryState & { refresh: number }) | null
+  >(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    getDocs(
+      query(
+        collection(getFirebaseServices().db, "titheProfiles"),
+        orderBy("searchName"),
+        safeLimit(PROFILE_DIRECTORY_LIMIT + 1),
+      ),
+    )
+      .then((s) => {
+        if (!active) return;
+        const data = s.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as TitheProfile,
+        );
+        setState({
+          refresh,
+          data: data.slice(0, PROFILE_DIRECTORY_LIMIT),
+          loading: false,
+          error: "",
+          truncated: data.length > PROFILE_DIRECTORY_LIMIT,
+        });
+      })
+      .catch((e) => {
+        if (active)
+          setState({
+            refresh,
+            data: [],
+            loading: false,
+            error: errorMessage(e),
+            truncated: false,
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [enabled, refresh]);
+  return enabled && state?.refresh === refresh
+    ? state
+    : { data: [], loading: enabled, error: "", truncated: false };
+}
+
+/** "2026-10" → ["2026-10-01", "2026-11-01"]; null si el período no es válido. */
+export function monthRange(period: string): [string, string] | null {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(period);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (year < 2000 || year > 2099) return null;
+  return [
+    `${periodId(year, month)}-01`,
+    `${month === 12 ? periodId(year + 1, 1) : periodId(year, month + 1)}-01`,
+  ];
+}
+/** Tope de diezmos del mes que se muestran en el aviso de diezmo repetido. */
+export const MONTH_TITHES_LIMIT = 20;
+function monthTitheConstraints(profileId: string, period: string) {
+  const range = monthRange(period);
+  if (!profileId || !range) return null;
+  // Índice existente: titheAttributions (profileId ASC, status ASC, date DESC).
+  return [
+    where("profileId", "==", profileId),
+    where("status", "==", "active"),
+    where("date", ">=", parseDate(range[0])),
+    where("date", "<", parseDate(range[1])),
+    orderBy("date", "desc"),
+    safeLimit(MONTH_TITHES_LIMIT),
+  ];
+}
+/** Diezmos activos de la ficha en el mes `period` ("AAAA-MM"). Se re-suscribe solo si cambia el mes. */
+export function useMonthTithes(profileId: string, period: string) {
+  const constraints = useMemo(
+    () => monthTitheConstraints(profileId, period),
+    [profileId, period],
+  );
+  return useCollection<TitheAttribution>(
+    "titheAttributions",
+    constraints ?? [],
+    !!constraints,
+    `month-tithes:${profileId}:${period}`,
+  );
+}
+/** Lectura puntual (servidor o caché) de los diezmos activos del mes, para la comprobación al guardar. */
+export async function fetchMonthTithes(
+  db: Firestore,
+  profileId: string,
+  period: string,
+) {
+  const constraints = monthTitheConstraints(profileId, period);
+  if (!constraints) return [];
+  const s = await getDocs(
+    query(collection(db, "titheAttributions"), ...constraints),
+  );
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }) as TitheAttribution);
+}
+/** Método de pago de hasta 30 movimientos por consulta documentId()-in. */
+export async function fetchTransactionMethods(db: Firestore, ids: string[]) {
+  const unique = [...new Set(ids)];
+  const map: Record<string, string> = {};
+  for (let i = 0; i < unique.length; i += 30) {
+    const snapshot = await getDocs(
+      query(
+        collection(db, "financeTransactions"),
+        where(documentId(), "in", unique.slice(i, i + 30)),
+      ),
+    );
+    snapshot.docs.forEach((d) => {
+      map[d.id] = (d.data() as { paymentMethod?: string }).paymentMethod || "";
+    });
+  }
+  return map;
+}
+// Method comes from a batched read of financeTransactions, limited to the
+// rows currently rendered (§C3): up to 30 ids per documentId()-"in" query.
+export function useTransactionMethods(ids: string[]) {
+  const key = [...new Set(ids)].sort().join(",");
+  const [state, setState] = useState<{
+    key: string;
+    map: Record<string, string>;
+  }>({ key: "", map: {} });
+  useEffect(() => {
+    if (!key) return;
+    let active = true;
+    fetchTransactionMethods(getFirebaseServices().db, key.split(","))
+      .then((map) => {
+        if (active) setState({ key, map });
+      })
+      .catch(() => {
+        if (active) setState({ key, map: {} });
+      });
+    return () => {
+      active = false;
+    };
+  }, [key]);
+  return key ? (state.key === key ? state.map : {}) : {};
+}
+
+/**
+ * Búsqueda normalizada en el cliente: cada palabra buscada debe aparecer dentro del nombre
+ * normalizado ("perez" encuentra "Pérez", "perez juan" encuentra "Juan Pérez").
+ */
+export function matchesProfileSearch(displayName: string, search: string) {
+  const words = normalizeName(search).split(" ").filter(Boolean);
+  if (!words.length) return true;
+  const name = normalizeName(displayName);
+  return words.every((w) => name.includes(w));
+}
+/** Conteo en el servidor (agregación, sin leer documentos) de fichas con `active == value`. */
+export function useProfileCount(active: boolean, refresh: number, enabled = true) {
+  const [state, setState] = useState<{
+    key: string;
+    count: number;
+    error: string;
+  } | null>(null);
+  const key = `${active}:${refresh}`;
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    getCountFromServer(
+      query(
+        collection(getFirebaseServices().db, "titheProfiles"),
+        where("active", "==", active),
+      ),
+    )
+      .then((s) => {
+        if (alive) setState({ key, count: s.data().count, error: "" });
+      })
+      .catch((e) => {
+        if (alive) setState({ key, count: 0, error: errorMessage(e) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [active, key, enabled]);
+  return enabled && state?.key === key
+    ? { count: state.count, error: state.error, loading: false }
+    : { count: 0, error: "", loading: enabled };
+}
+/** Conteo de diezmos activos de una ficha (agregación; usa el índice profileId+status+date). */
+export function useActiveTitheCount(profileId: string, refresh = 0) {
+  const [state, setState] = useState<{ key: string; count: number | null } | null>(null);
+  const key = `${profileId}:${refresh}`;
+  useEffect(() => {
+    let alive = true;
+    getCountFromServer(
+      query(
+        collection(getFirebaseServices().db, "titheAttributions"),
+        where("profileId", "==", profileId),
+        where("status", "==", "active"),
+      ),
+    )
+      .then((s) => {
+        if (alive) setState({ key, count: s.data().count });
+      })
+      .catch(() => {
+        if (alive) setState({ key, count: null });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [profileId, key]);
+  return state?.key === key ? state.count : undefined;
 }
