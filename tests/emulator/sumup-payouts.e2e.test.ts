@@ -3,11 +3,18 @@
 // (emulator_offline) y los secrets no existen (config_error): aquí se prueba el
 // cableado real (región, onCall, auth, validación) y que no escribe nada.
 // Solo `npm run test:emulator`.
+import { createRequire } from "node:module";
 import { initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { collection, doc, getDocs, setDoc, Timestamp, type Firestore } from "firebase/firestore";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SEED_FUNCTIONS_ORIGIN, SEED_PROJECT, SEED_REGION } from "../../scripts/seed-platform-calendar-emulator.mjs";
 import { seed, signIn } from "./helpers";
+
+const require = createRequire(import.meta.url);
+const read = require("../../functions/sumup-payouts/read.js");
+const adminApp = require("../../functions/node_modules/firebase-admin/app");
+const adminFirestore = require("../../functions/node_modules/firebase-admin/firestore");
+const FEE_DOC = "sumup_fee_offerings_2026-10-13_aaaaaaaaaaaa";
 
 const URL_ = `${SEED_FUNCTIONS_ORIGIN}/${SEED_PROJECT}/${SEED_REGION}/sumupPayoutsReconciliation`;
 const WATCHED = ["financeTransactions", "financeMonthlySummaries", "sumupSyncRuns", "sumupIntegrations", "sumupIntegrations/offerings/transactions"];
@@ -58,6 +65,12 @@ describe("sumupPayoutsReconciliation vía emulador de Functions", () => {
         timestamp: Timestamp.fromDate(new Date("2026-10-11T15:00:00.000Z")),
       });
     });
+    await rules.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      // Comisión ficticia "ya registrada" (fixture) para ejercitar getAll real.
+      await setDoc(doc(db, `financeTransactions/${FEE_DOC}`), { amount: 15968, status: "active", type: "expense", category: "Comisiones SumUp" });
+      await setDoc(doc(db, "financeTransactions/sumup_fee_offerings_2026-10-14_bbbbbbbbbbbb"), { amount: 10, status: "voided" });
+    });
     admin = await signIn("admin@cds.test");
     finance = await signIn("finanzas@cds.test");
     leader = await signIn("lider.jovenes@cds.test");
@@ -100,6 +113,37 @@ describe("sumupPayoutsReconciliation vía emulador de Functions", () => {
       }
       expect(res.text).not.toMatch(/apiKey|merchantCode|sup_sk_/);
     }
+    expect(await snapshot()).toBe(before);
+  });
+
+  it("store real (Admin SDK) sobre el emulador: listSales, getAll y guardia de escritura", async () => {
+    const app = adminApp.getApps().find((a: { name: string }) => a.name === "payouts-e2e") ?? adminApp.initializeApp({ projectId: SEED_PROJECT }, "payouts-e2e");
+    const db = adminFirestore.getFirestore(app);
+    const before = await snapshot();
+
+    const store = read.createPayoutsReadStore({ db });
+    const sales = await store.listSales("offerings", Date.parse("2026-10-10T00:00:00Z"), Date.parse("2026-10-13T00:00:00Z"));
+    const fict = sales.find((d: { transactionCode?: string }) => d.transactionCode === "FICTE2E1");
+    expect(fict).toBeDefined();
+    expect(read.toSaleRecord("offerings", fict)).toMatchObject({ saleDate: "2026-10-11", grossAmount: 5000, paymentType: "POS" });
+    expect(await store.getUser("seed-admin")).toMatchObject({ role: "admin", active: true });
+    expect(await store.getFinanceAmounts([FEE_DOC, "sumup_fee_offerings_2026-10-14_bbbbbbbbbbbb", "sumup_fee_no_existe"])).toEqual({
+      [FEE_DOC]: { amount: 15968 },
+    });
+
+    const ro = read.readOnlyFirestore(db);
+    const ref = ro.doc(`financeTransactions/${FEE_DOC}`);
+    expect(() => ref.set({ amount: 1 })).toThrow(read.ReadOnlyViolation);
+    expect(() => ref.firestore.batch()).toThrow(read.ReadOnlyViolation);
+    expect(() => ref.parent.add({})).toThrow(read.ReadOnlyViolation);
+    const snap = await ref.get();
+    expect(() => snap.ref.update({ amount: 2 })).toThrow(read.ReadOnlyViolation);
+    const qs = await ro.collection("financeTransactions").limit(5).get();
+    expect(qs.docs.length).toBeGreaterThan(0);
+    expect(() => qs.docs[0].ref.delete()).toThrow(read.ReadOnlyViolation);
+    const [got] = await ro.getAll(ro.doc(`financeTransactions/${FEE_DOC}`));
+    expect(got.data()).toMatchObject({ amount: 15968 });
+
     expect(await snapshot()).toBe(before);
   });
 });

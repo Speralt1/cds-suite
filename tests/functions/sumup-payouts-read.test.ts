@@ -256,6 +256,69 @@ describe("conciliación con fetch simulado", () => {
     ).rejects.toMatchObject({ errorClass: "timeout" });
   });
 
+  it("NIT: el timeout también cubre la lectura del cuerpo", async () => {
+    const hanging = async () => ({ ok: true, status: 200, json: () => new Promise(() => {}) });
+    await expect(
+      read.fetchPayouts({ config: FAKE.offerings, startDate: "2026-10-01", endDate: "2026-10-02", fetchImpl: hanging, timeoutMs: 20 }),
+    ).rejects.toMatchObject({ errorClass: "timeout" });
+  });
+
+  it("NIT: si SumUp devuelve el máximo de filas (9999) se marca rowLimitReached", async () => {
+    const ofr = groupedOfferingsCase();
+    const many = Array.from({ length: read.PAYOUTS_ROW_LIMIT }, (_, i) => ({ ...ofr.rows[i % ofr.rows.length], id: `bulk-${i}` }));
+    const { call } = setup({ fetchImpl: async (url) => jsonResponse(url.includes(FAKE.offerings.merchantCode) ? many : []) });
+    const res = (await call("u-admin", OCT)) as { accounts: { account: string; rowLimitReached: boolean }[] };
+    expect(res.accounts.map((a) => [a.account, a.rowLimitReached])).toEqual([
+      ["offerings", true],
+      ["cafeteria", false],
+    ]);
+  });
+
+  it("M1: abono 03-11 que paga 31-10 + 01-11 → la vista de octubre lee ventas hasta el fin de abonos y concilia", async () => {
+    const anchors = [10_000, 20_000, 30_000].map((g, i) => ({ code: `ANC${i}`, g, fee: [345, 690, 1035][i] }));
+    const sales = [
+      ...anchors.map((a) => ({ transactionCode: a.code, saleDate: "2026-10-05", grossAmount: a.g, refundedAmount: 0, amountAfterRefunds: a.g, status: "SUCCESSFUL", paymentType: "POS", currency: "CLP" })),
+      // Anclas de noviembre: la vista de noviembre también necesita ≥ 3 votos de base.
+      ...anchors.map((a) => ({ transactionCode: `N${a.code}`, saleDate: "2026-11-05", grossAmount: a.g, refundedAmount: 0, amountAfterRefunds: a.g, status: "SUCCESSFUL", paymentType: "POS", currency: "CLP" })),
+      { transactionCode: "B31", saleDate: "2026-10-31", grossAmount: 10_000, refundedAmount: 0, amountAfterRefunds: 10_000, status: "SUCCESSFUL", paymentType: "POS", currency: "CLP" },
+      { transactionCode: "B01", saleDate: "2026-11-01", grossAmount: 20_000, refundedAmount: 0, amountAfterRefunds: 20_000, status: "SUCCESSFUL", paymentType: "POS", currency: "CLP" },
+    ];
+    const rows = [
+      ...anchors.map((a) => ({ id: `a-${a.code}`, amount: a.g - a.fee, fee: a.fee, currency: "CLP", date: "2026-10-06", reference: "FICT ANCHOR", status: "SUCCESSFUL", transaction_code: a.code, type: "PAYOUT" })),
+      ...anchors.map((a) => ({ id: `n-${a.code}`, amount: a.g - a.fee, fee: a.fee, currency: "CLP", date: "2026-11-06", reference: "FICT ANCHOR N", status: "SUCCESSFUL", transaction_code: `N${a.code}`, type: "PAYOUT" })),
+      { id: "e1", amount: 9655, fee: 345, currency: "CLP", date: "2026-11-03", reference: "FICT EDGE", status: "SUCCESSFUL", transaction_code: "B31", type: "PAYOUT" },
+      { id: "e2", amount: 19_310, fee: 690, currency: "CLP", date: "2026-11-03", reference: "FICT EDGE", status: "SUCCESSFUL", transaction_code: "B01", type: "PAYOUT" },
+    ];
+    const { store } = memoryStore({ offerings: sales.map(saleDoc), cafeteria: [] });
+    const fetchCalls: string[] = [];
+    const service = read.createPayoutsReconciliationService({
+      store,
+      getConfig: (a: "offerings" | "cafeteria") => FAKE[a],
+      fetchImpl: async (url: string) => {
+        fetchCalls.push(url);
+        return jsonResponse(url.includes(FAKE.offerings.merchantCode) ? rows : []);
+      },
+      clock: { now: () => Date.parse("2026-11-20T15:00:00.000Z") },
+      logger: { error: vi.fn() },
+    });
+    const view = async (startDate: string, endDate: string) =>
+      (await service.handle("u-finance", { account: "offerings", startDate, endDate })) as {
+        salesRead: { endDate: string };
+        accounts: { settlements: { reference: string; status: string; reasons: string[] }[]; proposals: { id: string; amount: number; state: string }[]; pendingAmount: number }[];
+      };
+    const oct = await view("2026-10-01", "2026-10-31");
+    expect(oct.salesRead.endDate).toBe("2026-11-10");
+    const edge = oct.accounts[0].settlements.find((x) => x.reference === "FICT EDGE")!;
+    expect(edge.status).toBe("CONCILIADO");
+    expect(edge.reasons).toEqual([]);
+    expect(oct.accounts[0].pendingAmount).toBe(0);
+    const nov = await view("2026-11-01", "2026-11-30");
+    const pOct = oct.accounts[0].proposals.find((p) => p.amount === 1035 && p.id.includes("2026-11-03"))!;
+    const pNov = nov.accounts[0].proposals.find((p) => p.id.includes("2026-11-03"))!;
+    expect(pOct).toEqual(pNov);
+    expect(pOct.state).toBe("propuesta");
+  });
+
   it("comisión ya registrada en el libro con otro monto → propuesta en 'revision' con montos viejo/nuevo", async () => {
     const id = "sumup_fee_cafeteria_2026-10-13_" + require("../../functions/shared/sumup-payouts.js").shortHash("FICT PID CAFE 0001");
     const { call, calls } = setup({ financeDocs: { [id]: { amount: 15_000, status: "active" } } });
@@ -319,24 +382,34 @@ describe("secretos: nunca en logs ni en la respuesta", () => {
 describe("solo lectura", () => {
   function fakeDb() {
     const writes: string[] = [];
-    const docRef = (p: string): Record<string, unknown> => ({
-      path: p,
-      get: async () => ({ exists: true, id: p, data: () => ({ role: "admin", active: true, amount: 5, status: "active" }) }),
-      set: async () => writes.push(`set:${p}`),
-      update: async () => writes.push(`update:${p}`),
-      delete: async () => writes.push(`delete:${p}`),
-      create: async () => writes.push(`create:${p}`),
-      collection: (c: string) => collectionRef(`${p}/${c}`),
-    });
+    // eslint-disable-next-line prefer-const
+    let db: Record<string, unknown>;
+    const docRef = (p: string): Record<string, unknown> => {
+      const ref: Record<string, unknown> = {
+        path: p,
+        set: async () => writes.push(`set:${p}`),
+        update: async () => writes.push(`update:${p}`),
+        delete: async () => writes.push(`delete:${p}`),
+        create: async () => writes.push(`create:${p}`),
+        collection: (c: string) => collectionRef(`${p}/${c}`),
+      };
+      // Propiedades (no métodos) que apuntan a objetos con escritura.
+      ref.firestore = db;
+      ref.parent = collectionRef(p.split("/").slice(0, -1).join("/") || "root");
+      ref.get = async () => ({ exists: true, id: p, ref, data: () => ({ role: "admin", active: true, amount: 5, status: "active" }) });
+      return ref;
+    };
     const query = (p: string): Record<string, unknown> => ({
       where: () => query(p),
       select: () => query(p),
       limit: () => query(p),
       orderBy: () => query(p),
-      get: async () => ({ docs: [{ data: () => ({ transactionCode: "A", grossAmount: 1000, timestamp: new Date("2026-10-11T15:00:00Z") }) }] }),
+      get: async () => ({
+        docs: [{ ref: { path: `${p}/A`, set: async () => writes.push(`docs.ref.set:${p}`), update: async () => writes.push(`docs.ref.update:${p}`) }, data: () => ({ transactionCode: "A", grossAmount: 1000, timestamp: new Date("2026-10-11T15:00:00Z") }) }],
+      }),
     });
     const collectionRef = (p: string): Record<string, unknown> => ({ ...query(p), doc: (id: string) => docRef(`${p}/${id}`), add: async () => writes.push(`add:${p}`) });
-    const db = {
+    db = {
       doc: (p: string) => docRef(p),
       collection: (p: string) => collectionRef(p),
       getAll: async (...refs: { path: string; get: () => Promise<unknown> }[]) => {
@@ -368,6 +441,27 @@ describe("solo lectura", () => {
       () => ro.recursiveDelete(ro.doc("a/b")),
     ];
     for (const attempt of attempts) expect(attempt).toThrow(read.ReadOnlyViolation);
+    expect(writes).toEqual([]);
+  });
+
+  it("MINOR 1: propiedades y snapshots también van envueltos (ref.firestore, ref.parent, snap.ref, docs[i].ref)", async () => {
+    const { db, writes } = fakeDb();
+    const ro = read.readOnlyFirestore(db);
+    const ref = ro.doc("users/u1");
+    expect(() => ref.firestore.batch()).toThrow(read.ReadOnlyViolation);
+    expect(() => ref.firestore.doc("x/y").set({})).toThrow(read.ReadOnlyViolation);
+    expect(() => ref.parent.add({})).toThrow(read.ReadOnlyViolation);
+    const snap = await ref.get();
+    expect(snap.exists).toBe(true);
+    expect(() => snap.ref.set({})).toThrow(read.ReadOnlyViolation);
+    const qs = await ro.collection("sumupIntegrations/offerings/transactions").where("a", ">=", 1).get();
+    expect(() => qs.docs[0].ref.update({})).toThrow(read.ReadOnlyViolation);
+    expect(() => qs.docs[0].ref.set({})).toThrow(read.ReadOnlyViolation);
+    const data = snap.data();
+    expect(data.role).toBe("admin");
+    expect(() => {
+      data.role = "otro";
+    }).toThrow(read.ReadOnlyViolation);
     expect(writes).toEqual([]);
   });
 

@@ -36,6 +36,8 @@ const PAYOUTS_ERROR_KEYS = Object.freeze({
 
 const ACCOUNT_CHOICES = Object.freeze(["offerings", "cafeteria", "both"]);
 const FETCH_TIMEOUT_MS = 15_000;
+/** `limit` pedido a SumUp. Si vuelven ≥ estas filas, la respuesta puede venir truncada. */
+const PAYOUTS_ROW_LIMIT = 9999;
 const SALES_READ_LIMIT = 20_000;
 const WRITE_METHODS = Object.freeze([
   "set",
@@ -61,9 +63,13 @@ class ReadOnlyViolation extends Error {
 }
 
 /**
- * Envuelve un Firestore (o cualquier ref/query que devuelva) en un Proxy que
- * lanza ReadOnlyViolation al pedir un método de escritura. Las lecturas pasan
- * al objeto real (con `this` = objeto real). `getAll` desenvuelve sus refs.
+ * Envuelve un Firestore en un Proxy profundo de solo lectura: todo objeto que
+ * sale de él (retorno de métodos, propiedades como `ref.firestore`/`ref.parent`,
+ * snapshots y su `ref`, arreglos como `snap.docs`, promesas) vuelve envuelto,
+ * y pedir un método de escritura lanza ReadOnlyViolation. Las lecturas se
+ * ejecutan sobre el objeto real (`this` = objeto real; los argumentos se
+ * desenvuelven, p. ej. las refs de `getAll`). También los datos leídos
+ * (`snap.data()`) vuelven envueltos: se leen igual, pero no se pueden mutar.
  */
 function readOnlyFirestore(target) {
   const proxies = new WeakMap();
@@ -74,15 +80,12 @@ function readOnlyFirestore(target) {
   }
 
   function wrap(value) {
-    if (!value || typeof value !== "object") return value;
+    if (!value || (typeof value !== "object" && typeof value !== "function")) return value;
+    if (typeof value === "function") return value;
+    if (originals.has(value)) return value;
     if (typeof value.then === "function") return value.then(wrap);
+    if (Array.isArray(value)) return value.map(wrap);
     if (proxies.has(value)) return proxies.get(value);
-    // Solo se envuelven objetos con capacidad de escribir o de navegar a refs
-    // (Firestore, refs, colecciones, queries); los datos leídos pasan tal cual.
-    const navigable =
-      WRITE_METHODS.some((m) => typeof value[m] === "function") ||
-      ["doc", "collection", "where", "getAll"].some((m) => typeof value[m] === "function");
-    if (!navigable) return value;
     const proxy = new Proxy(value, {
       get(obj, prop) {
         if (typeof prop === "string" && WRITE_METHODS.includes(prop)) {
@@ -90,14 +93,25 @@ function readOnlyFirestore(target) {
             throw new ReadOnlyViolation(prop);
           };
         }
-        const v = obj[prop];
+        const v = Reflect.get(obj, prop, obj);
+        // Invariante de Proxy: una propiedad propia no configurable y no
+        // escribible debe devolverse tal cual.
+        const own = Object.getOwnPropertyDescriptor(obj, prop);
+        if (own && own.configurable === false && own.writable === false) return v;
         if (typeof v === "function") {
+          if (prop === "constructor") return v;
           return (...args) => wrap(v.apply(obj, args.map(unwrap)));
         }
-        return v;
+        return wrap(v);
       },
       set() {
         throw new ReadOnlyViolation("assign");
+      },
+      defineProperty() {
+        throw new ReadOnlyViolation("defineProperty");
+      },
+      deleteProperty() {
+        throw new ReadOnlyViolation("deleteProperty");
       },
     });
     proxies.set(value, proxy);
@@ -214,34 +228,52 @@ async function fetchPayouts({ config, startDate, endDate, fetchImpl, timeoutMs =
   const apiKey = config && typeof config.apiKey === "string" ? config.apiKey : "";
   const merchantCode = config && typeof config.merchantCode === "string" ? config.merchantCode : "";
   if (!apiKey || !merchantCode) throw payoutsError("config_error");
-  const params = new URLSearchParams({ start_date: startDate, end_date: endDate, limit: "9999", order: "asc" });
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate, limit: String(PAYOUTS_ROW_LIMIT), order: "asc" });
   const url = `https://api.sumup.com/v1.0/merchants/${encodeURIComponent(merchantCode)}/payouts?${params.toString()}`;
 
+  // El timeout cubre la petición Y la lectura del cuerpo (una respuesta que
+  // nunca termina también corta a los `timeoutMs`).
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let response;
+  let timedOut = false;
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(payoutsError("timeout"));
+    }, timeoutMs);
+  });
+  const isAbort = (error) => timedOut || (error && error.name === "AbortError");
   try {
-    response = await fetchImpl(url, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error && error.errorClass) throw error;
-    throw payoutsError(error && error.name === "AbortError" ? "timeout" : "provider_unavailable");
+    let response;
+    try {
+      response = await Promise.race([
+        fetchImpl(url, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+          signal: controller.signal,
+        }),
+        deadline,
+      ]);
+    } catch (error) {
+      if (error && error.errorClass) throw error;
+      throw payoutsError(isAbort(error) ? "timeout" : "provider_unavailable");
+    }
+    if (!response.ok) throw payoutsError(classifyStatus(response.status), response.status);
+    let body;
+    try {
+      body = await Promise.race([response.json(), deadline]);
+    } catch (error) {
+      if (error && error.errorClass) throw error;
+      throw payoutsError(isAbort(error) ? "timeout" : "provider_bad_response");
+    }
+    if (Array.isArray(body)) return body;
+    if (body && Array.isArray(body.items)) return body.items;
+    throw payoutsError("provider_bad_response");
   } finally {
     clearTimeout(timer);
+    deadline.catch(() => {});
   }
-  if (!response.ok) throw payoutsError(classifyStatus(response.status), response.status);
-  let body;
-  try {
-    body = await response.json();
-  } catch {
-    throw payoutsError("provider_bad_response");
-  }
-  if (Array.isArray(body)) return body;
-  if (body && Array.isArray(body.items)) return body.items;
-  throw payoutsError("provider_bad_response");
 }
 
 /** fetch del emulador: nunca sale a la red (sin SumUp real en local). */
@@ -344,7 +376,9 @@ function createPayoutsReconciliationService({ store, getConfig, fetchImpl, clock
       differenceBusinessDays: result.differenceBusinessDays,
       accounts: accounts.map((a, i) => {
         const r = byAccount.get(a);
-        return r ? { ok: true, errorClass: null, ...r } : { ok: false, account: a, errorClass: rowResults[i].errorClass };
+        return r
+          ? { ok: true, errorClass: null, rowLimitReached: rowResults[i].rows.length >= PAYOUTS_ROW_LIMIT, ...r }
+          : { ok: false, account: a, errorClass: rowResults[i].errorClass };
       }),
       totals: result.totals,
     };
@@ -410,6 +444,7 @@ function buildSumupPayoutsReconciliation({ db, region, secrets }) {
 
 module.exports = {
   PAYOUTS_ERROR_KEYS,
+  PAYOUTS_ROW_LIMIT,
   ACCOUNT_CHOICES,
   WRITE_METHODS,
   ReadOnlyViolation,
