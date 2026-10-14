@@ -209,7 +209,14 @@ type PanelState =
   | { kind: "error"; error: PayoutsErrorKind }
   | { kind: "ready"; data: PayoutsResponse };
 
-export function SumUpReconciliationPanel({ selectedDate }: { selectedDate: string }) {
+export function SumUpReconciliationPanel({
+  selectedDate,
+  request = requestPayoutsReconciliation,
+}: {
+  selectedDate: string;
+  /** Inyectable para pruebas y vistas locales; por defecto, el callable real. */
+  request?: typeof requestPayoutsReconciliation;
+}) {
   const startDate = firstOfMonth(selectedDate);
   const endDate = lastOfMonth(selectedDate);
   const future = startDate > today();
@@ -226,14 +233,14 @@ export function SumUpReconciliationPanel({ selectedDate }: { selectedDate: strin
     // Mostrar "cargando" es parte de sincronizar el panel con la consulta en curso.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState({ kind: "loading" });
-    requestPayoutsReconciliation({ account: "both", startDate, endDate })
+    request({ account: "both", startDate, endDate })
       .then((data) => {
         if (id === requestId.current) setState({ kind: "ready", data });
       })
       .catch((error: unknown) => {
         if (id === requestId.current) setState({ kind: "error", error: payoutsErrorKind(error) });
       });
-  }, [enabled, future, startDate, endDate, reloadKey]);
+  }, [enabled, future, startDate, endDate, reloadKey, request]);
 
   return (
     <section className="panel mt-6" aria-labelledby="sumup-recon-title" data-testid="sumup-reconciliation">
