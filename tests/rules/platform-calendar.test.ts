@@ -49,6 +49,10 @@ beforeEach(async () => {
 
 const FUTURE = addDays(TODAY, 20);
 const PAST = addDays(TODAY, -20);
+// Marca de tiempo del CLIENTE para los casos negativos de auditoría: fija y lejana,
+// nunca igual a request.time. Con Timestamp.now() el emulador podía procesar la
+// escritura en el mismo milisegundo y aceptarla (test intermitente, Atlas 13/10).
+const CLIENT_TIME = Timestamp.fromMillis(Date.UTC(2020, 0, 1));
 
 function series(o: DocumentData = {}): DocumentData {
   return {
@@ -112,7 +116,7 @@ describe("areas", () => {
     await assertFails(setDoc(doc(admin, "areas", "a6"), newArea("v1-admin", "a6", { active: "si" })));
     await assertFails(setDoc(doc(admin, "areas", "a7"), newArea("v1-admin", "a7", { order: 1 })));
     await assertFails(setDoc(doc(admin, "areas", "a8"), newArea("v1-admin", "a8", { createdBy: "otro" })));
-    await assertFails(setDoc(doc(admin, "areas", "a9"), newArea("v1-admin", "a9", { createdAt: Timestamp.now() })));
+    await assertFails(setDoc(doc(admin, "areas", "a9"), newArea("v1-admin", "a9", { createdAt: CLIENT_TIME })));
     // cambio de slug
     await assertFails(updateDoc(doc(admin, "areas", "jovenes"), {
       slug: "jovenes-cds", updatedAt: serverTimestamp(), updatedBy: "v1-admin",
@@ -160,7 +164,7 @@ describe("calendarEvents: crear", () => {
     await assertFails(createEvent(env, "v1-leader-jovenes", "e2", {}, { actorUid: "v1-publisher-jovenes" }));
     await assertFails(createEvent(env, "v1-leader-jovenes", "e3", {}, { action: "updated" }));
     await assertFails(createEvent(env, "v1-leader-jovenes", "e4", {}, { changedFields: ["title"] }));
-    await assertFails(createEvent(env, "v1-leader-jovenes", "e5", {}, { at: Timestamp.now() }));
+    await assertFails(createEvent(env, "v1-leader-jovenes", "e5", {}, { at: CLIENT_TIME }));
     await assertFails(createEvent(env, "v1-leader-jovenes", "e6", {}, { before: { title: "x" } }));
     // change suelto, sin evento
     const db = dbOf(env, "v1-leader-jovenes");
@@ -397,7 +401,7 @@ describe("calendarEvents: editar", () => {
     const sc = { from: addDays(FUTURE, 28), reason: "Fin del ciclo", by: u, at: serverTimestamp() };
     await assertFails(updateEvent(env, u, "ser", { seriesCancellation: { ...sc, from: PAST } }));
     await assertFails(updateEvent(env, u, "ser", { seriesCancellation: { ...sc, by: "otro" } }));
-    await assertFails(updateEvent(env, u, "ser", { seriesCancellation: { ...sc, at: Timestamp.now() } }));
+    await assertFails(updateEvent(env, u, "ser", { seriesCancellation: { ...sc, at: CLIENT_TIME } }));
     await assertFails(updateEvent(env, u, "ser", { seriesCancellation: { ...sc, reason: "x" } }));
     await assertSucceeds(updateEvent(env, u, "ser", { seriesCancellation: sc }));
     // una sola vez
@@ -409,7 +413,7 @@ describe("calendarEvents: editar", () => {
   it("archivar con motivo; sin motivo, con archivedAt falso o des-archivar no", async () => {
     const u = "v1-leader-jovenes";
     await assertFails(updateEvent(env, u, "own", { status: "archived", archivedAt: serverTimestamp() }));
-    await assertFails(updateEvent(env, u, "own", { status: "archived", archivedAt: Timestamp.now(), archiveReason: "Duplicada" }));
+    await assertFails(updateEvent(env, u, "own", { status: "archived", archivedAt: CLIENT_TIME, archiveReason: "Duplicada" }));
     await assertFails(updateEvent(env, u, "own", { status: "archived", archivedAt: serverTimestamp(), archiveReason: "Duplicada" }, { action: "updated" }));
     await assertSucceeds(updateEvent(env, u, "own", { status: "archived", archivedAt: serverTimestamp(), archiveReason: "Duplicada" }));
     await assertFails(updateEvent(env, "v1-admin", "own", { status: "scheduled" }));
@@ -460,9 +464,9 @@ describe("calendarEvents: editar", () => {
   it("createdBy/createdAt son inmutables; updatedAt/updatedBy los fija la regla", async () => {
     const u = "v1-leader-jovenes";
     await assertFails(updateEvent(env, u, "own", { createdBy: u }));
-    await assertFails(updateEvent(env, u, "own", { createdAt: Timestamp.now() }));
+    await assertFails(updateEvent(env, u, "own", { createdAt: CLIENT_TIME }));
     await assertFails(updateEvent(env, u, "own", { title: "X", updatedBy: "otro" }));
-    await assertFails(updateEvent(env, u, "own", { title: "X", updatedAt: Timestamp.now() }));
+    await assertFails(updateEvent(env, u, "own", { title: "X", updatedAt: CLIENT_TIME }));
   });
 
   it("nadie borra eventos ni su historial (incluido admin)", async () => {
