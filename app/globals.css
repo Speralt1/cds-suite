@@ -802,6 +802,7 @@ button:disabled {
 }
 .transaction-actions button {
   padding: 0.5rem;
+  min-width: 2.75rem;
   min-height: 2.75rem;
   font-size: 0.75rem;
 }
