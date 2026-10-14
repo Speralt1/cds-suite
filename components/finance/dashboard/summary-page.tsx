@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
@@ -42,7 +42,7 @@ import { TransactionForm } from "../forms/transaction-form";
 import { TransactionList } from "../transactions/transaction-list";
 import { TitheRegister } from "../tithes/tithe-register";
 import { CashModal } from "../offerings/cash-modal";
-import { BalanceBand, BalanceBandSkeleton } from "./balance-band";
+import { BALANCE_TITLE_ID, BalanceBand, BalanceBandSkeleton } from "./balance-band";
 import { FundsPosition } from "./funds-position";
 import { CashCalendarSection, CashCalendarSkeleton } from "./cash-calendar";
 import { AREA_TO_KEY, CashDayPanel, dateLabelShort } from "./cash-day-panel";
@@ -351,9 +351,31 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
     />
   ) : null;
 
+  // Diario: the day panel and the count only render once the day's month has
+  // loaded without error (same ready rule as the month view, M2).
+  const dailyReady = details && !dailyTransactions.loading && !dailyTransactions.error;
+  const dailyBandReady =
+    !dailySummaries.loading && !(details && dailyTransactions.loading) && !dailySummaries.error;
+
+  // "Revisar movimientos" switches to Diario and unmounts the calendar: the
+  // focus moves to the Diario band title once it is rendered (not the skeleton).
+  const focusBandTitle = useRef(false);
+  useEffect(() => {
+    if (!focusBandTitle.current || summaryView !== "day") return;
+    if (dailySummaries.loading || (details && dailyTransactions.loading)) return;
+    focusBandTitle.current = false;
+    if (dailyBandReady) document.getElementById(BALANCE_TITLE_ID)?.focus();
+  }, [summaryView, dailyBandReady, dailySummaries.loading, dailyTransactions.loading, details]);
+
+  function viewDay(date: string) {
+    focusBandTitle.current = true;
+    setDailyDate(date);
+    setSummaryView("day");
+  }
+
   const movementCount =
     summaryView === "day"
-      ? dailyTransactions.loading
+      ? !dailyReady
         ? null
         : activeDailyRows.length
       : summaries.loading || summaries.error
@@ -466,68 +488,71 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
         success={success}
       />
 
+      {/* Banda (slot fijo), luego la posición de fondos en una posición estable
+          fuera de las ramas de carga/error: el tile del PR D no se remonta al
+          cambiar de período ni se oculta si fallan los resúmenes. */}
       {summaryView === "day" ? (
         dailySummaries.loading ||
         (details && dailyTransactions.loading) ? (
           <BalanceBandSkeleton title={`Resultado del ${dateLabelShort(dailyDate)}`} />
         ) : dailySummaries.error ? null : (
-          <>
-            <BalanceBand
-              title={`Resultado del ${dateLabelShort(dailyDate)}`}
-              resultLabel="Resultado del día"
-              income={dailyIncome}
-              expense={dailyExpense}
-              result={dailyIncome - dailyExpense}
-              tithe={details ? dailyTithe : undefined}
-              sumUpFeePending={details && activeDailyRows.some(isSumUpIncome)}
-              showMissingExpenses={details}
-              emptyNote={
-                !dailyIncome && !dailyExpense
-                  ? "No hay movimientos registrados para esta fecha."
-                  : undefined
-              }
-            />
-
-            {fundsPosition}
-
-            {details && (
-              <CashDayPanel
-                date={dailyDate}
-                status={dayStatus(dailyDate, dailyTransactions.data, todayStr, WORSHIP_WEEKDAYS)}
-                transactions={dailyTransactions.data}
-                onRegisterCash={manage ? (area) => openCashModal(area, dailyDate) : undefined}
-              />
-            )}
-          </>
+          <BalanceBand
+            title={`Resultado del ${dateLabelShort(dailyDate)}`}
+            resultLabel="Resultado del día"
+            income={dailyIncome}
+            expense={dailyExpense}
+            result={dailyIncome - dailyExpense}
+            tithe={details ? dailyTithe : undefined}
+            sumUpFeePending={details && activeDailyRows.some(isSumUpIncome)}
+            // A single day without expenses is normal (e.g. every Sunday).
+            showMissingExpenses={false}
+            emptyNote={
+              !dailyIncome && !dailyExpense
+                ? "No hay movimientos registrados para esta fecha."
+                : undefined
+            }
+          />
         )
       ) : summaries.loading ? (
         <BalanceBandSkeleton title={`Resultado de ${periodName}`} />
       ) : summaries.error ? null : (
-        <>
-          <BalanceBand
-            title={`Resultado de ${periodName}`}
-            income={total.incomeTotal}
-            expense={total.expenseTotal}
-            result={total.result}
-            tithe={total.titheTotal}
-            previous={
-              previousSummary
-                ? {
-                    income: previousSummary.incomeTotal,
-                    result: previousSummary.result,
-                    label: previousName,
-                  }
-                : undefined
-            }
-            sumUpFeePending={Boolean(income && income.sumUpAmount > 0)}
-            showMissingExpenses={details}
-            emptyNote={
-              !total.transactionCount ? `Aún no hay movimientos en ${periodName}.` : undefined
-            }
+        <BalanceBand
+          title={`Resultado de ${periodName}`}
+          income={total.incomeTotal}
+          expense={total.expenseTotal}
+          result={total.result}
+          tithe={total.titheTotal}
+          previous={
+            previousSummary
+              ? {
+                  income: previousSummary.incomeTotal,
+                  result: previousSummary.result,
+                  label: previousName,
+                }
+              : undefined
+          }
+          sumUpFeePending={Boolean(income && income.sumUpAmount > 0)}
+          showMissingExpenses={details}
+          emptyNote={
+            !total.transactionCount ? `Aún no hay movimientos en ${periodName}.` : undefined
+          }
+        />
+      )}
+
+      {fundsPosition}
+
+      {summaryView === "day" ? (
+        dailyReady &&
+        !dailySummaries.loading && (
+          <CashDayPanel
+            date={dailyDate}
+            status={dayStatus(dailyDate, dailyTransactions.data, todayStr, WORSHIP_WEEKDAYS)}
+            transactions={dailyTransactions.data}
+            onRegisterCash={manage ? (area) => openCashModal(area, dailyDate) : undefined}
           />
-
-          {fundsPosition}
-
+        )
+      ) : summaries.loading || summaries.error ? null : (
+        <>
           {/* El calendario depende de los días de culto del mes, no de si ya
               hay movimientos registrados: debe poder mostrar "Sin registros"
               incluso en un mes vacío. Solo se calcula/muestra para roles con
@@ -554,10 +579,7 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
                     selected={effectiveSelectedDay}
                     onSelect={setSelectedDay}
                     onRegisterCash={manage ? openCashModal : undefined}
-                    onViewDay={(date) => {
-                      setDailyDate(date);
-                      setSummaryView("day");
-                    }}
+                    onViewDay={viewDay}
                   />
                 )}
                 {income && (income.count > 0 || total.transactionCount > 0) && (
@@ -621,7 +643,11 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
           <Notice error={movementError} />
 
           {movementLoading ? (
-            <Loading />
+            // Visible text but no second role="status": the band or the
+            // calendar skeleton already announces the loading.
+            <div className="panel py-10" aria-busy="true">
+              <span className="animate-pulse">Consultando información…</span>
+            </div>
           ) : movementError ? null : latestFiltered.length ? (
             <TransactionList
               items={latestFiltered}

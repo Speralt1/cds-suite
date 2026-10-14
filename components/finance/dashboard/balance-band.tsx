@@ -36,7 +36,8 @@ export interface BalanceBandProps {
 
 // Static id: the leader's legacy and v1 summaries must render identical HTML
 // (tests/platform/finance-parity-client), and useId would differ per root.
-const TITLE_ID = "fin-balance-title";
+export const BALANCE_TITLE_ID = "fin-balance-title";
+const TITLE_ID = BALANCE_TITLE_ID;
 
 function pesos(value: number) {
   return `${Math.abs(Math.round(value)).toLocaleString("es-CL")} pesos`;
@@ -80,7 +81,7 @@ export function BalanceBand({
   const incomeChange = previous && !empty ? percentChange(income, previous.income) : null;
   return (
     <section className="fin-balance" aria-labelledby={TITLE_ID}>
-      <h3 id={TITLE_ID} className="fin-balance-title">
+      <h3 id={TITLE_ID} className="fin-balance-title" tabIndex={-1}>
         {title}
       </h3>
       <p className="sr-only">{balanceSentence(income, expense, result)}</p>
@@ -154,7 +155,7 @@ export function BalanceBand({
 export function BalanceBandSkeleton({ title }: { title: string }) {
   return (
     <section className="fin-balance is-loading" aria-labelledby={TITLE_ID} aria-busy="true">
-      <h3 id={TITLE_ID} className="fin-balance-title">
+      <h3 id={TITLE_ID} className="fin-balance-title" tabIndex={-1}>
         {title}
       </h3>
       <p role="status" className="sr-only">

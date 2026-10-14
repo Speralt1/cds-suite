@@ -34,6 +34,13 @@ const SERIES = {
   expense: "#c0694c",
   result: "#60746b",
 } as const;
+// Value labels are text: they use the AA text tokens (--color-income
+// #256b47, --color-expense #a4482f), not the bar fills (#c0694c is 3.91:1).
+// Their font size comes from CSS (B1: .chart-box .recharts-label-list text).
+const LABEL_INK = {
+  income: "#256b47",
+  expense: "#a4482f",
+} as const;
 // Legend order is Ingresos, Gastos, Resultado (Recharts sorts by name by
 // default, which put Gastos first).
 const LEGEND_ORDER = ["Ingresos", "Diezmos", "Gastos", "Resultado"];
@@ -209,7 +216,7 @@ export function FinanceCharts({
                 radius={[5, 5, 0, 0]}
                 maxBarSize={64}
               >
-                <LabelList dataKey="income" position="top" formatter={valueLabel} />
+                <LabelList dataKey="income" position="top" formatter={valueLabel} fill={LABEL_INK.income} />
               </Bar>
               <Bar
                 isAnimationActive={false}
@@ -219,7 +226,7 @@ export function FinanceCharts({
                 radius={[5, 5, 0, 0]}
                 maxBarSize={64}
               >
-                <LabelList dataKey="expense" position="top" formatter={valueLabel} />
+                <LabelList dataKey="expense" position="top" formatter={valueLabel} fill={LABEL_INK.expense} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

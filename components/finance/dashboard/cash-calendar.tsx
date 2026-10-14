@@ -3,7 +3,7 @@
 // Calendario de caja del Resumen (Design Lock 28 §C2): encabezado con chip de
 // estado, leyenda, grilla con roving tabindex, panel del día en línea (≥52rem)
 // o en un diálogo (modo apilado) y "Días por revisar" debajo en modo apilado.
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { ChevronDown, CircleCheck, CircleDashed, TriangleAlert, X } from "lucide-react";
 import { clp, clpShort } from "@/lib/finance/formatters";
 import type { DayStatus, MonthCalendar, ReviewItem } from "@/lib/finance/insights";
@@ -35,6 +35,12 @@ function rootFontSize() {
 // (jsdom, very old browsers) the inline layout is kept.
 function useStackedLayout(ref: RefObject<HTMLElement | null>) {
   const [stacked, setStacked] = useState(false);
+  // First frame: measure before paint so phones don't flash the inline panel.
+  // jsdom reports 0 (no layout): keep the inline default there.
+  useLayoutEffect(() => {
+    const width = ref.current?.getBoundingClientRect().width || 0;
+    if (width > 0 && width < STACKED_BELOW_REM * rootFontSize()) setStacked(true);
+  }, [ref]);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -51,7 +57,7 @@ function useStackedLayout(ref: RefObject<HTMLElement | null>) {
         : new MutationObserver(() => measure(el.getBoundingClientRect().width));
     textSize?.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-text-size", "style", "class"],
+      attributeFilter: ["data-text-size"],
     });
     return () => {
       observer.disconnect();
@@ -327,6 +333,8 @@ export function CashDayDialog({
         event.preventDefault();
         requestClose();
       }}
+      // Closed natively (e.g. a second Esc the browser won't let us cancel).
+      onClose={requestClose}
       onClick={(event) => {
         if (event.target === event.currentTarget) requestClose();
       }}
@@ -521,9 +529,8 @@ export function CashCalendarSkeleton({ year, month }: { year: number; month: num
       <h3 className="fin-cal-title">
         Calendario de caja · {MONTHS[month - 1]} {year}
       </h3>
-      <p role="status" className="sr-only">
-        Consultando información…
-      </p>
+      {/* Sin role="status": la banda ya anuncia la carga (un solo aviso). */}
+      <p className="sr-only">Consultando información…</p>
       <div className="fin-cal-skeleton-grid" aria-hidden="true">
         {Array.from({ length: 35 }, (_, i) => (
           <span key={i} className="fin-skeleton" />

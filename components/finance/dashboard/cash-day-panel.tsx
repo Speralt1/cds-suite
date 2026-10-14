@@ -1,6 +1,6 @@
 // Panel del día del calendario de caja (Design Lock 28 §C2 "Panel del día").
 // Mismo contenido en línea (≥52rem) o dentro del diálogo (modo apilado).
-import type { Ref } from "react";
+import { useId, type Ref } from "react";
 import { Banknote, ChevronLeft, ChevronRight, CircleDashed, TriangleAlert } from "lucide-react";
 import { clp } from "@/lib/finance/formatters";
 import {
@@ -232,6 +232,8 @@ export function CashDayPanel({
   navigation,
   variant = "card",
 }: CashDayPanelProps) {
+  const warningsTitleId = useId();
+  const incomeTitleId = useId();
   const { rows, expenses, totalIncome } = dayBreakdown(transactions, date);
   const warnings = status ? dayWarnings(status, transactions) : [];
   const title = dayTitle(date, status);
@@ -253,8 +255,8 @@ export function CashDayPanel({
       </p>
 
       {warnings.length > 0 && (
-        <section className="fin-day-section" aria-label={`Advertencias (${warnings.length})`}>
-          <h4 className="fin-day-section-title">Advertencias ({warnings.length})</h4>
+        <section className="fin-day-section" aria-labelledby={warningsTitleId}>
+          <h4 id={warningsTitleId} className="fin-day-section-title">Advertencias ({warnings.length})</h4>
           <ul className="fin-warning-list">
             {warnings.map((warning) => (
               <WarningCard
@@ -268,8 +270,8 @@ export function CashDayPanel({
         </section>
       )}
 
-      <section className="fin-day-section" aria-label="Ingresos del día">
-        <h4 className="fin-day-section-title">Ingresos del día</h4>
+      <section className="fin-day-section" aria-labelledby={incomeTitleId}>
+        <h4 id={incomeTitleId} className="fin-day-section-title">Ingresos del día</h4>
         {rows.length ? (
           <table className="fin-day-table">
             <thead>
@@ -321,7 +323,9 @@ export function CashDayPanel({
 
       {navigation && navigation.total > 0 && (
         <nav className="fin-day-nav" aria-label="Advertencias del mes">
-          <button type="button" onClick={navigation.onPrevious} disabled={!navigation.onPrevious}>
+          {/* aria-disabled (not disabled): at the first/last warning the
+              button keeps the focus instead of dropping it to <body>. */}
+          <button type="button" onClick={navigation.onPrevious} aria-disabled={!navigation.onPrevious}>
             <ChevronLeft size={16} aria-hidden="true" />
             Advertencia anterior
           </button>
@@ -331,7 +335,7 @@ export function CashDayPanel({
               : plural(navigation.total, "día con advertencias", "días con advertencias")}
             {navigation.position ? <span className="sr-only"> días con advertencias</span> : null}
           </span>
-          <button type="button" onClick={navigation.onNext} disabled={!navigation.onNext}>
+          <button type="button" onClick={navigation.onNext} aria-disabled={!navigation.onNext}>
             Siguiente advertencia
             <ChevronRight size={16} aria-hidden="true" />
           </button>

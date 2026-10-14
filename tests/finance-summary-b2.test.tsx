@@ -1,7 +1,7 @@
 // PR B2 · Resumen (BalanceBand, FundsPosition) y calendario de caja
 // (Design Lock 28 §C1/§C2). Datos ficticios.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BalanceBand, BalanceBandSkeleton, balanceSentence } from "@/components/finance/dashboard/balance-band";
 import { FundsPosition } from "@/components/finance/dashboard/funds-position";
@@ -24,6 +24,8 @@ const amount = (text: string) => {
 const state = vi.hoisted(() => ({
   access: { role: "finance", active: true } as Record<string, unknown>,
   summary: null as MonthlySummary | null,
+  summaryError: "",
+  tx: { data: [] as FinanceTransaction[], loading: false, error: "" },
 }));
 
 vi.mock("@/lib/auth/access-provider", () => ({
@@ -38,8 +40,17 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/finance/hooks", () => ({
   usePeriod: () => useState({ year: 2026, month: 10, view: "month" as const }),
-  useSummaries: () => ({ data: state.summary ? [state.summary] : [], loading: false, error: "" }),
-  useTransactions: () => ({ data: [], loading: false, error: "", synced: true }),
+  useSummaries: () => ({
+    data: state.summary && !state.summaryError ? [state.summary] : [],
+    loading: false,
+    error: state.summaryError,
+  }),
+  useTransactions: () => ({ ...state.tx, synced: !state.tx.loading && !state.tx.error }),
+}));
+vi.mock("@/lib/firebase", () => ({ getFirebaseServices: () => ({ db: {} }) }));
+vi.mock("@/lib/finance/transactions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/finance/transactions")>()),
+  saveTransaction: vi.fn(),
 }));
 vi.mock("@/components/finance/charts/finance-charts", () => ({
   FinanceCharts: () => <div>Gráficos</div>,
@@ -71,6 +82,8 @@ function summary(over: Partial<MonthlySummary> = {}): MonthlySummary {
 beforeEach(() => {
   state.access = { role: "finance", active: true };
   state.summary = summary();
+  state.summaryError = "";
+  state.tx = { data: [], loading: false, error: "" };
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -231,6 +244,79 @@ describe("Resumen integrado", () => {
     expect(screen.queryByText("Tile de saldo")).toBeNull();
     expect(screen.getByRole("heading", { name: "Resultado de octubre 2026" })).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: /Calendario de/ })).toBeNull();
+  });
+
+  it("el panel abre el CashModal real con el área y la fecha del día", () => {
+    render(<SummaryPage />);
+    const aside = screen.getByRole("complementary", { name: "Detalle del día" });
+    expect(within(aside).getByRole("heading", { level: 3, name: "Domingo 4 de octubre · Culto" })).toBeInTheDocument();
+    fireEvent.click(within(aside).getByRole("button", { name: "Registrar efectivo · Cafetería" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { level: 2 })).toHaveTextContent("Ingresar efectivo · Cafetería");
+    expect(within(dialog).getByLabelText(/Fecha correspondiente/)).toHaveValue("2026-10-04");
+  });
+
+  it("'Revisar movimientos' pasa a Diario y lleva el foco al título de la banda", () => {
+    render(<SummaryPage />);
+    const aside = screen.getByRole("complementary", { name: "Detalle del día" });
+    fireEvent.click(within(aside).getByRole("button", { name: "Revisar movimientos" }));
+    expect(screen.getByRole("button", { name: "Diario" })).toHaveAttribute("aria-pressed", "true");
+    expect(document.activeElement).toHaveAttribute("id", "fin-balance-title");
+    expect(document.activeElement).toHaveTextContent("Resultado del dom 4 oct");
+  });
+
+  it("Diario: sin el chip de gastos en cero y con el conteo del día", () => {
+    state.summary = summary({ expenseTotal: 0, result: 4641132, dailyIncome: { "15": 50000 } });
+    state.tx = { data: [tx({ id: "t15", day: "15", amount: 50000 })], loading: false, error: "" };
+    render(<SummaryPage />);
+    expect(screen.getByText("Sin gastos registrados. ¿Faltan egresos?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Diario" }));
+    expect(screen.getByRole("heading", { name: "Resultado del jue 15 oct" })).toBeInTheDocument();
+    expect(screen.queryByText("Sin gastos registrados. ¿Faltan egresos?")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Movimientos del día · 1" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Ingresos del día" })).toBeInTheDocument();
+  });
+
+  it("Diario con error: sin panel ni conteo falso", () => {
+    state.tx = { data: [], loading: false, error: "Sin conexión con el servidor." };
+    render(<SummaryPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Diario" }));
+    expect(screen.getAllByRole("alert")[0]).toHaveTextContent("Sin conexión con el servidor.");
+    expect(screen.queryByRole("region", { name: "Ingresos del día" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Registrar efectivo ·/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Movimientos del día" })).toBeInTheDocument();
+  });
+
+  it("Diario cargando: skeleton con un solo aviso de estado, sin panel ni conteo", () => {
+    state.tx = { data: [], loading: true, error: "" };
+    render(<SummaryPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Diario" }));
+    expect(screen.getByRole("region", { name: "Resultado del jue 15 oct" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "Ingresos del día" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Movimientos del día" })).toBeInTheDocument();
+  });
+
+  it("el tile de saldo no se remonta al cambiar de vista y sigue visible si fallan los resúmenes", () => {
+    let mounts = 0;
+    function Tile() {
+      useEffect(() => {
+        mounts++;
+      }, []);
+      return <p>Tile de saldo</p>;
+    }
+    const view = render(<SummaryDashboard fundsBankTile={<Tile />} />);
+    fireEvent.click(screen.getByRole("button", { name: "Diario" }));
+    fireEvent.click(screen.getByRole("button", { name: "Anual" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mensual" }));
+    expect(screen.getByText("Tile de saldo")).toBeInTheDocument();
+    expect(mounts).toBe(1);
+    view.unmount();
+    state.summaryError = "No pudimos cargar los resúmenes.";
+    render(<SummaryDashboard fundsBankTile={<Tile />} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar los resúmenes.");
+    expect(screen.queryByRole("region", { name: /Resultado de/ })).toBeNull();
+    expect(screen.getByText("Tile de saldo")).toBeInTheDocument();
   });
 
   it("mes negativo: Déficit y signo menos en el resultado", () => {
@@ -423,13 +509,20 @@ describe("Panel del día", () => {
     render(<Harness />);
     const nav = () => screen.getByRole("navigation", { name: "Advertencias del mes" });
     expect(nav()).toHaveTextContent("1 de 3");
-    expect(within(nav()).getByRole("button", { name: "Advertencia anterior" })).toBeDisabled();
+    expect(within(nav()).getByRole("button", { name: "Advertencia anterior" })).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(within(nav()).getByRole("button", { name: "Siguiente advertencia" }));
     expect(screen.getByRole("heading", { level: 3, name: "Miércoles 7 de octubre · Culto" })).toBeInTheDocument();
     expect(nav()).toHaveTextContent("2 de 3");
-    fireEvent.click(within(nav()).getByRole("button", { name: "Siguiente advertencia" }));
+    const next = within(nav()).getByRole("button", { name: "Siguiente advertencia" });
+    next.focus();
+    fireEvent.click(next);
     expect(nav()).toHaveTextContent("3 de 3");
-    expect(within(nav()).getByRole("button", { name: "Siguiente advertencia" })).toBeDisabled();
+    // At the end the button is aria-disabled: it keeps the focus and does nothing.
+    expect(next).toHaveAttribute("aria-disabled", "true");
+    expect(next).not.toBeDisabled();
+    fireEvent.click(next);
+    expect(nav()).toHaveTextContent("3 de 3");
+    expect(document.activeElement).toBe(next);
     // Desde un día sin advertencias: la anterior y la siguiente del mes.
     fireEvent.click(cell("domingo 11 de octubre"));
     expect(nav()).toHaveTextContent("3 días con advertencias");
