@@ -34,7 +34,6 @@ import {
   FinancePageHeader,
   PeriodPicker,
   Notice,
-  Loading,
   Empty,
 } from "../shared";
 import { FinanceCharts } from "../charts/finance-charts";
@@ -72,6 +71,31 @@ function shortDayMonth(date: string) {
   return `${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1].slice(0, 3).toLowerCase()}`;
 }
 
+// Loading placeholder without role="status": only the band skeleton
+// announces loading, so screen readers hear a single status at a time.
+function BusyPlaceholder() {
+  return (
+    <div className="panel py-10" aria-busy="true">
+      <span className="animate-pulse">Consultando información…</span>
+    </div>
+  );
+}
+
+function percentLabel(percent: number) {
+  return `${percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`;
+}
+
+// Secondary line under the Tipo label for narrow panels (<26rem), where the
+// % and Mov. columns are hidden (display: none, so assistive tech hears the
+// figures once in either layout).
+function MethodSubline({ percent, count }: { percent: string; count: number }) {
+  return (
+    <span className="fin-amount-sub">
+      {percent} · {count.toLocaleString("es-CL")} mov.
+    </span>
+  );
+}
+
 function isSumUpIncome(t: FinanceTransaction) {
   return t.type === "income" && t.paymentMethod === "card" && isSumUpTransaction(t.id, t.createdBy);
 }
@@ -106,20 +130,21 @@ function IncomeTables({
               <tr>
                 <th scope="col">Tipo</th>
                 <th scope="col" className="is-num">Monto</th>
-                <th scope="col" className="is-num">%</th>
-                <th scope="col" className="is-num">Mov.</th>
+                <th scope="col" className="is-num is-pct">%</th>
+                <th scope="col" className="is-num is-count">Mov.</th>
               </tr>
             </thead>
             <tbody>
               {income.rows.map((row) => (
                 <Fragment key={row.key}>
                   <tr>
-                    <th scope="row">{row.label}</th>
+                    <th scope="row">
+                      {row.label}
+                      <MethodSubline percent={percentLabel(row.percent)} count={row.count} />
+                    </th>
                     <td className="is-num">{clp(row.amount)}</td>
-                    <td className="is-num">
-                      {row.percent.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%
-                    </td>
-                    <td className="is-num">{row.count}</td>
+                    <td className="is-num is-pct">{percentLabel(row.percent)}</td>
+                    <td className="is-num is-count">{row.count}</td>
                   </tr>
                   {row.key === "sumup" && row.amount > 0 && (
                     <tr className="is-breakdown">
@@ -133,10 +158,13 @@ function IncomeTables({
                 </Fragment>
               ))}
               <tr className="is-total">
-                <th scope="row">Total ingresos</th>
+                <th scope="row">
+                  Total ingresos
+                  <MethodSubline percent="100%" count={income.count} />
+                </th>
                 <td className="is-num">{clp(income.total)}</td>
-                <td className="is-num">100%</td>
-                <td className="is-num">{income.count}</td>
+                <td className="is-num is-pct">100%</td>
+                <td className="is-num is-count">{income.count}</td>
               </tr>
             </tbody>
           </table>
@@ -359,12 +387,16 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
 
   // "Revisar movimientos" switches to Diario and unmounts the calendar: the
   // focus moves to the Diario band title once it is rendered (not the skeleton).
+  // If the Diario band fails to load, the focus falls back to the pressed
+  // "Diario" toggle (the error Notice itself is not focusable).
   const focusBandTitle = useRef(false);
+  const viewToggleRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!focusBandTitle.current || summaryView !== "day") return;
     if (dailySummaries.loading || (details && dailyTransactions.loading)) return;
     focusBandTitle.current = false;
-    if (dailyBandReady) document.getElementById(BALANCE_TITLE_ID)?.focus();
+    const title = dailyBandReady ? document.getElementById(BALANCE_TITLE_ID) : null;
+    (title || viewToggleRef.current?.querySelector<HTMLElement>('[aria-pressed="true"]'))?.focus();
   }, [summaryView, dailyBandReady, dailySummaries.loading, dailyTransactions.loading, details]);
 
   function viewDay(date: string) {
@@ -392,6 +424,7 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
       <div className="summary-period-controls">
         <div className="summary-period-left">
           <div
+            ref={viewToggleRef}
             className="period-view-toggle"
             role="group"
             aria-label="Vista del período"
@@ -563,7 +596,7 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
               isMonthCalendarView ? (
                 <CashCalendarSkeleton year={period.year} month={period.month} />
               ) : (
-                <Loading />
+                <BusyPlaceholder />
               )
             ) : latest.error ? (
               <Notice error={latest.error} />
@@ -643,11 +676,7 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
           <Notice error={movementError} />
 
           {movementLoading ? (
-            // Visible text but no second role="status": the band or the
-            // calendar skeleton already announces the loading.
-            <div className="panel py-10" aria-busy="true">
-              <span className="animate-pulse">Consultando información…</span>
-            </div>
+            <BusyPlaceholder />
           ) : movementError ? null : latestFiltered.length ? (
             <TransactionList
               items={latestFiltered}

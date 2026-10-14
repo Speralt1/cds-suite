@@ -365,7 +365,27 @@
     width: auto;
   }
   .fin-amount-table th[scope="row"] {
-    min-width: 7rem;
+    min-width: min(7rem, 40cqi);
+  }
+}
+/* Teléfono (y 125 %): % y Mov. pasan a una línea secundaria bajo el tipo.
+   Las columnas se ocultan con display: none (también para el lector de
+   pantalla), así que las cifras se leen una sola vez en cada diseño. */
+.fin-amount-sub {
+  display: none;
+  margin-top: 0.125rem;
+  color: var(--color-muted-strong);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+@container fin-table (max-width: 25.99rem) {
+  .fin-amount-table .is-pct,
+  .fin-amount-table .is-count {
+    display: none;
+  }
+  .fin-amount-sub {
+    display: block;
   }
 }
 .fin-amount-table .is-num {

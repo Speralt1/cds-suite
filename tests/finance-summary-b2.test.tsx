@@ -319,6 +319,44 @@ describe("Resumen integrado", () => {
     expect(screen.getByText("Tile de saldo")).toBeInTheDocument();
   });
 
+  it("tabla por tipo de dinero: línea secundaria con % y movimientos para paneles angostos", () => {
+    state.tx = {
+      data: [
+        tx({ id: "c1", day: "4", amount: 75000 }),
+        tx({ id: "t1", day: "5", amount: 25000, category: "Otros", paymentMethod: "transfer" }),
+      ],
+      loading: false,
+      error: "",
+    };
+    render(<SummaryPage />);
+    const table = screen.getByRole("heading", { name: "Ingresos por tipo de dinero" }).closest("section")!;
+    const efectivo = within(table).getByRole("rowheader", { name: /^Efectivo/ });
+    expect(within(efectivo).getByText("75% · 1 mov.")).toHaveClass("fin-amount-sub");
+    expect(within(table).getByRole("rowheader", { name: /^Transferencia/ })).toHaveTextContent("25% · 1 mov.");
+    expect(within(table).getByRole("rowheader", { name: /^Total ingresos/ })).toHaveTextContent("100% · 2 mov.");
+    // The wide-layout columns stay (hidden by the container query on phones).
+    const efectivoRow = efectivo.closest("tr")!;
+    expect(efectivoRow.querySelector("td.is-pct")).toHaveTextContent("75%");
+    expect(efectivoRow.querySelector("td.is-count")).toHaveTextContent("1");
+  });
+
+  it("si la banda de Diario falla, el foco cae en el botón Diario", () => {
+    render(<SummaryPage />);
+    const aside = screen.getByRole("complementary", { name: "Detalle del día" });
+    state.summaryError = "No pudimos cargar el resumen del día.";
+    fireEvent.click(within(aside).getByRole("button", { name: "Revisar movimientos" }));
+    expect(screen.queryByRole("region", { name: /^Resultado del/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Diario" }));
+  });
+
+  it("Anual cargando: un solo aviso de estado", () => {
+    state.tx = { data: [], loading: true, error: "" };
+    render(<SummaryPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Anual" }));
+    expect(screen.getAllByText("Consultando información…").length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+
   it("mes negativo: Déficit y signo menos en el resultado", () => {
     state.summary = summary({ incomeTotal: 100000, expenseTotal: 120400, result: -20400, titheTotal: 0 });
     render(<SummaryPage />);
