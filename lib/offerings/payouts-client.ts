@@ -30,6 +30,8 @@ export type PayoutsAccountResult =
 
 export interface PayoutsResponse {
   readOnly: true;
+  /** Se alcanzó el tope de ventas leídas (20.000): la vinculación puede estar incompleta. */
+  salesLimitReached?: boolean;
   period: { startDate: string; endDate: string };
   payoutFetch: { startDate: string; endDate: string } | null;
   asOfDate: string;

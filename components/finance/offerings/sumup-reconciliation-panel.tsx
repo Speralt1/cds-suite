@@ -15,6 +15,7 @@ import {
   type AccountReconciliation,
   type PendingDay,
   type Settlement,
+  type SettlementReason,
   type SettlementStatus,
 } from "@/lib/shared/sumup-payouts";
 import {
@@ -31,7 +32,20 @@ function dayMonth(ymd: string | null) {
   return ymd ? numericYmd(ymd).slice(0, 5) : "—";
 }
 
-function StatusBadge({ status }: { status: SettlementStatus }) {
+/** Abono fallido cuyas ventas pagó otro abono exitoso: el dinero llegó por el reintento. */
+function isRetried(s: Settlement) {
+  return s.statusClass === "failed" && s.reasons.includes("payout_retried");
+}
+
+function StatusBadge({ status, retried = false }: { status: SettlementStatus; retried?: boolean }) {
+  if (retried) {
+    return (
+      <span className="status-inline text-muted" data-status={status} data-retried="true">
+        <RefreshCw size={13} aria-hidden="true" />
+        Reintentado
+      </span>
+    );
+  }
   const label = SETTLEMENT_STATUS_LABEL[status];
   const icon =
     status === "CONCILIADO" ? (
@@ -69,8 +83,15 @@ function CellLabel({ children }: { children: string }) {
   return <span className="text-muted min-[641px]:hidden">{children}: </span>;
 }
 
+/** Motivos a mostrar: los informativos importantes primero (reintento), máximo dos. */
+function visibleReasons(s: Settlement): SettlementReason[] {
+  const list = s.reasons.filter((r) => r !== "difference_within_term" || s.status === "PENDIENTE");
+  const first = list.filter((r) => r === "payout_retried");
+  return [...first, ...list.filter((r) => r !== "payout_retried")].slice(0, 2);
+}
+
 function SettlementRow({ s }: { s: Settlement }) {
-  const reasons = s.reasons.filter((r) => r !== "difference_within_term" || s.status === "PENDIENTE");
+  const reasons = visibleReasons(s);
   return (
     <tr data-testid="settlement-row">
       <td>
@@ -99,14 +120,16 @@ function SettlementRow({ s }: { s: Settlement }) {
         {clp(s.netPaid)}
       </td>
       <td>
-        <StatusBadge status={s.status} />
+        <StatusBadge status={s.status} retried={isRetried(s)} />
         {showsDifference(s) && (
           <span className="field-help block whitespace-normal" data-testid="settlement-difference">
             diferencia {clp(s.residual)}
           </span>
         )}
-        {s.status !== "CONCILIADO" && reasons.length > 0 && (
-          <span className="field-help block whitespace-normal">{SETTLEMENT_REASON_LABEL[reasons[0]]}</span>
+        {reasons.length > 0 && (
+          <span className="field-help block whitespace-normal" data-testid="settlement-reasons">
+            {reasons.map((r) => SETTLEMENT_REASON_LABEL[r]).join(" · ")}
+          </span>
         )}
       </td>
       <td>
@@ -306,6 +329,12 @@ export function SumUpReconciliationPanel({
         </p>
       ) : (
         <>
+          {state.data.salesLimitReached && (
+            <p className="notice-warning" role="status">
+              <TriangleAlert size={15} aria-hidden="true" />
+              Se alcanzó el máximo de ventas que se pueden leer en una consulta: algunos abonos podrían aparecer como no vinculados.
+            </p>
+          )}
           <div>
             {state.data.accounts.map((a) =>
               a.ok ? (

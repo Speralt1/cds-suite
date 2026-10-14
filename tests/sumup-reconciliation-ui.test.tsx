@@ -22,7 +22,16 @@ vi.mock("@/lib/offerings/payouts-client", async (orig) => ({
 const { SumUpReconciliationPanel } = await import("@/components/finance/offerings/sumup-reconciliation-panel");
 
 function response(
-  over: { pendingOfferings?: boolean; reviewOfferings?: boolean; failCafeteria?: string; diffOfferings?: boolean; failedPayoutOfferings?: boolean; rowLimit?: boolean } = {},
+  over: {
+    pendingOfferings?: boolean;
+    reviewOfferings?: boolean;
+    failCafeteria?: string;
+    diffOfferings?: boolean;
+    failedPayoutOfferings?: boolean;
+    retriedOfferings?: boolean;
+    rowLimit?: boolean;
+    salesLimit?: boolean;
+  } = {},
 ): PayoutsResponse {
   const caf = cafeteriaCase();
   const ofr = groupedOfferingsCase();
@@ -36,6 +45,11 @@ function response(
       ofrSales.push(sale("offerings", `DF${i}`, "2026-10-01", g));
       ofrRows.push(row(`DF${i}`, g - 300 - 1, 300, "2026-10-02", "FICT DIFF", { id: `df-${i}` }));
     }
+  }
+  if (over.retriedOfferings) {
+    ofrSales.push(sale("offerings", "RT1", "2026-10-15", 8000));
+    ofrRows.push(row("RT1", 7724, 276, "2026-10-16", "FICT RT FAIL", { id: "rt-f", status: "FAILED" }));
+    ofrRows.push(row("RT1", 7724, 276, "2026-10-17", "FICT RT OK", { id: "rt-ok" }));
   }
   if (over.failedPayoutOfferings) {
     ofrSales.push(sale("offerings", "FL1", "2026-10-15", 8000));
@@ -58,6 +72,7 @@ function response(
   if (over.failCafeteria) accountResults.push({ ok: false, account: "cafeteria", errorClass: over.failCafeteria });
   return {
     readOnly: true,
+    salesLimitReached: !!over.salesLimit,
     period: result.period,
     payoutFetch: { startDate: "2026-10-01", endDate: "2026-10-20" },
     asOfDate: "2026-10-20",
@@ -187,6 +202,24 @@ describe("Conciliación SumUp — panel de solo lectura", () => {
     expect(within(ofr).getByText(/1 abono fallido o en proceso no se suma/)).toBeInTheDocument();
     expect(within(ofr).getByTestId("pending-offerings")).toHaveTextContent("$8.000 · comisión pendiente");
     expect(within(ofr).getByText("Ventas brutas abonadas").nextSibling).toHaveTextContent("$100.522");
+  });
+
+  it("abono fallido y reintentado con éxito → 'Reintentado' con su motivo", async () => {
+    requestMock.mockResolvedValue(response({ retriedOfferings: true }));
+    await openPanel();
+    const ofr = screen.getByTestId("recon-offerings");
+    const failedRow = within(ofr).getAllByTestId("settlement-row").find((r) => r.textContent?.includes("16-10"))!;
+    const badge = within(failedRow).getByText("Reintentado");
+    expect(badge.closest("[data-retried]")).toHaveAttribute("data-status", "REQUIERE_REVISION");
+    expect(within(failedRow).getByTestId("settlement-reasons")).toHaveTextContent(/reintentó el abono.*fallido/);
+    const okRow = within(ofr).getAllByTestId("settlement-row").find((r) => r.textContent?.includes("17-10"))!;
+    expect(within(okRow).getByText("Conciliado")).toBeInTheDocument();
+  });
+
+  it("tope de ventas leídas → aviso general", async () => {
+    requestMock.mockResolvedValue(response({ salesLimit: true }));
+    await openPanel();
+    expect(screen.getByText(/máximo de ventas que se pueden leer/)).toBeInTheDocument();
   });
 
   it("límite de filas de SumUp → aviso", async () => {
