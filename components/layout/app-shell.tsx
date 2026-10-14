@@ -44,6 +44,8 @@ import { useAreas } from "@/lib/calendar/areas-client";
 import {
   applySidebarPref,
   applyTextSize,
+  getSidebarPref,
+  getTextSize,
   useMediaQuery,
   useSidebarPref,
   useTextSize,
@@ -174,8 +176,10 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
 
   // El script previo al pintado ya fijó los atributos; se re-aplican antes de
   // pintar por si React los limpió (remontaje de Strict Mode en desarrollo).
-  useLayoutEffect(() => applyTextSize(textSize), [textSize]);
-  useLayoutEffect(() => applySidebarPref(sidebar), [sidebar]);
+  // Se lee el valor guardado y no el del hook: durante la hidratación el hook
+  // devuelve el valor del servidor ("normal"/"expanded") y pintaría un parpadeo.
+  useLayoutEffect(() => applyTextSize(getTextSize()), [textSize]);
+  useLayoutEffect(() => applySidebarPref(getSidebarPref()), [sidebar]);
 
   const closeDrawer = useCallback(() => {
     setDrawerPath(null);

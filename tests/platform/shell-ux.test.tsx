@@ -3,6 +3,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/layout/app-shell";
@@ -241,6 +243,38 @@ describe("sidebar contraíble (≥1280)", () => {
     await user.click(screen.getByRole("button", { name: "Expandir barra lateral" }));
     expect(window.localStorage.getItem(SIDEBAR_KEY)).toBe("expanded");
     expect(html).toHaveAttribute("data-sidebar", "expanded");
+  });
+});
+
+describe("sin parpadeo al hidratar", () => {
+  it("con 125 % y rail guardados, la hidratación nunca vuelve <html> a normal/expanded", async () => {
+    window.localStorage.setItem(TEXT_SIZE_KEY, "xlarge");
+    window.localStorage.setItem(SIDEBAR_KEY, "collapsed");
+    window.history.replaceState({}, "", "/finanzas");
+    new Function(PREPAINT_SCRIPT)();
+    const tree = (
+      <AppShell>
+        <p>Contenido</p>
+      </AppShell>
+    );
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(tree);
+    document.body.appendChild(container);
+    // Cada registro guarda el valor ANTERIOR: valores anteriores + final =
+    // todos los valores que tuvo <html> durante la hidratación.
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver((list) => records.push(...list));
+    observer.observe(html, { attributes: true, attributeOldValue: true, attributeFilter: ["data-text-size", "data-sidebar"] });
+    const root = await act(async () => hydrateRoot(container, tree, { onRecoverableError: () => {} }));
+    await act(async () => {});
+    records.push(...observer.takeRecords());
+    const values = records.map((r) => `${r.attributeName}=${r.oldValue}`);
+    observer.disconnect();
+    expect(values.filter((v) => /=(normal|expanded)$/.test(v)), values.join(", ")).toEqual([]);
+    expect(html).toHaveAttribute("data-text-size", "xlarge");
+    expect(html).toHaveAttribute("data-sidebar", "collapsed");
+    act(() => root.unmount());
+    container.remove();
   });
 });
 
