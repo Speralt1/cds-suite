@@ -1,0 +1,444 @@
+/* Resumen financiero · BalanceBand, FundsPosition y tablas (Design Lock 28
+   §C1). Todo en rem; las container queries también en rem. Los bordes,
+   radios y sombras se quedan en px (§C4.4). */
+
+/* ---------- BalanceBand ---------- */
+.fin-balance {
+  container: fin-balance / inline-size;
+  margin: 1.25rem 0 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: white;
+}
+.fin-balance-title {
+  color: var(--color-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.fin-balance-title:focus:not(:focus-visible) {
+  outline: none;
+}
+.fin-balance-dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0.75rem 0 0;
+}
+/* Operadores "−" y "=": solo en el modo ancho y ocultos para el lector de
+   pantalla (alt vacío en `content`; el resumen SR va aparte). */
+.fin-balance-dl::before,
+.fin-balance-dl::after {
+  display: none;
+}
+.fin-balance-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  row-gap: 0.125rem;
+  min-height: 3rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-line);
+}
+.fin-balance-item dt {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.fin-balance-item dd {
+  margin: 0;
+}
+.fin-balance-amount {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--color-ink);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  text-align: right;
+  white-space: nowrap;
+}
+.fin-balance-item.is-income .fin-balance-amount.is-signed {
+  color: var(--color-income);
+}
+.fin-balance-item.is-expense .fin-balance-amount.is-signed {
+  color: var(--color-expense);
+}
+.fin-balance-sub,
+.fin-balance-var,
+.fin-balance-note {
+  grid-column: 1 / -1;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.fin-balance-var {
+  font-variant-numeric: tabular-nums;
+}
+.fin-balance-sub .fin-balance-sub-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.fin-balance-sub svg {
+  flex: 0 0 auto;
+  color: var(--color-warning);
+}
+.fin-balance-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+}
+.fin-balance-icon.is-income {
+  background: var(--color-income-soft);
+  color: var(--color-income);
+}
+.fin-balance-icon.is-expense {
+  background: var(--color-expense-soft);
+  color: var(--color-expense);
+}
+.fin-balance-chip {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  width: fit-content;
+  margin-top: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--color-warning);
+  border-radius: 6px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.fin-balance-chip svg {
+  flex: 0 0 auto;
+  margin-top: 0.125rem;
+  color: var(--color-warning);
+}
+.fin-balance-item.is-result {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-result-line);
+  border-radius: 12px;
+  background: var(--color-result-surface);
+}
+.fin-balance-item.is-result dt {
+  font-weight: 600;
+}
+.fin-balance-item.is-result .fin-balance-amount {
+  color: var(--color-result-ink);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.fin-balance-item.is-result.is-deficit .fin-balance-amount {
+  color: var(--color-expense);
+}
+.fin-balance-deficit {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-expense-soft);
+  color: var(--color-expense);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.fin-balance-empty {
+  margin-top: 0.75rem;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+}
+.fin-balance-skeleton {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.fin-balance-skeleton .fin-skeleton {
+  height: 3rem;
+}
+
+/* Muy angosto (teléfonos, 125 %): una columna; la cifra va en su propia fila y
+   la etiqueta (y "Déficit") pueden pasar de línea sin chocar con ella. */
+@container fin-balance (max-width: 24rem) {
+  .fin-balance-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fin-balance-item dt {
+    flex-wrap: wrap;
+  }
+  .fin-balance-amount {
+    grid-column: 1;
+    grid-row: auto;
+    text-align: left;
+  }
+  .fin-balance-item.is-result dt {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  .fin-balance-deficit {
+    margin-left: 0;
+  }
+}
+
+@container fin-balance (min-width: 36rem) {
+  .fin-balance-amount {
+    font-size: 1.375rem;
+  }
+  .fin-balance-item.is-result .fin-balance-amount {
+    font-size: 1.75rem;
+  }
+}
+
+@container fin-balance (min-width: 52rem) {
+  .fin-balance-dl {
+    grid-template-columns: 1fr 2rem 1fr 2rem 1.15fr;
+    align-items: start;
+  }
+  .fin-balance-dl::before,
+  .fin-balance-dl::after {
+    display: block;
+    grid-row: 1;
+    align-self: center;
+    color: var(--color-muted-strong);
+    font-size: 1.5rem;
+    font-weight: 500;
+    text-align: center;
+  }
+  .fin-balance-dl::before {
+    grid-column: 2;
+    content: "\2212";
+    content: "\2212" / "";
+  }
+  .fin-balance-dl::after {
+    grid-column: 4;
+    content: "=";
+    content: "=" / "";
+  }
+  .fin-balance-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+    min-height: 0;
+    padding: 0.25rem 0;
+    border-bottom: 0;
+  }
+  .fin-balance-item.is-income {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fin-balance-item.is-expense {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .fin-balance-item.is-result {
+    grid-column: 5;
+    grid-row: 1;
+    margin-top: 0;
+    padding: 1rem 1.25rem;
+  }
+  .fin-balance-amount {
+    font-size: 1.5rem;
+    text-align: left;
+  }
+  .fin-balance-item.is-result .fin-balance-amount {
+    font-size: 2rem;
+  }
+  .fin-balance-skeleton {
+    grid-template-columns: 1fr 1fr 1.15fr;
+    gap: 2rem;
+  }
+  .fin-balance-skeleton .fin-skeleton {
+    height: 6rem;
+  }
+}
+
+/* ---------- FundsPosition (slot; el tile lo monta el PR D) ---------- */
+.fin-funds {
+  margin-bottom: 1.25rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: white;
+}
+.fin-funds-title {
+  color: var(--color-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.fin-funds-sub {
+  margin-top: 0.25rem;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.fin-funds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.fin-funds-grid > * {
+  min-width: 0;
+}
+
+/* ---------- Tablas de ingresos ---------- */
+.fin-income-tables {
+  container: fin-tables / inline-size;
+  margin-bottom: 1.25rem;
+}
+.fin-income-tables-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+@container fin-tables (min-width: 52rem) {
+  .fin-income-tables-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fin-income-tables .panel {
+  container: fin-table / inline-size;
+  overflow-x: auto;
+}
+.fin-amount-table {
+  width: 100%;
+  max-width: 44rem;
+  margin-top: 0.875rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+.fin-amount-table col.is-amount {
+  width: 9rem;
+}
+.fin-amount-table col.is-pct {
+  width: 4.5rem;
+}
+.fin-amount-table col.is-count {
+  width: 4rem;
+}
+.fin-amount-table th,
+.fin-amount-table td {
+  padding: 0.5625rem 0.375rem;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  vertical-align: top;
+}
+.fin-amount-table thead th {
+  color: var(--color-muted-strong);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.fin-amount-table th[scope="row"] {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+/* Anchos fijos solo cuando hay lugar: en un panel angosto (teléfono, 125 %,
+   dos columnas en tablet) la tabla vuelve a layout automático para que la
+   columna de texto no quede de pocos píxeles. */
+@container fin-table (max-width: 30rem) {
+  .fin-amount-table {
+    table-layout: auto;
+  }
+  .fin-amount-table col.is-amount,
+  .fin-amount-table col.is-pct,
+  .fin-amount-table col.is-count {
+    width: auto;
+  }
+  .fin-amount-table th[scope="row"] {
+    min-width: min(7rem, 40cqi);
+  }
+}
+/* Teléfono (y 125 %): % y Mov. pasan a una línea secundaria bajo el tipo.
+   Las columnas se ocultan con display: none (también para el lector de
+   pantalla), así que las cifras se leen una sola vez en cada diseño. */
+.fin-amount-sub {
+  display: none;
+  margin-top: 0.125rem;
+  color: var(--color-muted-strong);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+@container fin-table (max-width: 25.99rem) {
+  .fin-amount-table .is-pct,
+  .fin-amount-table .is-count {
+    display: none;
+  }
+  .fin-amount-sub {
+    display: block;
+  }
+}
+.fin-amount-table .is-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.fin-amount-table .is-total th,
+.fin-amount-table .is-total td {
+  border-top: 2px solid var(--color-line);
+  border-bottom: 0;
+  font-weight: 600;
+}
+.fin-amount-table .is-breakdown td {
+  padding-top: 0;
+  padding-bottom: 0.75rem;
+  color: var(--color-muted-strong);
+  font-size: 0.75rem;
+  text-align: left;
+  white-space: normal;
+}
+.fin-table-help {
+  margin-top: 0.5rem;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.fin-table-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 10px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+  font-size: 0.8125rem;
+}
+.fin-table-warning svg {
+  flex: 0 0 auto;
+  margin-top: 0.125rem;
+  color: var(--color-warning);
+}
+
+/* ---------- Encabezado de "Últimos movimientos" ---------- */
+.fin-movements-count {
+  color: var(--color-muted-strong);
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .fin-balance,
+  .fin-funds {
+    padding: 1.125rem;
+  }
+}

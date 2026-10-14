@@ -115,7 +115,7 @@ export function NoticeRegion() {
   return (
     <div role="status" aria-live="polite" aria-atomic="false">
       {visible && notice && (
-        <div className="mx-auto max-w-7xl px-6 pt-6 sm:px-8 lg:px-12">
+        <div className="mx-auto max-w-7xl px-6 pt-6 md:px-8 xl:px-12">
           <div className="flex items-start gap-3 rounded-xl border border-info/20 bg-info-soft py-2 pr-2 pl-4 text-sm text-info">
             <Info className="mt-2.5 size-4 shrink-0" aria-hidden="true" />
             <p className="min-w-0 flex-1 py-2 leading-6">{notice.message}</p>
@@ -133,7 +133,7 @@ export function NoticeRegion() {
       {toast && (
         <div
           key={toast.id}
-          className="pointer-events-none fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-6"
+          className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--bottombar-h)+0.75rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-6"
         >
           <p className="pointer-events-auto flex max-w-md items-center gap-2 rounded-xl bg-side px-4 py-3 text-sm font-medium text-white shadow-lg">
             <CircleCheck className="size-4 shrink-0 text-side-accent" aria-hidden="true" />
