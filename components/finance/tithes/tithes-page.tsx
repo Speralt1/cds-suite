@@ -8,7 +8,10 @@ import {
   useLatestAttribution,
   useMonthlyAttributions,
   useNewProfileCount,
+  useProfileCount,
 } from "@/lib/finance/tithe-hooks";
+import { useAccess } from "@/lib/auth/access-provider";
+import { can } from "@/lib/shared/access";
 import { clp, dateLabel, previousPeriod } from "@/lib/finance/formatters";
 import { combineSummaries, variation } from "@/lib/finance/calculations";
 import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
@@ -23,6 +26,7 @@ import {
 } from "../shared";
 import { ProfileForm } from "../forms/profile-form";
 import { TitheRegister } from "./tithe-register";
+import { DuplicateProfilesPanel } from "./duplicate-profiles";
 import { profileHref } from "@/lib/finance/profile-route";
 export function TithesPage() {
   return (
@@ -57,7 +61,7 @@ function ProfileRow({
       <span
         className={`status-pill shrink-0 ${profile.active ? "" : "voided"}`}
       >
-        {profile.active ? "Activo" : "Inactivo"}
+        {profile.active ? "Activa" : "Archivada"}
       </span>
       {profile.active && (
         <button
@@ -81,7 +85,17 @@ function Tithes() {
   const [cursor, setCursor] = useState("");
   const [success, setSuccess] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [warning, setWarning] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const access = useAccess();
   const profiles = useProfiles(search, cursor);
+  // Conteo por agregación (sin leer las fichas archivadas).
+  const archived = useProfileCount(false, refresh);
+  const visibleProfiles = profiles.data
+    .slice(0, PAGE_SIZE)
+    .filter((p) => showArchived || p.active);
+  const hiddenOnPage =
+    profiles.data.slice(0, PAGE_SIZE).length - visibleProfiles.length;
   const current = useSummaries(period);
   const previous = useSummaries(previousPeriod(period));
   const attributions = useMonthlyAttributions(period.year, period.month);
@@ -90,8 +104,9 @@ function Tithes() {
     combineSummaries(current.data).titheTotal,
     combineSummaries(previous.data).titheTotal,
   );
-  function saved(s: string) {
+  function saved(s: string, w = "") {
     setSuccess(s);
+    setWarning(w);
     setRefresh((v) => v + 1);
   }
   return (
@@ -115,6 +130,11 @@ function Tithes() {
           profiles.error
         }
       />
+      {warning && (
+        <p role="status" className="notice-warning">
+          {warning}
+        </p>
+      )}
       <div className="filters tithe-search">
         <label>
           Buscar persona o familia
@@ -132,18 +152,41 @@ function Tithes() {
       </div>
       <div className="section-heading mt-6">
         <h2>Personas y familias</h2>
-        <button className="button-secondary" onClick={() => setCreate(true)}>
-          + Crear nueva ficha
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="button-secondary"
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            {showArchived ? "Ocultar archivadas" : "Mostrar archivadas"}
+            {archived.loading || archived.error ? "" : ` (${archived.count})`}
+          </button>
+          <button className="button-secondary" onClick={() => setCreate(true)}>
+            + Crear nueva ficha
+          </button>
+        </div>
       </div>
       {profiles.loading ? (
         <Loading />
-      ) : profiles.error ? null : profiles.data.length ? (
+      ) : profiles.error ? null : visibleProfiles.length ? (
         <div className="profile-rows">
-          {profiles.data.slice(0, PAGE_SIZE).map((p) => (
+          {visibleProfiles.map((p) => (
             <ProfileRow key={p.id} profile={p} onRegister={setRegisterProfile} />
           ))}
+          {hiddenOnPage > 0 && (
+            <p className="field-help">
+              {hiddenOnPage === 1
+                ? "1 ficha archivada oculta en esta página."
+                : `${hiddenOnPage} fichas archivadas ocultas en esta página.`}
+            </p>
+          )}
         </div>
+      ) : profiles.data.length ? (
+        <Empty>
+          Las fichas de esta página están archivadas. Usa «Mostrar archivadas»
+          para verlas.
+        </Empty>
       ) : (
         <Empty>
           No hay fichas para esta búsqueda. Puedes crear la primera.
@@ -217,6 +260,7 @@ function Tithes() {
           </span>
         </article>
       </div>
+      {can(access, "finance.records.manage") && <DuplicateProfilesPanel />}
       {create && (
         <ProfileForm
           onClose={() => setCreate(false)}

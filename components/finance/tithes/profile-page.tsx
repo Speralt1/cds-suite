@@ -1,26 +1,23 @@
 "use client";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  documentId,
-  getDocs,
-  query as firestoreQuery,
-  where,
-  orderBy,
-} from "firebase/firestore";
+import { Fragment, useMemo, useState } from "react";
+import { where, orderBy } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef } from "firebase/storage";
 import { Ban } from "lucide-react";
 import { getFirebaseServices } from "@/lib/firebase";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
 import { useCollection, useDocument } from "@/lib/finance/hooks";
-import { useLatestAttribution } from "@/lib/finance/tithe-hooks";
+import {
+  useLatestAttribution,
+  useTransactionMethods,
+} from "@/lib/finance/tithe-hooks";
 import { groupAttributionsByMonth, titheAggregates } from "@/lib/finance/insights";
 import {
   clp,
   dateLabel,
   parseDate,
+  shortReference,
   periodId,
   today,
 } from "@/lib/finance/formatters";
@@ -33,45 +30,10 @@ import { ProfileForm } from "../forms/profile-form";
 import { TitheRegister } from "./tithe-register";
 import { PastoralPanel } from "./pastoral-panel";
 import { EvolutionChart } from "../charts/finance-charts";
+import "@/components/finance/tithes/tithes-integrity.css";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const FIRST_YEAR = 2024;
-
-// Method comes from a batched read of financeTransactions, limited to the
-// attribution rows currently rendered (§C3): up to 30 ids per
-// documentId()-"in" query.
-function useTransactionMethods(ids: string[]) {
-  const key = [...new Set(ids)].sort().join(",");
-  const [state, setState] = useState<{ key: string; map: Record<string, string> }>({
-    key: "",
-    map: {},
-  });
-  useEffect(() => {
-    if (!key) return;
-    let active = true;
-    const uniqueIds = key.split(",");
-    (async () => {
-      const db = getFirebaseServices().db;
-      const map: Record<string, string> = {};
-      for (let i = 0; i < uniqueIds.length; i += 30) {
-        const chunk = uniqueIds.slice(i, i + 30);
-        const snapshot = await getDocs(
-          firestoreQuery(collection(db, "financeTransactions"), where(documentId(), "in", chunk)),
-        );
-        snapshot.docs.forEach((doc) => {
-          map[doc.id] = (doc.data() as { paymentMethod?: string }).paymentMethod || "";
-        });
-      }
-      if (active) setState({ key, map });
-    })().catch(() => {
-      if (active) setState({ key, map: {} });
-    });
-    return () => {
-      active = false;
-    };
-  }, [key]);
-  return key ? (state.key === key ? state.map : {}) : {};
-}
 
 function ReceiptCell({ transactionId }: { transactionId: string }) {
   const [status, setStatus] = useState<"idle" | "loading" | "missing">("idle");
@@ -131,6 +93,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
   const [edit, setEdit] = useState(false);
   const [register, setRegister] = useState(false);
   const [success, setSuccess] = useState("");
+  const [warning, setWarning] = useState("");
   const latest = useLatestAttribution(profile.id);
   const constraints = useMemo(
     () => [
@@ -201,7 +164,7 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
           <h2 className="break-words">{profile.displayName}</h2>
           <p>
             {profile.type === "family" ? "Familia" : "Persona"} ·{" "}
-            {profile.active ? "Activa" : "Inactiva"}
+            {profile.active ? "Activa" : "Archivada"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -221,6 +184,17 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
         success={success}
         error={history.error || latest.error || recent.error}
       />
+      {warning && (
+        <p role="status" className="notice-warning">
+          {warning}
+        </p>
+      )}
+      {!profile.active && (
+        <p role="note" className="notice-warning">
+          Ficha archivada: conserva su historial y no aparece al registrar
+          diezmos. Para volver a usarla, edita la ficha y marca «Ficha activa».
+        </p>
+      )}
       <section className="panel tithe-contrib-strip">
         <div>
           <span>Este mes</span>
@@ -346,7 +320,15 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
                   </tr>
                   {group.items.map((a) => (
                     <tr key={a.id} className={a.status === "voided" ? "is-voided" : undefined}>
-                      <td>{dateLabel(a.date)}</td>
+                      <td>
+                        {dateLabel(a.date)}
+                        <span
+                          className="tx-reference tithe-history-ref"
+                          title={`Referencia ${a.transactionId}`}
+                        >
+                          {shortReference(a.transactionId)}
+                        </span>
+                      </td>
                       <td>
                         {methods[a.transactionId]
                           ? PAYMENT_METHODS[
@@ -384,7 +366,10 @@ function ProfileDetail({ profile }: { profile: TitheProfile }) {
         <ProfileForm
           existing={profile}
           onClose={() => setEdit(false)}
-          onSaved={() => setSuccess("Ficha actualizada correctamente")}
+          onSaved={(_, warning) => {
+            setSuccess("Ficha actualizada correctamente");
+            setWarning(warning ?? "");
+          }}
         />
       )}{" "}
       {register && (
