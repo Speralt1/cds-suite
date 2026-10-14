@@ -220,11 +220,24 @@ describe("bankAccounts: saldo inicial (solo administración) con historial en el
     batch.update(doc(db, "bankAccounts", "main"), { openingBalance: 5, revision: 2, updatedBy: "admin", updatedAt: serverTimestamp() });
     batch.set(doc(db, "bankAccounts", "main", "history", "2"), { ...hist, openingBalance: 6 });
     expect(await allowed(() => batch.commit())).toBe(false);
-    // Lote que reutiliza la revisión 1 (historial ya existe).
-    const b2 = writeBatch(db);
-    b2.update(doc(db, "bankAccounts", "main"), { openingBalance: 5, updatedBy: "admin", updatedAt: serverTimestamp() });
-    b2.set(doc(db, "bankAccounts", "main", "history", "1"), { ...hist, revision: 1, action: "created", openingBalance: 5 });
-    expect(await allowed(() => b2.commit())).toBe(false);
+  });
+  it("un historial plantado de antemano no habilita escribir la cuenta (!exists antes del lote)", async () => {
+    await seedAccount();
+    // Historial r2 plantado sin reglas: existsAfter sería verdadero aunque el lote no lo escriba.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "bankAccounts", "main", "history", "2"), {
+        ...ACCOUNT, openingBalance: 5, revision: 2, action: "updated", reason: "Plantado", actorUid: "admin", at: SEED_TS,
+      });
+    });
+    const db = dbOf(env, "admin");
+    // Solo la cuenta, revisión +1 y auditoría válidas: lo único que falla es !exists(history/2).
+    expect(await allowed(() => updateDoc(doc(db, "bankAccounts", "main"), { openingBalance: 5, revision: 2, updatedBy: "admin", updatedAt: serverTimestamp() }))).toBe(false);
+    // Control: el mismo cambio escribiendo su historial en el lote (sin el plantado) sí pasa.
+    await env.withSecurityRulesDisabled(async (ctx) => deleteDoc(doc(ctx.firestore(), "bankAccounts", "main", "history", "2")));
+    const ok = writeBatch(db);
+    ok.update(doc(db, "bankAccounts", "main"), { openingBalance: 5, revision: 2, updatedBy: "admin", updatedAt: serverTimestamp() });
+    ok.set(doc(db, "bankAccounts", "main", "history", "2"), { ...ACCOUNT, openingBalance: 5, revision: 2, action: "updated", reason: "Corrección", actorUid: "admin", at: serverTimestamp() });
+    expect(await allowed(() => ok.commit())).toBe(true);
   });
   it("actualizar sin motivo se rechaza en reglas (historial r≥2 exige 3+ caracteres)", async () => {
     await seedAccount();
@@ -242,6 +255,7 @@ describe("bankAccounts: saldo inicial (solo administración) con historial en el
   });
   it.each([
     ["fecha de corte futura", { openingDate: addDays(TODAY, 3) }],
+    ["fecha de corte = mañana", { openingDate: addDays(TODAY, 1) }],
     ["fecha anterior a 2020", { openingDate: "2019-12-31" }],
     ["fecha mal formada", { openingDate: "2026-9-1" }],
     ["monto decimal", { openingBalance: 10.5 }],
@@ -352,6 +366,7 @@ describe("bankReconciliations (solo creación, nunca ajusta)", () => {
     ["cuenta inexistente", { accountId: "otra" }],
     ["saldo decimal", { reportedBalance: 1.5, difference: 1.5 - 1_010_000 }],
     ["clave extra", { adjustmentId: "x" }],
+    ["revisión del saldo inicial distinta de la vigente", { openingRevision: 2 }],
   ])("rechaza: %s", async (_label, patch) => {
     expect(await allowed(() => setDoc(doc(collection(dbOf(env, "finance"), "bankReconciliations")), rawReconciliation("finance", patch)))).toBe(false);
   });

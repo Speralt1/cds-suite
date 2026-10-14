@@ -1158,6 +1158,9 @@ service cloud.firestore {
     //  · bankReconciliations/{id}: foto de una conciliación. Solo creación; nunca ajusta nada.
     // Lectura: financeDetailsRead. Fechas "YYYY-MM-DD" locales (America/Santiago).
     // Indulgente para "no futuro": ≥ la fecha local real (adelanta como mucho 1 h en invierno).
+    // La fecha de corte debe ser < hoy (el día aún no cierra en la cartola); por la indulgencia, en
+    // esa hora de invierno podría aceptarse el día actual: la UI lo impide siempre.
+    // La conciliación guarda la revisión vigente del saldo inicial (openingRevision).
     function localTodayLatest() { return ymdOf(request.time - duration.value(3, 'h')); }
     function bankAmount(v) { return v is int && v >= -1000000000000 && v <= 1000000000000; }
     function bankAccountPath(id) { return /databases/$(database)/documents/bankAccounts/$(id); }
@@ -1166,7 +1169,7 @@ service cloud.firestore {
     function validBankAccount(d) {
       return d.keys().hasAll(bankAccountKeys()) && d.keys().hasOnly(bankAccountKeys())
         && text(d.name,1,80) && bankAmount(d.openingBalance)
-        && isYmd(d.openingDate) && d.openingDate >= '2020-01-01' && d.openingDate <= localTodayLatest()
+        && isYmd(d.openingDate) && d.openingDate >= '2020-01-01' && d.openingDate < localTodayLatest()
         && (d.openingCash == null || money(d.openingCash) || d.openingCash == 0)
         && text(d.statementReference,0,120) && d.revision is int;
     }
@@ -1245,7 +1248,8 @@ service cloud.firestore {
         && request.resource.data.date >= get(bankAccountPath(request.resource.data.accountId)).data.openingDate
         && bankAmount(request.resource.data.reportedBalance) && bankAmount(request.resource.data.expectedBalance)
         && request.resource.data.difference == request.resource.data.reportedBalance - request.resource.data.expectedBalance
-        && request.resource.data.estimateComplete is bool && request.resource.data.openingRevision is int
+        && request.resource.data.estimateComplete is bool
+        && request.resource.data.openingRevision == get(bankAccountPath(request.resource.data.accountId)).data.revision
         && text(request.resource.data.note,0,500)
         && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
       allow update, delete: if false;
