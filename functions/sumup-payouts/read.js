@@ -63,13 +63,22 @@ class ReadOnlyViolation extends Error {
 }
 
 /**
- * Envuelve un Firestore en un Proxy profundo de solo lectura: todo objeto que
- * sale de él (retorno de métodos, propiedades como `ref.firestore`/`ref.parent`,
- * snapshots y su `ref`, arreglos como `snap.docs`, promesas) vuelve envuelto,
- * y pedir un método de escritura lanza ReadOnlyViolation. Las lecturas se
- * ejecutan sobre el objeto real (`this` = objeto real; los argumentos se
- * desenvuelven, p. ej. las refs de `getAll`). También los datos leídos
- * (`snap.data()`) vuelven envueltos: se leen igual, pero no se pueden mutar.
+ * Envuelve un Firestore en un Proxy profundo de solo lectura:
+ *  - todo objeto que sale de él vuelve envuelto: retornos de métodos (también
+ *    dentro de promesas), propiedades (`ref.firestore`, `ref.parent`),
+ *    snapshots y su `ref`, arreglos (`snap.docs`), los datos leídos y los
+ *    descriptores de propiedad;
+ *  - los callbacks que se le pasan (p. ej. `qs.forEach(cb)`) reciben sus
+ *    argumentos envueltos;
+ *  - `constructor` (salvo Object/Array) y el prototipo tampoco dan acceso a los
+ *    métodos reales: `Object.getPrototypeOf(ref)` devuelve el prototipo envuelto;
+ *  - pedir set/update/delete/create/add/batch/runTransaction/bulkWriter/
+ *    recursiveDelete, asignar, definir o borrar propiedades lanza
+ *    ReadOnlyViolation.
+ * Las lecturas se ejecutan sobre el objeto real (`this` = objeto real) y los
+ * argumentos envueltos se desenvuelven (p. ej. las refs de `getAll`).
+ * Límite conocido: un objeto que el código obtuvo por fuera de esta guardia
+ * (no es el caso de este módulo) no queda protegido.
  */
 function readOnlyFirestore(target) {
   const proxies = new WeakMap();
@@ -77,6 +86,16 @@ function readOnlyFirestore(target) {
 
   function unwrap(value) {
     return value && typeof value === "object" && originals.has(value) ? originals.get(value) : value;
+  }
+
+  /** Argumento hacia el objeto real: refs desenvueltas; callbacks reciben valores envueltos. */
+  function toRealArg(arg) {
+    if (typeof arg === "function") return (...xs) => arg(...xs.map(wrap));
+    return unwrap(arg);
+  }
+
+  function blockedConstructor() {
+    throw new ReadOnlyViolation("constructor");
   }
 
   function wrap(value) {
@@ -99,13 +118,28 @@ function readOnlyFirestore(target) {
         const own = Object.getOwnPropertyDescriptor(obj, prop);
         if (own && own.configurable === false && own.writable === false) return v;
         if (typeof v === "function") {
-          if (prop === "constructor") return v;
-          return (...args) => wrap(v.apply(obj, args.map(unwrap)));
+          if (prop === "constructor") return v === Object || v === Array ? v : blockedConstructor;
+          return (...args) => wrap(v.apply(obj, args.map(toRealArg)));
         }
         return wrap(v);
       },
+      getPrototypeOf(obj) {
+        const proto = Reflect.getPrototypeOf(obj);
+        // Invariante: un objeto no extensible debe reportar su prototipo real.
+        if (!Object.isExtensible(obj)) return proto;
+        return proto && proto !== Object.prototype && proto !== Array.prototype ? wrap(proto) : proto;
+      },
+      getOwnPropertyDescriptor(obj, prop) {
+        const desc = Reflect.getOwnPropertyDescriptor(obj, prop);
+        if (!desc || desc.configurable === false) return desc;
+        if ("value" in desc) return { ...desc, value: typeof desc.value === "function" ? undefined : wrap(desc.value) };
+        return { configurable: true, enumerable: desc.enumerable, get: desc.get ? () => wrap(desc.get.call(obj)) : undefined, set: undefined };
+      },
       set() {
         throw new ReadOnlyViolation("assign");
+      },
+      setPrototypeOf() {
+        throw new ReadOnlyViolation("setPrototypeOf");
       },
       defineProperty() {
         throw new ReadOnlyViolation("defineProperty");
@@ -128,7 +162,8 @@ function readOnlyFirestore(target) {
 
 function toMillis(value) {
   if (!value) return null;
-  if (value instanceof Date) return value.getTime();
+  // Sin instanceof: los valores leídos llegan envueltos por la guardia.
+  if (typeof value.getTime === "function") return value.getTime();
   if (typeof value.toMillis === "function") return value.toMillis();
   if (typeof value.toDate === "function") return value.toDate().getTime();
   if (typeof value === "number") return value;
@@ -368,6 +403,8 @@ function createPayoutsReconciliationService({ store, getConfig, fetchImpl, clock
     const byAccount = new Map(result.accounts.map((r) => [r.account, r]));
     return {
       readOnly: true,
+      // Si alguna cuenta llegó al tope de lectura de ventas, la vinculación puede estar incompleta.
+      salesLimitReached: salesLists.some((list) => list.length >= SALES_READ_LIMIT),
       period: result.period,
       payoutFetch: plan.payoutFetch,
       salesRead: plan.salesRead,
@@ -445,6 +482,7 @@ function buildSumupPayoutsReconciliation({ db, region, secrets }) {
 module.exports = {
   PAYOUTS_ERROR_KEYS,
   PAYOUTS_ROW_LIMIT,
+  SALES_READ_LIMIT,
   ACCOUNT_CHOICES,
   WRITE_METHODS,
   ReadOnlyViolation,

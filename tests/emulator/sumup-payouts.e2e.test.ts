@@ -143,6 +143,12 @@ describe("sumupPayoutsReconciliation vía emulador de Functions", () => {
     const qs = await ro.collection("financeTransactions").limit(5).get();
     expect(qs.docs.length).toBeGreaterThan(0);
     expect(() => qs.docs[0].ref.delete()).toThrow(read.ReadOnlyViolation);
+    // Callbacks reciben snapshots envueltos; prototipo y constructor no dan acceso a escrituras.
+    expect(() => qs.forEach((d: { ref: { set: (x: object) => unknown } }) => d.ref.set({ amount: 3 }))).toThrow(read.ReadOnlyViolation);
+    expect(() => Object.getPrototypeOf(ref).set.call(ref, { amount: 4 })).toThrow(read.ReadOnlyViolation);
+    expect(() => Object.getPrototypeOf(Object.getPrototypeOf(ref)).update).not.toThrow();
+    expect(() => new ref.constructor()).toThrow(read.ReadOnlyViolation);
+    expect(() => ref.firestore.collection("financeTransactions").doc("x").create({})).toThrow(read.ReadOnlyViolation);
     const [got] = await ro.getAll(ro.doc(`financeTransactions/${FEE_DOC}`));
     expect(got.data()).toMatchObject({ amount: 15968 });
 

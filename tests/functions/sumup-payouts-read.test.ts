@@ -380,6 +380,20 @@ describe("secretos: nunca en logs ni en la respuesta", () => {
 });
 
 describe("solo lectura", () => {
+  // Ref con métodos en el PROTOTIPO (como las clases del Admin SDK).
+  class FakeRef {
+    constructor(
+      public path: string,
+      private writes: string[],
+    ) {}
+    async set() {
+      this.writes.push(`proto.set:${this.path}`);
+    }
+    async update() {
+      this.writes.push(`proto.update:${this.path}`);
+    }
+  }
+
   function fakeDb() {
     const writes: string[] = [];
     // eslint-disable-next-line prefer-const
@@ -404,9 +418,10 @@ describe("solo lectura", () => {
       select: () => query(p),
       limit: () => query(p),
       orderBy: () => query(p),
-      get: async () => ({
-        docs: [{ ref: { path: `${p}/A`, set: async () => writes.push(`docs.ref.set:${p}`), update: async () => writes.push(`docs.ref.update:${p}`) }, data: () => ({ transactionCode: "A", grossAmount: 1000, timestamp: new Date("2026-10-11T15:00:00Z") }) }],
-      }),
+      get: async () => {
+        const docs = [{ ref: new FakeRef(`${p}/A`, writes), data: () => ({ transactionCode: "A", grossAmount: 1000, timestamp: new Date("2026-10-11T15:00:00Z") }) }];
+        return { docs, forEach: (cb: (d: unknown) => void) => docs.forEach((d) => cb(d)) };
+      },
     });
     const collectionRef = (p: string): Record<string, unknown> => ({ ...query(p), doc: (id: string) => docRef(`${p}/${id}`), add: async () => writes.push(`add:${p}`) });
     db = {
@@ -463,6 +478,40 @@ describe("solo lectura", () => {
       data.role = "otro";
     }).toThrow(read.ReadOnlyViolation);
     expect(writes).toEqual([]);
+  });
+
+  it("MINOR 1 (re-review): callbacks, constructor y prototipo no dan acceso a escrituras", async () => {
+    const { db, writes } = fakeDb();
+    const ro = read.readOnlyFirestore(db);
+    const qs = await ro.collection("sumupIntegrations/offerings/transactions").get();
+    expect(() => qs.forEach((d: { ref: { set: (x: object) => unknown } }) => d.ref.set({}))).toThrow(read.ReadOnlyViolation);
+    const ref = qs.docs[0].ref;
+    expect(() => Object.getPrototypeOf(ref).set.call(ref, {})).toThrow(read.ReadOnlyViolation);
+    expect(() => new ref.constructor("x", [])).toThrow(read.ReadOnlyViolation);
+    expect(() => ref.constructor.prototype).not.toThrow();
+    expect(Object.getOwnPropertyDescriptor(ref, "writes")?.value).not.toBe(writes);
+    expect(() => Object.setPrototypeOf(ref, {})).toThrow(read.ReadOnlyViolation);
+    expect(writes).toEqual([]);
+  });
+
+  it("NIT: salesLimitReached cuando una cuenta llega al tope de ventas leídas", async () => {
+    const big = Array.from({ length: read.SALES_READ_LIMIT }, () => ({ transactionCode: "", timestamp: new Date("2026-10-10T15:00:00Z") }));
+    const service = read.createPayoutsReconciliationService({
+      store: { getUser: async () => ({ role: "admin", active: true }), listSales: async (a: string) => (a === "offerings" ? big : []), getFinanceAmounts: async () => ({}) },
+      getConfig: () => FAKE.offerings,
+      fetchImpl: async () => jsonResponse([]),
+      clock: { now: () => NOW },
+      logger: { error: vi.fn() },
+    });
+    expect(((await service.handle("u-admin", OCT)) as { salesLimitReached: boolean }).salesLimitReached).toBe(true);
+    const small = read.createPayoutsReconciliationService({
+      store: { getUser: async () => ({ role: "admin", active: true }), listSales: async () => [], getFinanceAmounts: async () => ({}) },
+      getConfig: () => FAKE.offerings,
+      fetchImpl: async () => jsonResponse([]),
+      clock: { now: () => NOW },
+      logger: { error: vi.fn() },
+    });
+    expect(((await small.handle("u-admin", OCT)) as { salesLimitReached: boolean }).salesLimitReached).toBe(false);
   });
 
   it("el store real solo expone lecturas y funciona sobre el db envuelto", async () => {
