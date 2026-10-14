@@ -333,14 +333,51 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    function validProfile(d) { return d.keys().hasOnly(['type','displayName','searchName','phone','email','members','active','pastoralContactAuthorized','createdAt','createdBy','updatedAt','updatedBy'])
+    function validProfile(d) { return d.keys().hasOnly(['type','displayName','searchName','identityKey','phone','email','members','active','pastoralContactAuthorized','createdAt','createdBy','updatedAt','updatedBy'])
       && d.searchName == d.displayName.lower() && d.type in ['person','family'] && text(d.displayName,1,120) && text(d.phone,0,40) && text(d.email,0,160) && text(d.members,0,600)
-      && (d.type == 'family' || d.members == '') && d.active is bool && d.pastoralContactAuthorized is bool; }
+      && (d.type == 'family' || d.members == '') && d.active is bool && d.pastoralContactAuthorized is bool
+      && (!('identityKey' in d) || validIdentityKey(d.identityKey)); }
+    // Registro de identidad de fichas (doc 27): titheProfileKeys/{key} = { profileId, createdAt, createdBy }.
+    // La clave la calcula el cliente con lib/shared/names (identityKey). Fase 1: identityKey es
+    // OPCIONAL (el cliente desplegado no la envía). Fase 2 (cambio futuro aparte): exigirla al crear.
+    function validIdentityKey(k) { return k is string && k.matches('^[a-z0-9_]{1,120}$'); }
+    function profileKeyPath(k) { return /databases/$(database)/documents/titheProfileKeys/$(k); }
+    function profileDocPath(id) { return /databases/$(database)/documents/titheProfiles/$(id); }
+    // La ficha con clave exige que, al terminar el mismo commit, el registro de esa clave apunte a ella.
+    function profileKeyHeld(d, id) { return getAfter(profileKeyPath(d.identityKey)).data.profileId == id; }
+    // Actualización: clave igual (o ambas ausentes) → no toca el registro. Clave nueva → registrada
+    // para esta ficha en el mismo commit, y la anterior (si había) borrada en el mismo commit.
+    // Quitar la clave se permite en Fase 1 (cliente desplegado, que reescribe la ficha sin ella):
+    // su registro sigue existiendo y sigue bloqueando ese nombre.
+    function profileKeyTransition(n, o, id) {
+      let nk = n.get('identityKey', '');
+      let ok = o.get('identityKey', '');
+      return nk == ok || nk == ''
+        || (profileKeyHeld(n, id) && (ok == '' || !existsAfter(profileKeyPath(ok))));
+    }
     match /titheProfiles/{id} {
       allow read: if financeDetailsRead();
-      allow create: if financeRecordsManage() && validProfile(request.resource.data) && auditCreate(request.resource.data);
-      allow update: if financeRecordsManage() && validProfile(request.resource.data) && auditUpdate(request.resource.data,resource.data);
+      allow create: if financeRecordsManage() && validProfile(request.resource.data) && auditCreate(request.resource.data)
+        && (!('identityKey' in request.resource.data) || profileKeyHeld(request.resource.data, id));
+      allow update: if financeRecordsManage() && validProfile(request.resource.data) && auditUpdate(request.resource.data,resource.data)
+        && profileKeyTransition(request.resource.data, resource.data, id);
       allow delete: if false;
+    }
+    // Inmutable: crear sobre una clave existente es un update y se deniega; así dos fichas no
+    // pueden quedarse con la misma clave ni aunque se creen a la vez. Se crea solo junto con la
+    // ficha que la toma (escrita en el mismo commit) y se borra solo junto con la ficha que la suelta.
+    match /titheProfileKeys/{key} {
+      allow read: if financeDetailsRead();
+      allow create: if financeRecordsManage() && validIdentityKey(key)
+        && request.resource.data.keys().hasOnly(['profileId','createdAt','createdBy'])
+        && text(request.resource.data.profileId,1,128)
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+        && getAfter(profileDocPath(request.resource.data.profileId)).data.get('identityKey', '') == key
+        && getAfter(profileDocPath(request.resource.data.profileId)).data.updatedAt == request.time;
+      allow update: if false;
+      allow delete: if financeRecordsManage()
+        && getAfter(profileDocPath(resource.data.profileId)).data.get('identityKey', '') != key
+        && getAfter(profileDocPath(resource.data.profileId)).data.updatedAt == request.time;
     }
     function validAttribution(d,id) {
       let t=getAfter(/databases/$(database)/documents/financeTransactions/$(id)).data;

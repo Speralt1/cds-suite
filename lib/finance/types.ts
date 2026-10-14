@@ -62,6 +62,8 @@ export interface MonthlySummary {
 export interface TitheProfile {
   id: string;
   searchName: string;
+  /** Clave de identidad (lib/shared/names). Ausente en fichas antiguas (doc 27, Fase 1). */
+  identityKey?: string;
   type: "person" | "family";
   displayName: string;
   phone: string;
