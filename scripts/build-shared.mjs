@@ -24,6 +24,7 @@ export const SHARED_FILES = Object.freeze([
   "public-calendar",
   "share-token-format",
   "names",
+  "sumup-payouts",
 ]);
 
 export const generatedHeader = (name) =>

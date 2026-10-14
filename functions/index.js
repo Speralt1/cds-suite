@@ -489,3 +489,7 @@ exports.calendarShareLinkManage = onCall(
   { region: REGION, timeoutSeconds: 15, maxInstances: 3 },
   createShareLinkCallableHandler(shareLinks),
 );
+
+// ---------- Conciliación de abonos SumUp (solo lectura, doc 29) ----------
+
+exports.sumupPayoutsReconciliation = require("./sumup-payouts/read").buildSumupPayoutsReconciliation({ db, region: REGION, secrets: [sumupOfferings, sumupCafe] });
