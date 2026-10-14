@@ -58,7 +58,7 @@ export default function LoginPage() {
       >
         <Brand />
         <div className="my-auto hidden max-w-xl py-24 lg:block">
-          <span className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#ced9c8] px-3 py-1.5 text-[10px] font-semibold tracking-[0.15em] text-primary">
+          <span className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#ced9c8] px-3 py-1.5 text-[0.625rem] font-semibold tracking-[0.15em] text-primary">
             <span className="size-1.5 rounded-full bg-primary" />
             NUESTRA COMUNIDAD, CONECTADA
           </span>
@@ -102,7 +102,7 @@ export default function LoginPage() {
               aria-hidden="true"
             />
           </span>
-          <p className="mb-3 text-[10px] font-semibold tracking-[0.17em] text-muted">
+          <p className="mb-3 text-[0.625rem] font-semibold tracking-[0.17em] text-muted">
             BIENVENIDO A CDS ADMINISTRACIÓN
           </p>
           <h2 className="text-3xl font-medium tracking-tight">

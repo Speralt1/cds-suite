@@ -60,6 +60,71 @@
   --color-area-carmin-soft: var(--area-carmin-soft);
 }
 
+/* Design Lock 28 §B (Finanzas iPad-first). Tokens nuevos; los existentes no
+   cambian de valor (--color-warning, --color-warning-soft, --color-info y
+   --color-info-soft ya existen arriba con los mismos valores). */
+@theme inline {
+  --color-income: #256b47;
+  --color-income-soft: #e8f2ec;
+  --color-expense: #a4482f;
+  --color-expense-soft: #f8ece6;
+  --color-chart-income: #285b45;
+  --color-chart-expense: #c0694c;
+  --color-chart-result: #60746b;
+  --color-result-ink: #233c33;
+  --color-result-surface: #f0ece2;
+  --color-result-line: #ddd5c3;
+  /* --color-warning (#9a6a1f) queda SOLO para iconos y bordes; todo texto de
+     advertencia usa --color-warning-ink (5,47:1 sobre --color-warning-soft). */
+  --color-warning-ink: #7a5216;
+  --color-muted-strong: #5f6d65;
+}
+
+/* Shell (Design Lock 28 §B "Shell"). Medidas en rem: crecen con "Aa". */
+:root {
+  --topbar-h: 3.5rem;
+  --rail-w: 4.5rem;
+  --sidebar-w: 15rem;
+  --drawer-w: min(20rem, 86vw);
+  --tap-min: 2.75rem;
+  --tap-touch: 3rem;
+  --bottombar-h: 4rem;
+  /* Ancho que ocupa la navegación fija a la izquierda del contenido. */
+  --shell-offset: 0px;
+  /* Alto de lo que queda pegado arriba (top bar oscura) para las subnavs. */
+  --finance-nav-top: var(--topbar-h);
+}
+@media (min-width: 1024px) {
+  :root {
+    --shell-offset: var(--rail-w);
+    --finance-nav-top: 0px;
+  }
+}
+@media (min-width: 1280px) {
+  :root {
+    --shell-offset: var(--sidebar-w);
+  }
+  :root[data-sidebar="collapsed"] {
+    --shell-offset: var(--rail-w);
+  }
+}
+
+/* "Aa": tamaño del texto (Design Lock 28 §C4). Solo font-size en <html>;
+   nunca zoom ni transform. Todo el CSS de la app está en rem. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html[data-text-size="normal"] {
+  font-size: 100%;
+}
+html[data-text-size="large"] {
+  font-size: 110%;
+}
+html[data-text-size="xlarge"] {
+  font-size: 125%;
+}
+
 /* Paleta de áreas como variables CSS: --area-{color}-{swatch|ink|soft}. */
 :root {
   --area-azul-swatch: #2f6fb0;
@@ -128,7 +193,7 @@ button:disabled {
   z-index: 50;
   border-radius: 8px;
   background: white;
-  padding: 12px;
+  padding: 0.75rem;
 }
 .skip-link:focus {
   transform: translateY(0);
@@ -140,8 +205,8 @@ button:disabled {
   gap: 10px;
   border-radius: 10px;
   background: var(--color-primary);
-  padding: 13px 20px;
-  font-size: 14px;
+  padding: 0.8125rem 1.25rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: white;
   transition: background-color 150ms;
@@ -157,8 +222,8 @@ button:disabled {
   border: 1px solid #cbd4ca;
   border-radius: 10px;
   background: white;
-  padding: 13px 14px;
-  font-size: 16px;
+  padding: 0.8125rem 0.875rem;
+  font-size: 1rem;
   color: var(--color-ink);
 }
 .form-input::placeholder {
@@ -196,14 +261,14 @@ button:disabled {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  height: 40px;
-  padding: 0 12px;
+  height: 2.5rem;
+  padding: 0 0.75rem;
   margin-bottom: -1px;
   border-bottom: 2px solid transparent;
   /* Darker than --color-muted: at 4.46:1 on --color-canvas it falls just
      short of the 4.5:1 AA text contrast target. */
   color: #5f6d65;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -221,28 +286,28 @@ button:disabled {
 }
 @media (max-width: 640px) {
   .finance-nav {
-    padding-right: 24px;
+    padding-right: 1.5rem;
     mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
   }
   .finance-nav a {
-    height: 44px;
-    padding: 0 14px;
+    height: 2.75rem;
+    padding: 0 0.875rem;
   }
 }
 .settings-nav {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
-  padding: 6px;
+  padding: 0.375rem;
   border: 1px solid var(--color-line);
   border-radius: 12px;
   background: white;
 }
 .settings-nav button {
-  min-height: 44px;
+  min-height: 2.75rem;
   border-radius: 8px;
   color: var(--color-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 .settings-nav button[aria-pressed="true"] {
@@ -267,13 +332,13 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 18px;
+  padding: 1rem 1.125rem;
 }
 .settings-row + .settings-row {
   border-top: 1px solid var(--color-line);
 }
 .settings-row h3 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 .settings-add-form {
@@ -289,7 +354,7 @@ button:disabled {
   flex-direction: column;
   gap: 7px;
   color: var(--color-ink);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 .settings-add-form label {
@@ -300,13 +365,13 @@ button:disabled {
 .user-settings-fields select {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  min-height: 2.75rem;
   border: 1px solid #cbd4ca;
   border-radius: 9px;
   background: white;
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   color: var(--color-ink);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 400;
 }
 .settings-fallback-notice,
@@ -330,7 +395,7 @@ button:disabled {
   margin-bottom: 32px;
 }
 .settings-info-panel h2 {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 500;
 }
 .settings-general-grid {
@@ -340,7 +405,7 @@ button:disabled {
 }
 .settings-general-grid > div {
   min-width: 0;
-  padding: 16px;
+  padding: 1rem;
   border: 1px solid var(--color-line);
   border-radius: 12px;
   background: var(--color-canvas);
@@ -348,11 +413,11 @@ button:disabled {
 .settings-general-grid dt {
   margin-bottom: 7px;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .settings-general-grid dd {
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 .user-settings-list {
@@ -362,7 +427,7 @@ button:disabled {
 }
 .user-settings-card {
   min-width: 0;
-  padding: 20px;
+  padding: 1.25rem;
   border: 1px solid var(--color-line);
   border-radius: 14px;
   background: white;
@@ -381,7 +446,7 @@ button:disabled {
   gap: 10px;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.17em;
   color: var(--color-primary);
@@ -395,12 +460,12 @@ button:disabled {
   margin-bottom: 24px;
 }
 .section-heading h2 {
-  font-size: 23px;
+  font-size: 1.4375rem;
   font-weight: 500;
   letter-spacing: -0.02em;
 }
 .section-heading p {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-muted);
   margin-top: 6px;
   line-height: 1.6;
@@ -414,17 +479,17 @@ button:disabled {
 }
 .finance-page-title {
   flex: 1;
-  min-width: 180px;
+  min-width: 11.25rem;
 }
 .finance-page-title h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 .finance-page-title p {
   margin-top: 4px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 @media (max-width: 640px) {
@@ -443,7 +508,7 @@ button:disabled {
 .finance-period-label {
   margin-bottom: 10px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 .summary-period-controls {
@@ -470,19 +535,22 @@ button:disabled {
 .period-view-toggle {
   display: inline-flex;
   flex-shrink: 0;
+  /* A 110–125 % puede no caber: envuelve en vez de desbordar la página. */
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 3px;
-  padding: 3px;
+  padding: 0.1875rem;
   border: 1px solid var(--color-line);
   border-radius: 11px;
   background: white;
 }
 .period-view-toggle button {
-  min-height: 40px;
-  min-width: 88px;
-  padding: 8px 16px;
+  min-height: 2.5rem;
+  min-width: 5.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 8px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 .period-view-toggle button[aria-pressed="true"] {
@@ -502,15 +570,15 @@ button:disabled {
 }
 .button-secondary {
   display: inline-flex;
-  min-height: 44px;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   border: 1px solid var(--color-line);
   border-radius: 10px;
   background: white;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 .button-secondary:hover {
@@ -522,23 +590,23 @@ button:disabled {
 .panel {
   border: 1px solid var(--color-line);
   background: white;
-  padding: 24px;
+  padding: 1.5rem;
   border-radius: 16px;
   min-width: 0;
 }
 .panel h3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 .empty {
   text-align: center;
-  padding: 48px 24px;
+  padding: 3rem 1.5rem;
   color: var(--color-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .empty h3 {
   color: var(--color-ink);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 500;
 }
 .period-picker {
@@ -553,17 +621,17 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   min-width: 0;
 }
 .period-picker label {
-  flex: 0 1 160px;
-  min-width: 145px;
+  flex: 0 1 10rem;
+  min-width: 9.0625rem;
 }
 .period-picker label:last-child {
-  flex-basis: 110px;
-  min-width: 95px;
+  flex-basis: 6.875rem;
+  min-width: 5.9375rem;
 }
 .period-picker select,
 .filters select,
@@ -571,21 +639,21 @@ button:disabled {
 .finance-form input,
 .finance-form select,
 .finance-form textarea {
-  min-height: 46px;
+  min-height: 2.875rem;
   max-width: 100%;
   width: 100%;
   min-width: 0;
-  padding: 11px 12px;
+  padding: 0.6875rem 0.75rem;
   border: 1px solid #cbd4ca;
   border-radius: 9px;
   background: white;
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--color-ink);
   font-weight: 400;
 }
 .period-picker select {
-  min-height: 44px;
-  padding-block: 10px;
+  min-height: 2.75rem;
+  padding-block: 0.625rem;
 }
 .filters {
   display: grid;
@@ -595,9 +663,9 @@ button:disabled {
 }
 .notice {
   margin: 16px 0;
-  padding: 13px 16px;
+  padding: 0.8125rem 1rem;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -617,27 +685,28 @@ button:disabled {
   margin: 20px 0 14px;
 }
 .kpi {
-  padding: 20px 16px;
+  padding: 1.25rem 1rem;
   border: 1px solid var(--color-line);
   background: white;
   border-radius: 14px;
   min-width: 0;
 }
 .kpi h3 {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-muted);
   font-weight: 500;
-  min-height: 30px;
+  min-height: 1.875rem;
 }
 .kpi p {
-  font-size: clamp(17px, 1.65vw, 25px);
+  /* Sin vw (Design Lock 28 §C4): tamaño fijo en rem que escala con "Aa". */
+  font-size: 1.375rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 .kpi span {
   display: block;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--color-muted);
   margin-top: 10px;
 }
@@ -647,19 +716,29 @@ button:disabled {
   gap: 20px;
 }
 .chart-box {
-  height: 270px;
+  height: 17rem;
   width: 100%;
   min-width: 0;
   margin-top: 14px;
 }
 .chart-box.short {
-  height: 180px;
+  height: 11.25rem;
+}
+/* Textos de recharts desde CSS (en rem: siguen a "Aa"), sin fontSize numérico. */
+.chart-box .recharts-yAxis .recharts-cartesian-axis-tick text {
+  font-size: 0.625rem;
+}
+.chart-box .chart-axis-compact .recharts-cartesian-axis-tick text {
+  font-size: 0.6875rem;
+}
+.chart-box .recharts-legend-wrapper {
+  font-size: 0.75rem;
 }
 .chart-legend {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .chart-legend li {
   display: grid;
@@ -678,9 +757,9 @@ button:disabled {
   border-radius: 50%;
 }
 .empty-chart {
-  padding: 70px 0;
+  padding: 4.375rem 0;
   text-align: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-muted);
 }
 .transaction-table {
@@ -695,11 +774,11 @@ button:disabled {
   grid-template-columns: 1.3fr 1.3fr 1fr auto;
   align-items: center;
   gap: 16px;
-  padding: 18px 20px;
-  font-size: 13px;
+  padding: 1.125rem 1.25rem;
+  font-size: 0.8125rem;
 }
 .transaction-head {
-  font-size: 10px;
+  font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   background: #f0f3ed;
@@ -718,12 +797,12 @@ button:disabled {
   gap: 1px;
 }
 .transaction-actions button {
-  padding: 8px;
-  min-height: 44px;
-  font-size: 12px;
+  padding: 0.5rem;
+  min-height: 2.75rem;
+  font-size: 0.75rem;
 }
 .field-help {
-  font-size: 11px !important;
+  font-size: 0.6875rem !important;
   font-weight: 400 !important;
   line-height: 1.7;
   color: var(--color-muted);
@@ -749,8 +828,8 @@ button:disabled {
 .status-pill {
   display: inline-block;
   margin-top: 4px;
-  font-size: 10px;
-  padding: 2px 7px;
+  font-size: 0.625rem;
+  padding: 0.125rem 0.4375rem;
   border-radius: 20px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
@@ -766,9 +845,9 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
-  padding: 8px 10px;
-  font-size: 12px;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-primary);
 }
@@ -777,17 +856,17 @@ button:disabled {
 }
 .transaction-group-detail {
   margin: 0 0 8px 20px;
-  padding-left: 12px;
+  padding-left: 0.75rem;
   border-left: 2px solid var(--color-line);
 }
 .transaction-group-detail .transaction-row {
-  padding: 14px 20px;
+  padding: 0.875rem 1.25rem;
 }
 .finance-modal {
   position: fixed;
   inset: 0;
   margin: auto;
-  width: min(600px, calc(100% - 32px));
+  width: min(37.5rem, calc(100% - 32px));
   max-height: 92dvh;
   border: 1px solid var(--color-line);
   border-radius: 18px;
@@ -807,13 +886,13 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 24px;
+  padding: 1.125rem 1.5rem;
   border-bottom: 1px solid var(--color-line);
   background: white;
   z-index: 2;
 }
 .modal-heading h2 {
-  font-size: 21px;
+  font-size: 1.3125rem;
   font-weight: 500;
 }
 .icon-button {
@@ -826,14 +905,14 @@ button:disabled {
   flex-shrink: 0;
 }
 .finance-form {
-  padding: 24px;
+  padding: 1.5rem;
 }
 .finance-form label {
   margin-bottom: 18px;
 }
 .finance-form .amount-input {
-  font-size: 32px;
-  padding: 14px;
+  font-size: 2rem;
+  padding: 0.875rem;
 }
 .finance-form fieldset {
   min-width: 0;
@@ -848,7 +927,7 @@ button:disabled {
   justify-content: flex-end;
   gap: 12px;
   background: white;
-  padding-top: 16px;
+  padding-top: 1rem;
   border-top: 1px solid var(--color-line);
 }
 .form-footer button {
@@ -858,15 +937,15 @@ button:disabled {
   display: flex;
   gap: 6px;
   background: var(--color-canvas);
-  padding: 5px;
+  padding: 0.3125rem;
   border: 1px solid var(--color-line);
   border-radius: 10px;
 }
 .segmented button {
   flex: 1;
-  min-height: 44px;
+  min-height: 2.75rem;
   border-radius: 7px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .segmented button[aria-pressed="true"] {
   background: var(--color-primary);
@@ -879,11 +958,11 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  font-size: 14px;
+  font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
 .detail-grid dt {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-muted);
   margin-bottom: 5px;
 }
@@ -894,7 +973,7 @@ button:disabled {
 }
 .profile-card {
   display: block;
-  padding: 20px;
+  padding: 1.25rem;
   border: 1px solid var(--color-line);
   border-radius: 14px;
   background: white;
@@ -904,12 +983,12 @@ button:disabled {
   border-color: #8aa18b;
 }
 .profile-card h3 {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 500;
   overflow-wrap: anywhere;
 }
 .tithe-search input {
-  min-height: 44px;
+  min-height: 2.75rem;
 }
 .profile-rows {
   border: 1px solid var(--color-line);
@@ -922,9 +1001,9 @@ button:disabled {
   grid-template-columns: 2fr 1fr 1.2fr auto auto;
   align-items: center;
   gap: 12px;
-  min-height: 48px;
-  padding: 10px 16px;
-  font-size: 13px;
+  min-height: 3rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.8125rem;
 }
 .profile-row + .profile-row {
   border-top: 1px solid var(--color-line);
@@ -940,7 +1019,7 @@ button:disabled {
   color: var(--color-muted);
 }
 .profile-row-action {
-  min-height: 44px;
+  min-height: 2.75rem;
 }
 
 .tithe-contrib-strip {
@@ -955,11 +1034,11 @@ button:disabled {
   gap: 6px;
 }
 .tithe-contrib-strip span {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-muted);
 }
 .tithe-contrib-strip strong {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .tithe-history-table-wrap {
@@ -971,17 +1050,17 @@ button:disabled {
 .tithe-history-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .tithe-history-table th,
 .tithe-history-table td {
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
   border-bottom: 1px solid var(--color-line);
   text-align: left;
   white-space: nowrap;
 }
 .tithe-history-table thead th {
-  font-size: 10px;
+  font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-muted);
@@ -989,7 +1068,7 @@ button:disabled {
 }
 .tithe-history-group th {
   background: var(--color-canvas);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-ink);
   white-space: normal;
@@ -1005,13 +1084,13 @@ button:disabled {
 }
 .tithe-history-note {
   white-space: normal;
-  max-width: 220px;
+  max-width: 13.75rem;
   color: var(--color-muted);
 }
 .receipt-button {
-  min-height: 40px;
-  font-size: 12px;
-  padding: 8px 12px;
+  min-height: 2.5rem;
+  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
 }
 
 @media (max-width: 640px) {
@@ -1023,20 +1102,20 @@ button:disabled {
 .check-label {
   flex-direction: row !important;
   align-items: flex-start;
-  font-size: 14px !important;
+  font-size: 0.875rem !important;
   line-height: 1.6;
-  min-height: 44px;
+  min-height: 2.75rem;
 }
 .check-label input {
-  min-height: 22px !important;
+  min-height: 1.375rem !important;
   width: 22px !important;
   margin-top: 1px;
   flex-shrink: 0;
 }
 .followup {
-  padding: 18px 0;
+  padding: 1.125rem 0;
   border-bottom: 1px solid var(--color-line);
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1057,7 +1136,7 @@ button:disabled {
     grid-template-columns: 1fr 1fr;
   }
   .kpi p {
-    font-size: 23px;
+    font-size: 1.4375rem;
   }
 }
 @media (max-width: 640px) {
@@ -1091,11 +1170,11 @@ button:disabled {
   .finance-page-actions > * {
     flex: 1;
     min-width: 0;
-    padding-inline: 12px;
+    padding-inline: 0.75rem;
     text-align: center;
   }
   .report-actions > * {
-    flex: 1 1 140px;
+    flex: 1 1 8.75rem;
     text-align: center;
   }
   .charts-grid,
@@ -1107,29 +1186,29 @@ button:disabled {
     gap: 10px;
   }
   .kpi {
-    padding: 16px 12px;
+    padding: 1rem 0.75rem;
   }
   .kpi p {
-    font-size: 21px;
+    font-size: 1.3125rem;
   }
   .kpi:last-child {
     grid-column: 1 / -1;
   }
   .kpi h3 {
-    min-height: 25px;
+    min-height: 1.5625rem;
   }
   .panel {
-    padding: 18px;
+    padding: 1.125rem;
   }
   .transaction-row {
-    padding: 18px 16px;
+    padding: 1.125rem 1rem;
     gap: 14px;
   }
   .transaction-row > div:first-child {
     grid-column: 1 / -1;
   }
   .transaction-row > div:nth-child(2) {
-    font-size: 12px;
+    font-size: 0.75rem;
   }
   .transaction-row > div:nth-child(3) {
     text-align: right;
@@ -1137,7 +1216,7 @@ button:disabled {
   .transaction-actions {
     grid-column: 1 / -1;
     border-top: 1px solid var(--color-line);
-    padding-top: 4px;
+    padding-top: 0.25rem;
     justify-content: space-between;
   }
   .transaction-actions button {
@@ -1151,16 +1230,16 @@ button:disabled {
     border-radius: 18px 18px 0 0;
   }
   .finance-form {
-    padding: 20px;
+    padding: 1.25rem;
   }
   .modal-heading {
-    padding: 12px 20px;
+    padding: 0.75rem 1.25rem;
   }
   .form-grid {
     gap: 10px;
   }
   .chart-box {
-    height: 235px;
+    height: 14.6875rem;
   }
   .section-heading > .flex {
     width: 100%;
@@ -1174,12 +1253,12 @@ button:disabled {
     grid-template-columns: 1fr;
   }
   .chart-legend {
-    font-size: 11px;
+    font-size: 0.6875rem;
   }
   .form-footer {
     position: sticky;
     bottom: 0;
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
     z-index: 1;
   }
   .filters {
@@ -1194,15 +1273,15 @@ button:disabled {
     flex-direction: column;
   }
   #main-content {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
   .form-grid {
     grid-template-columns: 1fr;
     gap: 0;
   }
   .kpi p {
-    font-size: 19px;
+    font-size: 1.1875rem;
   }
   .chart-legend li {
     grid-template-columns: 8px 1fr;
@@ -1211,10 +1290,10 @@ button:disabled {
     grid-column: 2;
   }
   .finance-form {
-    padding: 16px;
+    padding: 1rem;
   }
   .modal-heading h2 {
-    font-size: 19px;
+    font-size: 1.1875rem;
   }
 }
 .tithe-kpis {
@@ -1307,17 +1386,17 @@ button:disabled {
   }
 
   .summary-period-controls .period-picker label:first-child {
-    flex: 0 0 160px;
-    min-width: 160px;
+    flex: 0 0 10rem;
+    min-width: 10rem;
   }
 
   .summary-period-controls .period-picker label:last-child {
-    flex: 0 0 110px;
-    min-width: 110px;
+    flex: 0 0 6.875rem;
+    min-width: 6.875rem;
   }
 
   .summary-period-controls .period-picker select {
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .summary-period-controls .finance-page-actions {
@@ -1364,16 +1443,16 @@ button:disabled {
 
 .button-danger {
   display: inline-flex;
-  min-height: 44px;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   border: 1px solid #e4bbb6;
   border-radius: 10px;
   background: #fff7f5;
   color: #8e302b;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
@@ -1436,29 +1515,29 @@ button:disabled {
 }
 
 .summary-period-left .period-picker label:first-child {
-  width: 160px;
+  width: 10rem;
 }
 
 .summary-period-left .period-picker label:last-child {
-  width: 110px;
+  width: 6.875rem;
 }
 
 .summary-period-left .period-picker select {
   width: 100%;
-  height: 46px;
-  min-height: 46px;
+  height: 2.875rem;
+  min-height: 2.875rem;
   margin: 0;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1;
 }
 
 .summary-period-left .period-view-toggle {
-  height: 46px;
+  min-height: 2.875rem;
   align-items: center;
 }
 
 .summary-period-left .period-view-toggle button {
-  min-height: 38px;
+  min-height: 2.375rem;
 }
 
 .summary-period-controls .finance-page-actions {
@@ -1470,7 +1549,7 @@ button:disabled {
 }
 
 .summary-period-controls .finance-page-actions > * {
-  min-height: 46px;
+  min-height: 2.875rem;
 }
 
 /* Pantallas intermedias */
@@ -1522,7 +1601,7 @@ button:disabled {
 
   .summary-period-left .period-picker {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 110px;
+    grid-template-columns: minmax(0, 1fr) 6.875rem;
     gap: 10px;
     width: 100%;
   }
@@ -1585,7 +1664,7 @@ button:disabled {
 
 .campaign-card {
   min-width: 0;
-  padding: 22px;
+  padding: 1.375rem;
   border: 1px solid var(--color-line);
   border-radius: 16px;
   background: white;
@@ -1601,7 +1680,7 @@ button:disabled {
 
 .campaign-card-heading h3 {
   margin-top: 12px;
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 600;
 }
 
@@ -1615,13 +1694,13 @@ button:disabled {
 }
 
 .campaign-progress-heading strong {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 600;
 }
 
 .campaign-progress-heading span {
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .campaign-progress {
@@ -1642,7 +1721,7 @@ button:disabled {
 .campaign-goal {
   margin-top: 8px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .campaign-manage-button {
@@ -1652,19 +1731,19 @@ button:disabled {
 
 .campaign-detail-heading h2 {
   margin-top: 8px;
-  font-size: 27px;
+  font-size: 1.6875rem;
   font-weight: 600;
 }
 
 .campaign-detail-heading p:not(.eyebrow) {
-  max-width: 660px;
+  max-width: 41.25rem;
   margin-top: 10px;
   color: var(--color-muted);
   line-height: 1.6;
 }
 
 .campaign-detail-progress {
-  max-width: 700px;
+  max-width: 43.75rem;
 }
 
 .campaign-metrics {
@@ -1675,7 +1754,7 @@ button:disabled {
 }
 
 .campaign-metrics > div {
-  padding: 16px;
+  padding: 1rem;
   border-radius: 12px;
   background: var(--color-canvas);
 }
@@ -1684,11 +1763,11 @@ button:disabled {
   display: block;
   margin-bottom: 7px;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .campaign-metrics strong {
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .campaign-public-link {
@@ -1697,14 +1776,14 @@ button:disabled {
   justify-content: space-between;
   gap: 18px;
   margin-top: 24px;
-  padding-top: 20px;
+  padding-top: 1.25rem;
   border-top: 1px solid var(--color-line);
 }
 
 .campaign-public-link p {
   margin-top: 5px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 
@@ -1720,7 +1799,7 @@ button:disabled {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 16px 18px;
+  padding: 1rem 1.125rem;
 }
 
 .campaign-contribution-row + .campaign-contribution-row {
@@ -1741,7 +1820,7 @@ button:disabled {
 .campaign-contribution-row p {
   margin-top: 4px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .campaign-contribution-amount {
@@ -1797,7 +1876,7 @@ button:disabled {
 .public-campaign-shell {
   width: min(760px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 28px 0 56px;
+  padding: 1.75rem 0 3.5rem;
 }
 
 .public-campaign-brand {
@@ -1827,13 +1906,13 @@ button:disabled {
 .public-campaign-brand span {
   margin-top: 3px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .public-campaign-hero,
 .public-campaign-card {
   margin-bottom: 18px;
-  padding: 28px;
+  padding: 1.75rem;
   border: 1px solid var(--color-line);
   border-radius: 18px;
   background: white;
@@ -1841,7 +1920,7 @@ button:disabled {
 
 .public-campaign-hero h1 {
   margin-top: 10px;
-  font-size: clamp(28px, 6vw, 42px);
+  font-size: clamp(1.75rem, 6vw, 2.625rem);
   line-height: 1.1;
 }
 
@@ -1857,7 +1936,7 @@ button:disabled {
 
 .public-campaign-total strong {
   display: block;
-  font-size: 36px;
+  font-size: 2.25rem;
 }
 
 .public-campaign-total span {
@@ -1886,7 +1965,7 @@ button:disabled {
   justify-content: space-between;
   margin-top: 9px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .public-campaign-stats {
@@ -1897,7 +1976,7 @@ button:disabled {
 }
 
 .public-campaign-stats > div {
-  padding: 14px;
+  padding: 0.875rem;
   border-radius: 12px;
   background: var(--color-canvas);
 }
@@ -1910,7 +1989,7 @@ button:disabled {
 .public-campaign-stats span {
   margin-bottom: 7px;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .public-section-heading {
@@ -1922,12 +2001,12 @@ button:disabled {
 
 .public-campaign-card h2 {
   margin-top: 8px;
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 .transfer-data {
   margin-top: 22px;
-  padding: 18px;
+  padding: 1.125rem;
   border-radius: 12px;
   background: var(--color-canvas);
   white-space: pre-wrap;
@@ -1964,7 +2043,7 @@ button:disabled {
   align-items: flex-start;
   gap: 10px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -1977,7 +2056,7 @@ button:disabled {
   display: flex;
   gap: 14px;
   margin-top: 24px;
-  padding: 18px;
+  padding: 1.125rem;
   border-radius: 14px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
@@ -1989,15 +2068,15 @@ button:disabled {
 
 .public-receipt-note {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.5;
 }
 
 .public-campaign-footer {
-  padding: 18px 0;
+  padding: 1.125rem 0;
   text-align: center;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .campaign-pending-row {
@@ -2005,7 +2084,7 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 18px;
-  padding: 18px;
+  padding: 1.125rem;
 }
 
 .campaign-pending-row + .campaign-pending-row {
@@ -2015,7 +2094,7 @@ button:disabled {
 .campaign-pending-row p {
   margin-top: 4px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .campaign-pending-note {
@@ -2030,12 +2109,12 @@ button:disabled {
 @media (max-width: 640px) {
   .public-campaign-shell {
     width: min(100% - 20px, 760px);
-    padding-top: 16px;
+    padding-top: 1rem;
   }
 
   .public-campaign-hero,
   .public-campaign-card {
-    padding: 21px;
+    padding: 1.3125rem;
   }
 
   .public-campaign-stats {
@@ -2075,12 +2154,12 @@ button:disabled {
 
 .public-hero-compact {
   margin-bottom: 12px;
-  padding: 22px;
+  padding: 1.375rem;
 }
 
 .public-hero-compact h1 {
   margin-top: 7px;
-  font-size: clamp(27px, 6vw, 36px);
+  font-size: clamp(1.6875rem, 6vw, 2.25rem);
 }
 
 .public-main-progress {
@@ -2094,13 +2173,13 @@ button:disabled {
 }
 
 .public-main-number strong {
-  font-size: clamp(36px, 9vw, 50px);
+  font-size: clamp(2.25rem, 9vw, 3.125rem);
   line-height: 1;
 }
 
 .public-main-number span {
   color: var(--color-muted);
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .public-hero-compact .public-progress {
@@ -2110,11 +2189,11 @@ button:disabled {
 .public-contribution-count {
   margin-top: 8px !important;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .public-contribution-card {
-  padding: 22px;
+  padding: 1.375rem;
 }
 
 .public-contribution-heading {
@@ -2126,22 +2205,22 @@ button:disabled {
 
 .public-contribution-heading h2 {
   margin-top: 6px;
-  font-size: 25px;
+  font-size: 1.5625rem;
 }
 
 .public-contribution-heading > span {
   flex-shrink: 0;
-  padding: 6px 9px;
+  padding: 0.375rem 0.5625rem;
   border-radius: 999px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
 }
 
 .public-form-intro.compact {
   margin-top: 7px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .public-form-compact {
@@ -2152,12 +2231,12 @@ button:disabled {
 .public-form-compact
   label:not(.public-checkbox) {
   gap: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .public-form-compact input,
 .public-form-compact textarea {
-  min-height: 48px;
+  min-height: 3rem;
 }
 
 .public-form-row {
@@ -2179,17 +2258,17 @@ button:disabled {
 .optional-label,
 .public-receipt-field > span {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 400;
 }
 
 .public-file-input {
   position: relative;
   display: flex;
-  min-height: 58px;
+  min-height: 3.625rem;
   align-items: center;
   gap: 11px;
-  padding: 10px 13px;
+  padding: 0.625rem 0.8125rem;
   overflow: hidden;
   border: 1px dashed #bac8be;
   border-radius: 11px;
@@ -2209,7 +2288,7 @@ button:disabled {
 .public-file-input strong {
   max-width: 420px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2217,7 +2296,7 @@ button:disabled {
 .public-file-input span {
   margin-top: 3px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .public-file-input input {
@@ -2235,14 +2314,14 @@ button:disabled {
 
 .public-submit {
   width: 100%;
-  min-height: 50px;
+  min-height: 3.125rem;
 }
 
 .public-verification-note {
   margin-top: -3px;
   text-align: center;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .public-another-contribution {
@@ -2259,11 +2338,11 @@ button:disabled {
 
 .public-transfer-details summary {
   display: flex;
-  min-height: 72px;
+  min-height: 4.5rem;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  padding: 15px 20px;
+  padding: 0.9375rem 1.25rem;
   cursor: pointer;
   list-style: none;
 }
@@ -2279,12 +2358,12 @@ button:disabled {
 
 .public-transfer-details summary span {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .public-transfer-details summary strong {
   margin-top: 3px;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .public-transfer-details[open]
@@ -2294,7 +2373,7 @@ button:disabled {
 }
 
 .public-transfer-body {
-  padding: 0 20px 20px;
+  padding: 0 1.25rem 1.25rem;
   border-top: 1px solid var(--color-line);
 }
 
@@ -2306,18 +2385,18 @@ button:disabled {
 
 .public-transfer-body .transfer-data {
   margin-top: 11px;
-  padding: 14px;
-  font-size: 13px;
+  padding: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 @media (max-width: 640px) {
   .public-campaign-v2 {
     width: calc(100% - 16px);
-    padding-top: 11px;
+    padding-top: 0.6875rem;
   }
 
   .public-brand-compact {
-    padding: 0 5px;
+    padding: 0 0.3125rem;
   }
 
   .public-brand-compact
@@ -2329,7 +2408,7 @@ button:disabled {
 
   .public-hero-compact,
   .public-contribution-card {
-    padding: 19px;
+    padding: 1.1875rem;
     border-radius: 15px;
   }
 
@@ -2340,7 +2419,7 @@ button:disabled {
   .public-main-number span {
     display: block;
     margin-top: 6px;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .public-contribution-heading {
@@ -2371,7 +2450,7 @@ button:disabled {
   border: 0;
   background: transparent;
   color: var(--color-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-decoration: underline;
 }
@@ -2384,16 +2463,17 @@ button:disabled {
 }
 
 .campaign-row-actions button {
-  min-height: 34px;
-  padding: 7px 10px;
-  font-size: 11px;
+  /* Objetivo táctil de 44px (Design Lock 28 §C4; antes 34px). */
+  min-height: var(--tap-min);
+  padding: 0.4375rem 0.625rem;
+  font-size: 0.6875rem;
 }
 
 .campaign-void-reason {
   display: block;
   margin-top: 6px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .campaign-receipt-link {
@@ -2404,7 +2484,7 @@ button:disabled {
 
 .campaign-receipt-preview {
   display: flex;
-  max-height: 72vh;
+  max-height: 72dvh;
   justify-content: center;
   overflow: auto;
   border-radius: 12px;
@@ -2416,7 +2496,7 @@ button:disabled {
   width: auto;
   max-width: 100%;
   height: auto;
-  max-height: 70vh;
+  max-height: 70dvh;
   object-fit: contain;
 }
 
@@ -2437,7 +2517,7 @@ button:disabled {
   display: flex;
   gap: 6px;
   margin: 18px 0;
-  padding: 4px;
+  padding: 0.25rem;
   width: fit-content;
   border-radius: 10px;
   background: var(--color-canvas);
@@ -2447,27 +2527,27 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 38px;
-  padding: 7px 12px;
+  min-height: 2.375rem;
+  padding: 0.4375rem 0.75rem;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .campaign-payment-tab span {
   display: inline-flex;
-  min-width: 20px;
-  height: 20px;
+  min-width: 1.25rem;
+  height: 1.25rem;
   align-items: center;
   justify-content: center;
-  padding: 0 5px;
+  padding: 0 0.3125rem;
   border-radius: 999px;
   background: white;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .campaign-payment-tab.active {
@@ -2505,25 +2585,25 @@ button:disabled {
 .offering-summary-card { display:grid; gap:7px; }
 .offering-summary-card > svg { color:var(--color-primary); }
 .offering-summary-card > span,.offering-summary-card > small { color:var(--color-muted); }
-.offering-summary-card > strong { font-size:26px; }
+.offering-summary-card > strong { font-size:1.625rem; }
 .offering-integrations-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.offering-integration-card { padding:20px; border:1px solid var(--color-line); border-radius:16px; background:white; }
+.offering-integration-card { padding:1.25rem; border:1px solid var(--color-line); border-radius:16px; background:white; }
 .offering-integration-card h3 { margin-top:5px; }
 .offering-integration-card > .status-pill { display:inline-flex; margin-top:12px; }
-.offering-integration-card > p { margin-top:10px; color:var(--color-muted); font-size:12px; }
+.offering-integration-card > p { margin-top:10px; color:var(--color-muted); font-size:0.75rem; }
 .offering-public-panel { display:flex; align-items:center; justify-content:space-between; gap:18px; }
 .offering-public-panel h2 { margin-top:5px; }
-.offering-public-panel p { margin-top:6px; overflow-wrap:anywhere; color:var(--color-muted); font-size:12px; }
+.offering-public-panel p { margin-top:6px; overflow-wrap:anywhere; color:var(--color-muted); font-size:0.75rem; }
 .text-button { width:fit-content; padding:0; border:0; background:transparent; color:var(--color-primary); font-weight:700; cursor:pointer; }
-.giving-public-shell { width:min(680px,calc(100% - 24px)); margin:0 auto; padding:28px 0 44px; }
-.giving-public-hero { margin-top:18px; padding:28px; border:1px solid var(--color-line); border-radius:20px; background:white; }
-.giving-public-hero h1 { margin-top:7px; font-size:clamp(34px,8vw,52px); color:#213c31; }
+.giving-public-shell { width:min(680px,calc(100% - 24px)); margin:0 auto; padding:1.75rem 0 2.75rem; }
+.giving-public-hero { margin-top:18px; padding:1.75rem; border:1px solid var(--color-line); border-radius:20px; background:white; }
+.giving-public-hero h1 { margin-top:7px; font-size:clamp(2.125rem,8vw,3.25rem); color:#213c31; }
 .giving-public-hero > p:last-child { margin-top:12px; color:var(--color-muted); line-height:1.55; }
 .giving-methods { display:grid; gap:12px; margin-top:12px; }
-.giving-method-card { padding:24px; border:1px solid var(--color-line); border-radius:18px; background:white; }
+.giving-method-card { padding:1.5rem; border:1px solid var(--color-line); border-radius:18px; background:white; }
 .giving-method-icon { display:inline-flex; width:44px; height:44px; align-items:center; justify-content:center; border-radius:12px; background:var(--color-primary-soft); color:var(--color-primary); }
 .giving-method-copy { margin-top:16px; }
-.giving-method-copy h2 { margin-top:5px; font-size:25px; }
+.giving-method-copy h2 { margin-top:5px; font-size:1.5625rem; }
 .giving-method-copy > p { margin-top:7px; color:var(--color-muted); line-height:1.5; }
 .giving-method-card .transfer-data { margin-top:18px; }
 .giving-copy-button { width:100%; margin-top:12px; }
@@ -2532,8 +2612,8 @@ button:disabled {
   .offering-header-actions button { flex:1; }
   .offering-summary-grid,.offering-integrations-grid { grid-template-columns:1fr; }
   .offering-public-panel { align-items:stretch; flex-direction:column; }
-  .giving-public-shell { width:calc(100% - 16px); padding-top:14px; }
-  .giving-public-hero,.giving-method-card { padding:20px; border-radius:16px; }
+  .giving-public-shell { width:calc(100% - 16px); padding-top:0.875rem; }
+  .giving-public-hero,.giving-method-card { padding:1.25rem; border-radius:16px; }
 }
 
 /* Caja diaria · Ofrendas + Cafetería */
@@ -2552,21 +2632,21 @@ button:disabled {
 .daily-cash-toolbar p {
   margin-top: 4px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .daily-cash-date {
   display: grid;
   gap: 6px;
-  min-width: 170px;
+  min-width: 10.625rem;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
 }
 
 .daily-cash-date input {
-  min-height: 42px;
-  padding: 8px 10px;
+  min-height: 2.625rem;
+  padding: 0.5rem 0.625rem;
   border: 1px solid var(--color-line);
   border-radius: 9px;
   background: white;
@@ -2594,7 +2674,7 @@ button:disabled {
 
 .daily-cash-heading h3 {
   margin-top: 5px;
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .daily-cash-heading > svg {
@@ -2611,7 +2691,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 9px;
+  padding-bottom: 0.5625rem;
   border-bottom: 1px solid var(--color-line);
 }
 
@@ -2620,11 +2700,11 @@ button:disabled {
   align-items: center;
   gap: 7px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .daily-cash-lines strong {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .daily-cash-total {
@@ -2632,20 +2712,20 @@ button:disabled {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px;
+  padding: 0.8125rem;
   border-radius: 11px;
   background: var(--color-primary-soft);
 }
 
 .daily-cash-total span {
   color: var(--color-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
 .daily-cash-total strong {
   color: var(--color-primary);
-  font-size: 23px;
+  font-size: 1.4375rem;
 }
 
 .daily-cash-card > button {
@@ -2686,7 +2766,7 @@ button:disabled {
 
 @media (min-width: 760px) {
   .daily-cash-grid-single .daily-cash-card {
-    max-width: 620px;
+    max-width: 38.75rem;
   }
 }
 
@@ -2697,7 +2777,7 @@ button:disabled {
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 14px;
-  padding: 22px 24px;
+  padding: 1.375rem 1.5rem;
   border: 1px solid var(--color-line);
   border-radius: 16px;
   background: var(--color-primary-soft);
@@ -2709,15 +2789,15 @@ button:disabled {
 
 .summary-sumup-copy h3 {
   margin-top: 5px;
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--color-primary);
 }
 
 .summary-sumup-copy p {
-  max-width: 620px;
+  max-width: 38.75rem;
   margin-top: 5px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -2730,14 +2810,14 @@ button:disabled {
 
 .summary-sumup-amount strong {
   color: var(--color-primary);
-  font-size: 28px;
+  font-size: 1.75rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .summary-sumup-amount > span {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .summary-sumup-amount .button-secondary {
@@ -2755,20 +2835,20 @@ button:disabled {
 
 .summary-sumup-breakdown li {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .summary-sumup-only-note {
   margin-top: 12px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 @media (max-width: 640px) {
   .summary-sumup-card {
     align-items: stretch;
     flex-direction: column;
-    padding: 18px;
+    padding: 1.125rem;
   }
 
   .summary-sumup-amount {
@@ -2784,16 +2864,16 @@ button:disabled {
 /* Diezmos · método de pago + comprobante */
 .finance-form .tithe-payment-select {
   width: 100%;
-  min-height: 52px;
-  padding: 0 14px;
+  min-height: 3.25rem;
+  padding: 0 0.875rem;
   border-radius: 10px;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .tithe-receipt-field input[type="file"] {
   width: 100%;
-  min-height: 52px;
-  padding: 10px 12px;
+  min-height: 3.25rem;
+  padding: 0.625rem 0.75rem;
   border: 1px solid var(--color-line);
   border-radius: 10px;
   background: white;
@@ -2810,7 +2890,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 2px 2px 0;
+  padding: 0.125rem 0.125rem 0;
 }
 
 .daily-cash-month-total > div {
@@ -2820,18 +2900,18 @@ button:disabled {
 
 .daily-cash-month-total span {
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .daily-cash-month-total small {
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .daily-cash-month-total > strong {
   color: var(--color-primary);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2840,19 +2920,19 @@ button:disabled {
   display: grid;
   gap: 5px;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
 }
 
 .summary-day-picker input {
-  min-width: 170px;
-  min-height: 48px;
-  padding: 8px 12px;
+  min-width: 10.625rem;
+  min-height: 3rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-line);
   border-radius: 9px;
   background: white;
   color: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .summary-day-balance {
@@ -2866,7 +2946,7 @@ button:disabled {
 .summary-day-balance > div {
   display: grid;
   gap: 5px;
-  padding: 20px 22px;
+  padding: 1.25rem 1.375rem;
 }
 
 .summary-day-balance > div + div {
@@ -2875,11 +2955,11 @@ button:disabled {
 
 .summary-day-balance span {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .summary-day-balance strong {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2911,21 +2991,21 @@ button:disabled {
    fuente, días por revisar y calendario + panel del día. */
 
 .text-warning {
-  color: var(--color-warning);
+  color: var(--color-warning-ink);
 }
 
 .button-ghost {
   display: inline-flex;
-  min-height: 44px;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   color: var(--color-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 .button-ghost:hover {
@@ -2963,13 +3043,18 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin-top: 12px;
 }
 .notice-warning {
   background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
+}
+/* El icono conserva el ámbar (--color-warning es solo para iconos y bordes). */
+.notice-warning > svg,
+.review-days li > svg {
   color: var(--color-warning);
 }
 .cash-date-warning {
@@ -3004,7 +3089,7 @@ button:disabled {
   flex: none;
   width: 18px;
   height: 18px;
-  min-height: 18px;
+  min-height: 1.125rem;
   margin: 0;
   padding: 0;
   accent-color: var(--color-primary);
@@ -3024,11 +3109,11 @@ button:disabled {
   width: 100%;
   border-collapse: collapse;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .income-method-table th,
 .income-method-table td {
-  padding: 9px 6px;
+  padding: 0.5625rem 0.375rem;
   text-align: left;
   border-bottom: 1px solid var(--color-line);
 }
@@ -3046,8 +3131,8 @@ button:disabled {
 .income-method-breakdown td {
   border-bottom: 1px solid var(--color-line);
   padding-top: 0;
-  padding-bottom: 12px;
-  font-size: 11px;
+  padding-bottom: 0.75rem;
+  font-size: 0.6875rem;
   color: var(--color-muted);
   text-align: left;
 }
@@ -3062,17 +3147,17 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   margin-top: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .source-block-expense strong {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .sumup-fee-pending {
   display: inline-flex !important;
   align-items: center;
   gap: 6px;
   color: var(--color-muted);
-  font-size: 13px !important;
+  font-size: 0.8125rem !important;
   font-weight: 500;
 }
 .sumup-fee-pending svg {
@@ -3092,8 +3177,8 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
-  color: var(--color-warning);
+  font-size: 0.8125rem;
+  color: var(--color-warning-ink);
 }
 .review-days li span {
   flex: 1;
@@ -3112,7 +3197,7 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.4;
 }
 .report-alerts li span {
@@ -3140,19 +3225,19 @@ button:disabled {
   table-layout: fixed;
 }
 .calendar-table th {
-  font-size: 10px;
+  font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-muted);
-  padding: 6px 2px;
+  padding: 0.375rem 0.125rem;
   text-align: center;
 }
 .calendar-table td {
-  padding: 2px;
+  padding: 0.125rem;
 }
 .calendar-cell {
   width: 100%;
-  min-height: 44px;
+  min-height: 2.75rem;
   border: 1px solid var(--color-line);
   border-radius: 10px;
   background: white;
@@ -3161,25 +3246,25 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 6px 2px;
-  font-size: 10px;
+  padding: 0.375rem 0.125rem;
+  font-size: 0.625rem;
   color: var(--color-ink);
 }
 .calendar-cell-day {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 .calendar-cell-status {
   display: flex;
   align-items: center;
   gap: 2px;
-  font-size: 9px;
+  font-size: 0.5625rem;
 }
 .calendar-cell.is-future {
   color: var(--color-muted);
 }
 .calendar-cell.has-warning {
-  color: var(--color-warning);
+  color: var(--color-warning-ink);
   border-color: var(--color-warning);
 }
 .calendar-cell.has-empty {
@@ -3203,11 +3288,11 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   margin: 0;
 }
 .day-panel-status.status-warning {
-  color: var(--color-warning);
+  color: var(--color-warning-ink);
 }
 .day-panel-status.status-muted {
   color: var(--color-muted);
@@ -3215,11 +3300,11 @@ button:disabled {
 .day-panel-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .day-panel-table th,
 .day-panel-table td {
-  padding: 7px 4px;
+  padding: 0.4375rem 0.25rem;
   border-bottom: 1px solid var(--color-line);
   text-align: right;
 }
@@ -3261,7 +3346,7 @@ button:disabled {
     grid-template-columns: 1fr;
   }
   .calendar-cell {
-    min-height: 44px;
+    min-height: 2.75rem;
   }
 }
 
@@ -3277,18 +3362,18 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-muted);
 }
 .offering-date-bar input {
-  min-height: 44px;
+  min-height: 2.75rem;
   border: 1px solid var(--color-line);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
 }
 .offering-date-bar .button-secondary {
   min-width: 44px;
-  padding: 10px;
+  padding: 0.625rem;
 }
 
 .offering-legacy-line {
@@ -3307,13 +3392,13 @@ button:disabled {
 
 .offering-area-block + .offering-area-block {
   margin-top: 16px;
-  padding-top: 16px;
+  padding-top: 1rem;
   border-top: 1px solid var(--color-line);
 }
 
 .offering-area-block-label {
   display: block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3326,8 +3411,8 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 0;
-  font-size: 13px;
+  padding: 0.375rem 0;
+  font-size: 0.8125rem;
 }
 .offering-area-line span {
   display: flex;
@@ -3343,7 +3428,7 @@ button:disabled {
 .offering-area-total {
   border-top: 1px solid var(--color-line);
   margin-top: 4px;
-  padding-top: 10px;
+  padding-top: 0.625rem;
   font-weight: 600;
 }
 .offering-area-total span {
@@ -3359,7 +3444,7 @@ button:disabled {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-muted);
   margin: 16px 0;
 }
@@ -3372,9 +3457,9 @@ button:disabled {
   color: var(--color-line);
 }
 .integration-line-sync {
-  min-height: 32px;
-  padding: 4px 10px;
-  font-size: 12px;
+  min-height: 2rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
 }
 
 .offering-days-table-wrap {
@@ -3383,11 +3468,11 @@ button:disabled {
 .offering-days-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .offering-days-table th,
 .offering-days-table td {
-  padding: 10px 8px;
+  padding: 0.625rem 0.5rem;
   border-bottom: 1px solid var(--color-line);
   text-align: right;
   white-space: nowrap;
@@ -3397,7 +3482,7 @@ button:disabled {
   text-align: left;
 }
 .offering-days-table th {
-  font-size: 10px;
+  font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-muted);
@@ -3406,7 +3491,7 @@ button:disabled {
   background: var(--color-primary-soft);
 }
 .offering-day-link {
-  min-height: 44px;
+  min-height: 2.75rem;
   padding: 0;
   background: none;
   border: none;
@@ -3459,7 +3544,7 @@ button:disabled {
   .offering-days-table tr {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    padding: 10px 0;
+    padding: 0.625rem 0;
   }
   .offering-days-table td {
     border-bottom: none;

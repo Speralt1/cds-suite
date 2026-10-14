@@ -151,6 +151,13 @@ function mockMedia(mobile: boolean) {
 }
 
 const css = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+/** Longitud CSS en px (acepta px o rem; 1rem = 16px al 100 %). */
+function toPx(value: string | undefined): number {
+  const m = value?.match(/^([\d.]+)(px|rem)$/);
+  if (!m) return NaN;
+  return m[2] === "rem" ? Number(m[1]) * 16 : Number(m[1]);
+}
+const LEN = "([\\d.]+(?:px|rem))";
 /** Cuerpo de la primera regla cuyo selector es exactamente `selector`. */
 function rule(source: string, selector: string): string {
   const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -180,20 +187,20 @@ describe("B1 · Reporte: Fecha y Hora no se pegan", () => {
     const time = rule(src, ".cal-rep-table .c-time");
     expect(date).toMatch(/white-space:\s*nowrap/);
     expect(time).toMatch(/white-space:\s*nowrap/);
-    expect(Number(date.match(/width:\s*(\d+)px/)?.[1])).toBeGreaterThanOrEqual(144);
-    expect(date).toMatch(/padding-right:\s*16px/);
-    expect(Number(time.match(/width:\s*(\d+)px/)?.[1])).toBeGreaterThanOrEqual(104);
+    expect(toPx(date.match(new RegExp(`width:\\s*${LEN}`))?.[1])).toBeGreaterThanOrEqual(144);
+    expect(date).toMatch(/padding-right:\s*(16px|1rem)/);
+    expect(toPx(time.match(new RegExp(`width:\\s*${LEN}`))?.[1])).toBeGreaterThanOrEqual(104);
     expect(rule(src, ".cal-rep-table .c-title")).not.toMatch(/width/);
   });
 
   it("los cortes por ancho dejan a Actividad con al menos 160 px", () => {
-    const width = (sel: string) => Number(rule(src, `.cal-rep-table .${sel}`).match(/width:\s*(\d+)px/)?.[1] ?? 0);
+    const width = (sel: string) => toPx(rule(src, `.cal-rep-table .${sel}`).match(new RegExp(`width:\\s*${LEN}`))?.[1] ?? "0px");
     const fixed = width("c-date") + width("c-time") + width("c-resp") + width("c-status");
     const bp = (col: string) => {
-      const re = new RegExp(`@container \\(max-width: (\\d+)px\\) \\{\\s*\\.cal-rep-table \\.${col} \\{\\s*display: none;`);
-      return Number(src.match(re)?.[1]);
+      const re = new RegExp(`@container \\(max-width: ${LEN}\\) \\{\\s*\\.cal-rep-table \\.${col} \\{\\s*display: none;`);
+      return toPx(src.match(re)?.[1]);
     };
-    const tableBp = Number(src.match(/@container \(max-width: (\d+)px\) \{\s*\.cal-rep-table \{\s*display: none;/)?.[1]);
+    const tableBp = toPx(src.match(new RegExp(`@container \\(max-width: ${LEN}\\) \\{\\s*\\.cal-rep-table \\{\\s*display: none;`))?.[1]);
     // Justo sobre cada corte, con las columnas aún visibles.
     expect(bp("c-part") + 1 - (fixed + width("c-loc") + width("c-desc") + width("c-part"))).toBeGreaterThanOrEqual(160);
     expect(bp("c-part") - (fixed + width("c-loc") + width("c-desc"))).toBeGreaterThanOrEqual(160);
@@ -232,8 +239,9 @@ describe("B2 · «+ Crear» flotante en móvil", () => {
     const src = css("components/calendar/calendar.css");
     const mobile = src.slice(src.lastIndexOf(".cds-calendar .cal-fab {"));
     expect(mobile).toMatch(/position:\s*fixed/);
-    expect(mobile).toMatch(/bottom:\s*calc\(64px \+ env\(safe-area-inset-bottom\) \+ 16px\)/);
-    expect(mobile).toMatch(/height:\s*48px/);
+    // Barra inferior en rem (Design Lock 28): --bottombar-h = 4rem (64px al 100 %).
+    expect(mobile).toMatch(/bottom:\s*calc\(var\(--bottombar-h\) \+ env\(safe-area-inset-bottom\) \+ 1rem\)/);
+    expect(mobile).toMatch(/height:\s*3rem/);
     expect(mobile).toMatch(/border-radius:\s*12px/);
     expect(src).toMatch(/\.cal-screen\.has-fab\s*\{\s*padding-bottom:/);
   });
@@ -300,7 +308,7 @@ describe("B4 · Agenda y Mis actividades alineadas a la izquierda", () => {
   it("la lista no se centra: max-width 880 y margen izquierdo 0", () => {
     const src = css("components/calendar/calendar.css");
     const wrap = rule(src, ".cds-calendar .cal-screen .cal-agenda-wrap");
-    expect(wrap).toMatch(/max-width:\s*880px/);
+    expect(wrap).toMatch(/max-width:\s*(880px|55rem)/);
     expect(wrap).toMatch(/margin-left:\s*0/);
     expect(wrap).not.toMatch(/margin:\s*0 auto/);
   });
@@ -310,7 +318,7 @@ describe("B5 · Objetivos táctiles de 44 px en móvil", () => {
   it("«Agregar áreas», stepper del reporte y segmented público", () => {
     const cal = css("components/calendar/calendar.css");
     const mobileCal = cal.slice(cal.lastIndexOf("@media (max-width: 767px)"));
-    expect(rule(mobileCal, ".cds-calendar .cal-add-areas")).toMatch(/min-height:\s*44px/);
+    expect(rule(mobileCal, ".cds-calendar .cal-add-areas")).toMatch(/min-height:\s*(44px|2\.75rem)/);
     const rep = rule(css("components/reports/reports.css"), ".cal-rep-stepper > button");
     expect(rep).toMatch(/width:\s*44px/);
     expect(rep).toMatch(/height:\s*44px/);
@@ -377,7 +385,7 @@ describe("B6 · Compartir: quién creó el enlace", () => {
     expect(await screen.findByRole("button", { name: /Copiar enlace/ })).toHaveClass("cal-share-copy");
     const copy = rule(css("components/calendar/calendar.css"), ".cds-calendar .cal-share-copy");
     expect(copy).toMatch(/white-space:\s*nowrap/);
-    expect(copy).toMatch(/min-width:\s*168px/);
+    expect(copy).toMatch(/min-width:\s*(168px|10\.5rem)/);
   });
 });
 
