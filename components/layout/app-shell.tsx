@@ -7,7 +7,8 @@
 //   hamburguesa abre el cajón modal con los nombres completos.
 // - 768–1023: sin rail; barra superior oscura sticky con hamburguesa → cajón.
 // - <768: barra superior oscura + barra inferior con los módulos permitidos
-//   (≤4, sin "Más"); la hamburguesa abre el cajón.
+//   (≤5, sin "Más"; con 5 la etiqueta se acota al ancho de la columna); la
+//   hamburguesa abre el cajón.
 // - Barra superior: <1024 oscura y sticky (hamburguesa · CS · módulo · Aa ·
 //   avatar "Cuenta"); ≥1024 fila sobre canvas en la columna de contenido, no
 //   sticky, con la hamburguesa a la izquierda y "Aa" a la derecha.
@@ -326,13 +327,13 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
                 <Icon className="size-[1.375rem]" strokeWidth={1.75} />
               </span>
               {short && crowded ? (
-                <span className="max-w-full truncate whitespace-nowrap" aria-hidden="true">
+                <span className="bar-label-crowded max-w-full truncate whitespace-nowrap" aria-hidden="true">
                   {short}
                 </span>
               ) : (
                 <>
                   <span
-                    className={`max-w-full truncate whitespace-nowrap ${short ? "bar-label-full max-[359px]:hidden" : ""}`}
+                    className={`max-w-full truncate whitespace-nowrap ${short ? "bar-label-full max-[359px]:hidden" : ""} ${crowded ? "bar-label-crowded" : ""}`}
                     aria-hidden="true"
                   >
                     {m.label}
