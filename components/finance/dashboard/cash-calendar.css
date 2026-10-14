@@ -230,6 +230,11 @@
 .fin-cal-cell:hover {
   border-color: #b9c4b8;
 }
+/* Con el gap de 0,25rem el offset global de 4px quedaría bajo la celda vecina. */
+.fin-cal-cell:focus-visible {
+  z-index: 1;
+  outline-offset: 2px;
+}
 .fin-cal-cell-top {
   display: flex;
   align-items: center;
