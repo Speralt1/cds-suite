@@ -23,7 +23,7 @@ export interface TestProfile {
 }
 
 export const PROFILES: readonly TestProfile[] = [
-  { name: "legacy admin", doc: { role: "admin", active: true }, modules: ["finance", "calendar", "reports", "settings"], home: "/finanzas" },
+  { name: "legacy admin", doc: { role: "admin", active: true }, modules: ["finance", "calendar", "members", "reports", "settings"], home: "/finanzas" },
   { name: "legacy pastor", doc: { role: "pastor", active: true }, modules: ["finance", "calendar", "reports"], home: "/finanzas" },
   { name: "legacy finance", doc: { role: "finance", active: true }, modules: ["finance", "calendar", "reports"], home: "/finanzas" },
   { name: "legacy leader", doc: { role: "leader", active: true }, modules: ["finance", "calendar", "reports"], home: "/calendario" },
@@ -33,7 +33,7 @@ export const PROFILES: readonly TestProfile[] = [
   {
     name: "v1 admin",
     doc: v1({ role: "admin", baseRole: "admin", homeModule: "finance", position: "Administración" }),
-    modules: ["finance", "calendar", "reports", "settings"],
+    modules: ["finance", "calendar", "members", "reports", "settings"],
     home: "/finanzas",
   },
   {

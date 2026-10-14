@@ -34,6 +34,7 @@ export const IMPLIES: Readonly<Partial<Record<Permission, readonly Permission[]>
   "calendar.events.manage_all": ["calendar.events.manage_assigned"],
   "calendar.events.manage_assigned": ["calendar.read"],
   "calendar.events.publish_assigned": ["calendar.read"],
+  "members.consolidation.manage": ["members.consolidation.read"],
 };
 
 export interface LegacyRoleAccess {
@@ -217,11 +218,14 @@ export function deriveLegacyRole(baseRole: BaseRole, perms: readonly Permission[
 
 // ---------- Módulos y módulo inicial ----------
 
-export const MODULE_ORDER: readonly ModuleId[] = ["finance", "calendar", "reports", "settings"];
+// Integrantes (Consolidación V1, doc 23) solo se ve con permiso EXPLÍCITO o admin:
+// el fallback legacy no lo otorga a ningún rol.
+export const MODULE_ORDER: readonly ModuleId[] = ["finance", "calendar", "members", "reports", "settings"];
 
 export const MODULE_HREF: Readonly<Record<ModuleId, string>> = {
   finance: "/finanzas",
   calendar: "/calendario",
+  members: "/integrantes",
   reports: "/reportes",
   settings: "/configuracion",
 };
@@ -230,6 +234,7 @@ export const MODULE_HREF: Readonly<Record<ModuleId, string>> = {
 export const MODULE_PERMISSIONS: Readonly<Record<ModuleId, readonly Permission[]>> = {
   finance: ["finance.summary.read"],
   calendar: ["calendar.read"],
+  members: ["members.consolidation.read"],
   reports: ["finance.details.read", "calendar.read"],
   settings: ["settings.manage"],
 };

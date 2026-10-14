@@ -1,12 +1,12 @@
 // Registro único de módulos de CDS Suite (18a §G.3, 18b §1.3).
-// Orden fijo: Finanzas · Calendario · Reportes · Configuración.
-// "Integrantes" no existe en el registro: no aparece ni deshabilitado.
+// Orden fijo: Finanzas · Calendario · Integrantes · Reportes · Configuración.
+// Integrantes solo aparece con members.consolidation.* explícito o admin (doc 23).
 // Los íconos van como NOMBRES (puro, sin React); el shell los traduce a lucide.
 
 import { MODULE_HREF, MODULE_ORDER } from "@/lib/shared/access";
 import type { HomeModule, ModuleId } from "@/lib/shared/types";
 
-export type ModuleIconName = "Wallet" | "CalendarDays" | "ChartColumn" | "Settings";
+export type ModuleIconName = "Wallet" | "CalendarDays" | "Users" | "ChartColumn" | "Settings";
 
 export interface ModuleDef {
   id: ModuleId;
@@ -20,6 +20,7 @@ export interface ModuleDef {
 export const MODULE_LABEL: Readonly<Record<ModuleId, string>> = {
   finance: "Finanzas",
   calendar: "Calendario",
+  members: "Integrantes",
   reports: "Reportes",
   settings: "Configuración",
 };
@@ -27,6 +28,7 @@ export const MODULE_LABEL: Readonly<Record<ModuleId, string>> = {
 export const MODULE_DESCRIPTION: Readonly<Record<ModuleId, string>> = {
   finance: "Ingresos, gastos y caja",
   calendar: "Actividades y agenda de la iglesia",
+  members: "Consolidación de personas nuevas",
   reports: "Reportes de finanzas y calendario",
   settings: "Áreas, usuarios y ajustes",
 };
@@ -34,6 +36,7 @@ export const MODULE_DESCRIPTION: Readonly<Record<ModuleId, string>> = {
 const MODULE_ICON: Readonly<Record<ModuleId, ModuleIconName>> = {
   finance: "Wallet",
   calendar: "CalendarDays",
+  members: "Users",
   reports: "ChartColumn",
   settings: "Settings",
 };

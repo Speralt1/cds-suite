@@ -47,9 +47,9 @@ function subsets(): Permission[][] {
 }
 
 describe("catálogo y cierre", () => {
-  it("el catálogo tiene 9 permisos y settings.manage no es guardable", () => {
-    expect(PERMISSIONS).toHaveLength(9);
-    expect(STORABLE_PERMISSIONS).toHaveLength(8);
+  it("el catálogo tiene 11 permisos y settings.manage no es guardable", () => {
+    expect(PERMISSIONS).toHaveLength(11);
+    expect(STORABLE_PERMISSIONS).toHaveLength(10);
     expect(STORABLE_PERMISSIONS).not.toContain("settings.manage");
   });
 
@@ -81,8 +81,15 @@ describe("catálogo y cierre", () => {
     // publicar NO implica gestionar, ni gestionar implica publicar
     expect(closure(["calendar.events.publish_assigned"]).has("calendar.events.manage_assigned")).toBe(false);
     expect(closure(["calendar.events.manage_all"]).has("calendar.events.publish_assigned")).toBe(false);
+    // Integrantes (doc 23): manage → read, y no implica nada de Finanzas ni Calendario.
+    expect(sortPermissions(closure(["members.consolidation.manage"]))).toEqual([
+      "members.consolidation.read",
+      "members.consolidation.manage",
+    ]);
+    expect(sortPermissions(closure(["members.consolidation.read"]))).toEqual(["members.consolidation.read"]);
     expect(Object.keys(IMPLIES).sort()).toEqual(
       [
+        "members.consolidation.manage",
         "calendar.events.manage_all",
         "calendar.events.manage_assigned",
         "calendar.events.publish_assigned",
@@ -115,7 +122,7 @@ describe("catálogo y cierre", () => {
   });
 
   it("permisos desconocidos o mal tipados se ignoran", () => {
-    expect(eff(v1({ permissions: ["members.consolidation.manage", "calendar.read", 42, null, { x: 1 }, "CALENDAR.READ"] }))).toEqual([
+    expect(eff(v1({ permissions: ["members.everything", "calendar.read", 42, null, { x: 1 }, "CALENDAR.READ"] }))).toEqual([
       "calendar.read",
     ]);
     expect(eff(v1({ permissions: "calendar.read" }))).toEqual([]);
@@ -236,12 +243,14 @@ describe("deriveLegacyRole", () => {
 
 describe("módulos visibles", () => {
   const F: ModuleId = "finance";
+  const M: ModuleId = "members";
   const C: ModuleId = "calendar";
   const R: ModuleId = "reports";
   const S: ModuleId = "settings";
 
   it("matriz por perfil", () => {
-    expect(visibleModules(legacy("admin"))).toEqual([F, C, R, S]);
+    expect(visibleModules(legacy("admin"))).toEqual([F, C, M, R, S]);
+    // El fallback legacy NO otorga Integrantes (doc 23 §9): pastor, finance y leader sin cambios.
     expect(visibleModules(legacy("pastor"))).toEqual([F, C, R]);
     expect(visibleModules(legacy("finance"))).toEqual([F, C, R]);
     expect(visibleModules(legacy("leader"))).toEqual([F, C, R]);
@@ -250,10 +259,19 @@ describe("módulos visibles", () => {
     expect(visibleModules(v1({ permissions: ["finance.details.read"] }))).toEqual([F, R]);
     expect(visibleModules(v1({ permissions: ["calendar.events.publish_assigned"] }))).toEqual([C, R]);
     expect(visibleModules(v1({ permissions: [] }))).toEqual([]);
+    expect(visibleModules(v1({ permissions: ["members.consolidation.read"] }))).toEqual([M]);
+    expect(visibleModules(v1({ permissions: ["members.consolidation.manage", "calendar.read"] }))).toEqual([C, M, R]);
+    expect(visibleModules(v1({ permissions: ["members.consolidation.manage"], active: false }))).toEqual([]);
     expect(visibleModules(legacy("admin", false))).toEqual([]);
     expect(visibleModules(null)).toEqual([]);
-    expect(MODULE_ORDER).toEqual([F, C, R, S]);
-    expect(MODULE_HREF).toEqual({ finance: "/finanzas", calendar: "/calendario", reports: "/reportes", settings: "/configuracion" });
+    expect(MODULE_ORDER).toEqual([F, C, M, R, S]);
+    expect(MODULE_HREF).toEqual({
+      finance: "/finanzas",
+      calendar: "/calendario",
+      members: "/integrantes",
+      reports: "/reportes",
+      settings: "/configuracion",
+    });
   });
 });
 

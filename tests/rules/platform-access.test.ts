@@ -387,6 +387,8 @@ describe("firestore.rules: tablas de acceso", () => {
       [P.manageAssigned]: [P.manageAssigned, P.manageAll],
       [P.manageAll]: [P.manageAll],
       [P.publish]: [P.publish],
+      [P.memRead]: [P.memRead, P.memManage],
+      [P.memManage]: [P.memManage],
       "settings.manage": [],
     });
   });
@@ -429,6 +431,7 @@ describe("firestore.rules: tablas de acceso", () => {
   it.each([
     ["calendarRead", P.calRead],
     ["calendarManageAll", P.manageAll],
+    ["membersRead", P.memRead],
   ])("%s() ≡ can('%s') (implicantes y roles legacy)", (fn, perm) => {
     const g = gates(fn);
     expect(g).toHaveLength(1);
@@ -471,7 +474,9 @@ describe("firestore.rules: tablas de acceso", () => {
 
   it("el catálogo almacenable no incluye settings.manage", () => {
     const catalog = list(body("permissionCatalogNoSettings"));
-    expect(catalog).toEqual([P.summary, P.details, P.records, P.pastoral, P.calRead, P.manageAssigned, P.manageAll, P.publish]);
+    expect(catalog).toEqual([
+      P.summary, P.details, P.records, P.pastoral, P.calRead, P.manageAssigned, P.manageAll, P.publish, P.memRead, P.memManage,
+    ]);
   });
 
   it("ya no quedan los helpers financieros por rol", () => {

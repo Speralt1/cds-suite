@@ -40,6 +40,7 @@ export interface SeedResult {
   feedUrl: string;
   counts: { users: number; areas: number; events: number };
   finance: { created: number; skipped: number };
+  members: { people: number; visits: number; followUps: number; changes: number };
 }
 export interface FinanceSeedItem {
   id: string;

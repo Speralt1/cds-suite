@@ -14,6 +14,8 @@ export interface ModuleSubnavItem {
   href: string;
   label: string;
   icon?: LucideIcon;
+  /** Rutas extra que también activan este ítem (p. ej. el detalle de un listado). */
+  matchPaths?: readonly string[];
 }
 
 function matches(path: string, href: string) {
@@ -24,9 +26,15 @@ function matches(path: string, href: string) {
 export function activeSubnavHref(pathname: string, items: readonly ModuleSubnavItem[]): string | null {
   const path = normalizePath(pathname);
   let best: string | null = null;
-  for (const { href } of items) {
-    const h = normalizePath(href);
-    if (matches(path, h) && (!best || h.length > best.length)) best = h;
+  let bestLen = -1;
+  for (const { href, matchPaths = [] } of items) {
+    for (const candidate of [href, ...matchPaths]) {
+      const c = normalizePath(candidate);
+      if (matches(path, c) && c.length > bestLen) {
+        best = normalizePath(href);
+        bestLen = c.length;
+      }
+    }
   }
   return best;
 }

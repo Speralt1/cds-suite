@@ -55,6 +55,8 @@ export const P = {
   manageAssigned: "calendar.events.manage_assigned",
   manageAll: "calendar.events.manage_all",
   publish: "calendar.events.publish_assigned",
+  memRead: "members.consolidation.read",
+  memManage: "members.consolidation.manage",
 } as const;
 
 export const LEGACY_PERMS = {
@@ -156,6 +158,11 @@ export const USERS: Record<string, DocumentData> = {
     homeModule: "calendar",
   }),
   "v1-none": v1User("v1-none", { role: "leader", permissions: [] }),
+  // Integrantes › Consolidación (doc 23): solo permiso explícito.
+  "v1-members-read": v1User("v1-members-read", { role: "leader", permissions: [P.memRead] }),
+  "v1-members-manage": v1User("v1-members-manage", { role: "leader", permissions: [P.memManage] }),
+  "v1-members-inactive": v1User("v1-members-inactive", { role: "leader", permissions: [P.memManage], active: false }),
+  "v1-finance-details": v1User("v1-finance-details", { role: "leader", permissions: [P.details] }),
   "v1-inactive": v1User("v1-inactive", {
     role: "pastor",
     permissions: LEGACY_PERMS.pastor,

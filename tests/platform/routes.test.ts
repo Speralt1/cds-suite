@@ -233,7 +233,16 @@ describe("tabla de rutas", () => {
       expect(paths).toContain(path);
     }
     expect(ROUTE_RULES.find((r) => r.path === "/calendario/compartir")?.match).toBe("exact");
-    expect(JSON.stringify(ROUTE_RULES)).not.toMatch(/integrantes/i);
+    // Integrantes (doc 23): todo /integrantes exige members.consolidation.read; registrar, manage.
+    expect(ROUTE_RULES.find((r) => r.path === "/integrantes")).toMatchObject({
+      match: "prefix",
+      access: { anyOf: ["members.consolidation.read"] },
+      module: "members",
+    });
+    expect(ROUTE_RULES.find((r) => r.path === "/integrantes/consolidacion/nueva")).toMatchObject({
+      match: "exact",
+      access: { anyOf: ["members.consolidation.manage"] },
+    });
   });
 
   it("gana el prefijo más largo y moduleOfPath activa el módulo correcto", () => {

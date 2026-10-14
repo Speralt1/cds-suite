@@ -210,6 +210,7 @@ export function summarize(rows) {
 // ---------- Agregado sin datos personales (--summary) ----------
 
 const FINANCE_PREFIX = "finance.";
+const MEMBERS_PREFIX = "members.";
 const AREA_SCOPED = ["calendar.events.manage_assigned", "calendar.events.publish_assigned"];
 
 function bump(map, key) {
@@ -229,6 +230,14 @@ function bump(map, key) {
  * - `incoherent`: v1 (activos o no) cuyo `role` no es el derivado de baseRole +
  *   permisos. Las reglas lo impiden desde la app; solo aparece por una edición
  *   manual en la consola o con Admin SDK, y rompe la equivalencia con Storage.
+ * - `consolidation` (doc 23 §9, doc 25): quién vería Integrantes DESPUÉS de la
+ *   migración. La migración nunca otorga members.*: solo admin (implícito) y
+ *   grants explícitos ya guardados en perfiles v1.
+ *   - `adminImplicit`: activos con rol base admin;
+ *   - `explicitRead` / `explicitManage`: activos no admin con el permiso guardado
+ *     (read sin manage / manage);
+ *   - `inactiveWithGrant`: inactivos con algún members.* guardado (no acceden);
+ *   - `legacyWithout`: legacy no admin que se migran y NO obtienen Integrantes.
  * @param {{ row: object, doc: Record<string, unknown> }[]} entries
  */
 export function aggregateReport(entries) {
@@ -244,6 +253,7 @@ export function aggregateReport(entries) {
     needsAreas: 0,
     rollbackRisk: 0,
     incoherent: 0,
+    consolidation: { adminImplicit: 0, explicitRead: 0, explicitManage: 0, inactiveWithGrant: 0, legacyWithout: 0 },
   };
   for (const { row, doc } of entries) {
     bump(report.byStatus, row.status);
@@ -262,6 +272,14 @@ export function aggregateReport(entries) {
     }
     const after = row.status === "migrate" ? { ...doc, ...row.changes } : doc;
     const eff = effectivePermissions(after);
+    const stored = after.accessSchemaVersion === 1 && Array.isArray(after.permissions) ? after.permissions : [];
+    const isAdmin = (after.accessSchemaVersion === 1 ? after.baseRole : after.role) === "admin";
+    const c = report.consolidation;
+    if (!active && stored.some((p) => typeof p === "string" && p.startsWith(MEMBERS_PREFIX))) c.inactiveWithGrant++;
+    if (active && isAdmin) c.adminImplicit++;
+    else if (active && stored.includes("members.consolidation.manage")) c.explicitManage++;
+    else if (active && stored.includes("members.consolidation.read")) c.explicitRead++;
+    if (row.status === "migrate" && !isAdmin && !eff.has("members.consolidation.read")) c.legacyWithout++;
     bump(report.byHomeModule, row.status === "migrate" ? row.homeModule : typeof doc.homeModule === "string" ? doc.homeModule : "(sin módulo inicial)");
     if (!active) continue;
     if (modulesForPermissions(eff).length === 0) report.withoutModules++;
@@ -294,6 +312,12 @@ export function formatAggregate(report) {
     `  activos que requieren áreas   ${report.needsAreas}`,
     `  v1 con riesgo de rollback     ${report.rollbackRisk}`,
     `  v1 con role incoherente       ${report.incoherent}`,
+    "Integrantes › Consolidación (la migración no otorga members.*)",
+    `  admin (implícito, activos)    ${report.consolidation.adminImplicit}`,
+    `  consolidation.read explícito  ${report.consolidation.explicitRead}`,
+    `  consolidation.manage explícito ${report.consolidation.explicitManage}`,
+    `  inactivos con permiso guardado ${report.consolidation.inactiveWithGrant}`,
+    `  legacy que NO obtienen acceso ${report.consolidation.legacyWithout}`,
   ].join("\n");
 }
 

@@ -121,6 +121,8 @@ export const PERMISSION_LABEL: Readonly<Record<Permission, string>> = {
   "calendar.events.manage_assigned": "Gestionar actividades de sus áreas",
   "calendar.events.publish_assigned": "Publicar actividades de sus áreas",
   "calendar.events.manage_all": "Gestionar todas las actividades y el enlace público",
+  "members.consolidation.read": "Ver Consolidación",
+  "members.consolidation.manage": "Gestionar Consolidación",
   "settings.manage": "Administrar configuración",
 };
 
@@ -134,11 +136,15 @@ export const PERMISSION_DESCRIPTION: Readonly<Record<Permission, string>> = {
   "calendar.events.publish_assigned":
     "Marcar como Pública una actividad de sus áreas para que aparezca en el calendario compartido.",
   "calendar.events.manage_all": "Cualquier área, publicar y administrar el enlace compartido.",
+  "members.consolidation.read":
+    "Ver personas nuevas, sus visitas, seguimientos y alertas (nombres y teléfonos). Solo con autorización expresa.",
+  "members.consolidation.manage":
+    "Registrar personas, visitas y seguimientos, cambiar estados y responsables. Puede ser responsable de seguimiento.",
   "settings.manage": "Solo usuarios con rol Administrador.",
 };
 
 export interface PermissionGroup {
-  id: "finance" | "calendar" | "settings";
+  id: "finance" | "calendar" | "members" | "settings";
   label: string;
   permissions: readonly Permission[];
   note?: string;
@@ -161,6 +167,12 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     ],
     note: "Los reportes se muestran según lo que la persona puede ver.",
   },
+  {
+    id: "members",
+    label: "Integrantes",
+    permissions: ["members.consolidation.read", "members.consolidation.manage"],
+    note: "Datos personales: otórgalo solo a quienes acompañan a las personas nuevas.",
+  },
   { id: "settings", label: "Configuración", permissions: ["settings.manage"] },
 ];
 
@@ -172,6 +184,7 @@ export const HOME_MODULE_LABEL: Readonly<Record<HomeModule, string>> = {
 export const MODULE_LABEL: Readonly<Record<ModuleId, string>> = {
   finance: "Finanzas",
   calendar: "Calendario",
+  members: "Integrantes",
   reports: "Reportes",
   settings: "Configuración",
 };
