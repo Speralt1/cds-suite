@@ -1146,5 +1146,113 @@ service cloud.firestore {
 
     // ── calendarShareLinks: solo Admin SDK / Functions (18a §C.5) ───────────
     match /calendarShareLinks/{shareId} { allow read, write: if false; }
+
+    // ── Banco y caja: saldo bancario estimado (doc 30) ───────────────────────
+    // Colecciones nuevas e independientes del libro: NO tocan financeTransactions ni
+    // financeMonthlySummaries (resultado contable). Nada se crea automáticamente.
+    //  · bankAccounts/{id}: saldo inicial según cartola. Solo administración (settingsManage,
+    //    lo mismo que appSettings/finance). Cada cambio crea en el MISMO lote un historial
+    //    inmutable bankAccounts/{id}/history/{revision}.
+    //  · treasuryTransfers/{id}: depósitos/retiros caja↔banco, traspasos y ajustes. Registro con
+    //    financeRecordsManage; solo se anulan con motivo (nunca se editan ni borran).
+    //  · bankReconciliations/{id}: foto de una conciliación. Solo creación; nunca ajusta nada.
+    // Lectura: financeDetailsRead. Fechas "YYYY-MM-DD" locales (America/Santiago).
+    // Indulgente para "no futuro": ≥ la fecha local real (adelanta como mucho 1 h en invierno).
+    // La fecha de corte debe ser < hoy (el día aún no cierra en la cartola); por la indulgencia, en
+    // esa hora de invierno podría aceptarse el día actual: la UI lo impide siempre.
+    // La conciliación guarda la revisión vigente del saldo inicial (openingRevision).
+    function localTodayLatest() { return ymdOf(request.time - duration.value(3, 'h')); }
+    function bankAmount(v) { return v is int && v >= -1000000000000 && v <= 1000000000000; }
+    function bankAccountPath(id) { return /databases/$(database)/documents/bankAccounts/$(id); }
+    function bankHistoryPath(id, rev) { return /databases/$(database)/documents/bankAccounts/$(id)/history/$(rev); }
+    function bankAccountKeys() { return ['name','openingBalance','openingDate','openingCash','statementReference','revision','createdBy','createdAt','updatedBy','updatedAt']; }
+    function validBankAccount(d) {
+      return d.keys().hasAll(bankAccountKeys()) && d.keys().hasOnly(bankAccountKeys())
+        && text(d.name,1,80) && bankAmount(d.openingBalance)
+        && isYmd(d.openingDate) && d.openingDate >= '2020-01-01' && d.openingDate < localTodayLatest()
+        && (d.openingCash == null || money(d.openingCash) || d.openingCash == 0)
+        && text(d.statementReference,0,120) && d.revision is int;
+    }
+    // La cuenta solo se escribe junto con su historial nuevo (no existía antes del lote).
+    function bankHistoryLinked(id, d) {
+      return !exists(bankHistoryPath(id, string(d.revision))) && existsAfter(bankHistoryPath(id, string(d.revision)));
+    }
+    match /bankAccounts/{accountId} {
+      allow get, list: if financeDetailsRead();
+      allow create: if settingsManage() && isAreaId(accountId) && validBankAccount(request.resource.data)
+        && auditCreate(request.resource.data) && request.resource.data.revision == 1
+        && bankHistoryLinked(accountId, request.resource.data);
+      allow update: if settingsManage() && validBankAccount(request.resource.data)
+        && auditUpdate(request.resource.data, resource.data) && request.resource.data.revision == resource.data.revision + 1
+        && bankHistoryLinked(accountId, request.resource.data);
+      allow delete: if false;
+
+      // Historial: copia exacta de la cuenta después del lote, mismo actor e instante. Inmutable.
+      match /history/{rev} {
+        allow get, list: if financeDetailsRead();
+        allow create: if settingsManage() && validBankHistory(request.resource.data, rev, getAfter(bankAccountPath(accountId)).data);
+        allow update, delete: if false;
+      }
+    }
+    function validBankHistory(d, rev, a) {
+      return d.keys().hasAll(['revision','action','name','openingBalance','openingDate','openingCash','statementReference','reason','actorUid','at'])
+        && d.keys().hasOnly(['revision','action','name','openingBalance','openingDate','openingCash','statementReference','reason','actorUid','at'])
+        && d.revision is int && rev == string(d.revision)
+        && d.action == (d.revision == 1 ? 'created' : 'updated')
+        && (d.revision == 1 ? text(d.reason,0,300) : text(d.reason,3,300))
+        && d.actorUid == request.auth.uid && d.at == request.time
+        && a.revision == d.revision && a.updatedAt == request.time && a.updatedBy == request.auth.uid
+        && a.name == d.name && a.openingBalance == d.openingBalance && a.openingDate == d.openingDate
+        && a.openingCash == d.openingCash && a.statementReference == d.statementReference;
+    }
+
+    function treasuryKeys() { return ['accountId','type','direction','amount','date','note','reason','status','revision','createdBy','createdAt','updatedBy','updatedAt']; }
+    function validTreasury(d) {
+      return d.keys().hasAll(treasuryKeys())
+        && d.keys().hasOnly(treasuryKeys().concat(['voidedBy','voidedAt','voidReason']))
+        && isAreaId(d.accountId)
+        && d.type in ['cash_deposit','cash_withdrawal','outgoing_transfer','other_deposit','adjustment']
+        && d.direction == (d.type in ['cash_deposit','other_deposit'] ? 'in'
+          : d.type in ['cash_withdrawal','outgoing_transfer'] ? 'out' : d.direction)
+        && d.direction in ['in','out']
+        && money(d.amount) && isYmd(d.date) && text(d.note,0,300)
+        && (d.type == 'adjustment' ? text(d.reason,10,300) : text(d.reason,0,300))
+        && d.status in ['active','voided'] && d.revision is int;
+    }
+    match /treasuryTransfers/{id} {
+      allow get, list: if financeDetailsRead();
+      allow create: if financeRecordsManage() && validTreasury(request.resource.data)
+        && auditCreate(request.resource.data) && request.resource.data.revision == 1 && request.resource.data.status == 'active'
+        && !request.resource.data.keys().hasAny(['voidedBy','voidedAt','voidReason'])
+        && request.resource.data.date <= localTodayLatest()
+        && exists(bankAccountPath(request.resource.data.accountId))
+        && request.resource.data.date > get(bankAccountPath(request.resource.data.accountId)).data.openingDate;
+      // Solo anular (con motivo). Corregir = anular y registrar de nuevo.
+      allow update: if financeRecordsManage() && resource.data.status == 'active'
+        && request.resource.data.status == 'voided'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedBy','updatedAt','voidedBy','voidedAt','voidReason'])
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+        && request.resource.data.voidedBy == request.auth.uid && request.resource.data.voidedAt == request.time
+        && text(request.resource.data.voidReason,3,300);
+      allow delete: if false;
+    }
+
+    function reconciliationKeys() { return ['accountId','date','reportedBalance','expectedBalance','difference','estimateComplete','openingRevision','note','createdBy','createdAt']; }
+    match /bankReconciliations/{id} {
+      allow get, list: if financeDetailsRead();
+      allow create: if financeRecordsManage()
+        && request.resource.data.keys().hasAll(reconciliationKeys()) && request.resource.data.keys().hasOnly(reconciliationKeys())
+        && isAreaId(request.resource.data.accountId) && exists(bankAccountPath(request.resource.data.accountId))
+        && isYmd(request.resource.data.date) && request.resource.data.date <= localTodayLatest()
+        && request.resource.data.date >= get(bankAccountPath(request.resource.data.accountId)).data.openingDate
+        && bankAmount(request.resource.data.reportedBalance) && bankAmount(request.resource.data.expectedBalance)
+        && request.resource.data.difference == request.resource.data.reportedBalance - request.resource.data.expectedBalance
+        && request.resource.data.estimateComplete is bool
+        && request.resource.data.openingRevision == get(bankAccountPath(request.resource.data.accountId)).data.revision
+        && text(request.resource.data.note,0,500)
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
   }
 }

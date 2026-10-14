@@ -43,6 +43,7 @@ import { TitheRegister } from "../tithes/tithe-register";
 import { CashModal } from "../offerings/cash-modal";
 import { BALANCE_TITLE_ID, BalanceBand, BalanceBandSkeleton } from "./balance-band";
 import { FundsPosition } from "./funds-position";
+import { BankBalanceCard } from "../bank/bank-balance-card";
 import { CashCalendarSection, CashCalendarSkeleton } from "./cash-calendar";
 import { AREA_TO_KEY, CashDayPanel, dateLabelShort } from "./cash-day-panel";
 import "./tokens.css";
@@ -222,11 +223,12 @@ export interface SummaryDashboardProps {
   fundsTiles?: ReactNode[];
 }
 
-// Ruta /finanzas (sin props: la ruta la exporta tal cual). El PR D monta el
-// tile de saldo cambiando esta línea por
-// `<SummaryDashboard fundsBankTile={<BankBalanceCard … />} />`.
+// Ruta /finanzas (sin props: la ruta la exporta tal cual). PR D (doc 30) monta
+// el tile "Saldo bancario estimado" en Posición de fondos. FundsPosition ya lo
+// limita a finance.details.read; la tarjeta consulta los abonos SumUp con la
+// callable de solo lectura y, si no está disponible, se muestra "incompleto".
 export function SummaryPage() {
-  return <SummaryDashboard />;
+  return <SummaryDashboard fundsBankTile={<BankBalanceCard variant="funds" connectSumupPayouts />} />;
 }
 
 export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboardProps = {}) {

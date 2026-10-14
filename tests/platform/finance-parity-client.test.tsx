@@ -31,6 +31,14 @@ vi.mock("@/lib/finance/hooks", () => ({
     return { data: [], loading: false, error: "" };
   },
 }));
+// PR D (doc 30): SummaryPage monta la tarjeta de saldo; aquí se reemplaza por un doble.
+vi.mock("@/components/finance/bank/bank-balance-card", () => ({
+  BankBalanceCard: (p: { variant?: string; connectSumupPayouts?: boolean }) => (
+    <p data-testid="bank-tile" data-variant={p.variant} data-connect={String(!!p.connectSumupPayouts)}>
+      Tile bancario
+    </p>
+  ),
+}));
 vi.mock("@/components/finance/charts/finance-charts", () => ({
   FinanceCharts: () => <div>Gráficos</div>,
 }));
