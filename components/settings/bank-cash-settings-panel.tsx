@@ -11,6 +11,7 @@ import { getFirebaseServices } from "@/lib/firebase";
 import { clp, errorMessage } from "@/lib/finance/formatters";
 import { saveBankAccount, type BankAccountDoc } from "@/lib/finance/bank-accounts";
 import { santiagoToday, useBankAccount, useBankHistory } from "@/lib/finance/bank-hooks";
+import { useSumupPayoutsForBank } from "@/lib/finance/sumup-payouts-client";
 import {
   DEFAULT_BANK_ACCOUNT_ID,
   DEFAULT_BANK_ACCOUNT_NAME,
@@ -260,7 +261,12 @@ function OpeningBalanceSection() {
 
 /** Sección completa "Banco y caja" para Configuración › Finanzas. */
 export function BankCashSettingsPanel() {
+  const access = useAccess();
   const account = useBankAccount();
+  const openingDate = account.data?.openingDate ?? null;
+  // Abonos SumUp (callable de solo lectura del PR C); falla cerrado a "no disponible".
+  const payouts = useSumupPayoutsForBank(openingDate, santiagoToday(), can(access, "finance.details.read"));
+  const payoutsAvailable = payouts?.status === "available" && !(payouts.partialReasons?.length);
   const [draft, setDraft] = useState<{ id: number; value: AdjustmentDraft } | null>(null);
   return (
     <section id="banco-y-caja" className={styles.section} aria-labelledby="bank-cash-title">
@@ -276,11 +282,13 @@ export function BankCashSettingsPanel() {
       <TreasuryTransfersPanel
         key={draft?.id ?? 0}
         accountId={DEFAULT_BANK_ACCOUNT_ID}
-        openingDate={account.data?.openingDate ?? null}
+        openingDate={openingDate}
         draft={draft?.value ?? null}
+        payoutsAvailable={payoutsAvailable}
       />
       <ReconciliationPanel
         accountId={DEFAULT_BANK_ACCOUNT_ID}
+        payouts={payouts}
         onPrepareAdjustment={(value) => {
           setDraft((d) => ({ id: (d?.id ?? 0) + 1, value }));
           document.getElementById("treasury-title")?.scrollIntoView?.({ behavior: "smooth", block: "start" });

@@ -4,6 +4,7 @@
 // gastos: no tocan los resúmenes mensuales. Se registran con
 // finance.records.manage y solo se anulan con motivo.
 import { useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
@@ -31,6 +32,8 @@ export interface AdjustmentDraft {
   direction: TreasuryDirection;
   amount: number;
   note: string;
+  /** Fecha de la conciliación que originó el ajuste. */
+  date: Ymd;
 }
 
 function TransferRow({ t, canManage }: { t: TreasuryTransferDoc; canManage: boolean }) {
@@ -114,11 +117,14 @@ export function TreasuryTransfersPanel({
   accountId,
   openingDate,
   draft = null,
+  payoutsAvailable = false,
 }: {
   accountId: string;
   openingDate: Ymd | null;
   /** Ajuste sugerido por una conciliación: solo rellena el formulario. */
   draft?: AdjustmentDraft | null;
+  /** false mientras los abonos SumUp no estén en el estimado: un ajuste podría duplicarlos. */
+  payoutsAvailable?: boolean;
 }) {
   const { user } = useAuth();
   const access = useAccess();
@@ -128,7 +134,7 @@ export function TreasuryTransfersPanel({
   const [type, setType] = useState<TreasuryType>(draft ? "adjustment" : "cash_deposit");
   const [direction, setDirection] = useState<TreasuryDirection | "">(draft?.direction ?? "");
   const [amount, setAmount] = useState(draft ? String(draft.amount) : "");
-  const [date, setDate] = useState<Ymd>(today);
+  const [date, setDate] = useState<Ymd>(draft?.date ?? today);
   const [note, setNote] = useState(draft?.note ?? "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -191,6 +197,15 @@ export function TreasuryTransfersPanel({
                 </select>
               )}
             </Field>
+            {type === "adjustment" && !payoutsAvailable && (
+              <p className={`${styles.warn} ${styles.full}`} role="note">
+                <TriangleAlert size={16} aria-hidden="true" />
+                <span>
+                  El estimado todavía no incluye los abonos SumUp. No registres un ajuste para cubrir esa diferencia:
+                  cuando los abonos se conecten, ese dinero se contaría dos veces.
+                </span>
+              </p>
+            )}
             {type === "adjustment" && (
               <fieldset className={`${styles.radios} ${styles.full}`}>
                 <legend>Efecto en el banco</legend>

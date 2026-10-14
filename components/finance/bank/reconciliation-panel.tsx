@@ -4,6 +4,7 @@
 // (solo creación). NUNCA crea ajustes: si la diferencia está confirmada, la
 // persona debe registrar explícitamente un ajuste manual.
 import { useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
@@ -25,7 +26,8 @@ export function ReconciliationPanel({
   onPrepareAdjustment,
 }: {
   accountId: string;
-  payouts?: SumupPayoutsInput;
+  /** null = cargando; sin valor = abonos SumUp no conectados (estimado parcial). */
+  payouts?: SumupPayoutsInput | null;
   /** Rellena (no envía) el formulario de ajuste manual. */
   onPrepareAdjustment?: (draft: AdjustmentDraft) => void;
 }) {
@@ -39,7 +41,13 @@ export function ReconciliationPanel({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<{ difference: number; date: Ymd } | null>(null);
+  const [saved, setSaved] = useState<{
+    difference: number;
+    date: Ymd;
+    complete: boolean;
+    payoutsMissing: boolean;
+    atCutoff: boolean;
+  } | null>(null);
   const estimate = useBankBalance({ accountId, payouts, asOf: date, enabled: canRead });
   const recent = useRecentReconciliations(canRead);
   const items = recent.data.filter((r) => r.accountId === accountId);
@@ -51,7 +59,8 @@ export function ReconciliationPanel({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!user || busy || !estimate.account || expected === null) return;
+    // Nunca se guarda un esperado calculado sobre una consulta fallida.
+    if (!user || busy || !estimate.account || expected === null || estimate.error || !r) return;
     setError("");
     setSaved(null);
     const input = {
@@ -68,7 +77,13 @@ export function ReconciliationPanel({
     setBusy(true);
     try {
       await createReconciliation(getFirebaseServices().db, user.uid, input, { today, openingDate: r?.openingDate ?? null });
-      setSaved({ difference: input.reportedBalance - expected, date });
+      setSaved({
+        difference: input.reportedBalance - expected,
+        date,
+        complete: input.estimateComplete,
+        payoutsMissing: !!r.bank?.lines.find((l) => l.key === "sumupPayouts")?.missing,
+        atCutoff: date === r.openingDate,
+      });
       setReported("");
       setNote("");
     } catch (e) {
@@ -89,6 +104,10 @@ export function ReconciliationPanel({
       </p>
       {!canManage ? (
         <p className={styles.empty}>Solo pueden conciliar quienes gestionan registros financieros.</p>
+      ) : estimate.error ? (
+        <p className={styles.empty} role="alert">
+          No se puede conciliar: no pudimos calcular el saldo estimado ({estimate.error}).
+        </p>
       ) : estimate.loading ? (
         <p className={styles.empty} role="status">
           Calculando saldo estimado…
@@ -129,7 +148,7 @@ export function ReconciliationPanel({
             {(p) => <input {...p} value={note} maxLength={500} placeholder="Ej. Cartola web al cierre del día" onChange={(e) => setNote(e.target.value)} />}
           </Field>
           <div className={`${styles.actions} ${styles.full}`}>
-            <button className="button-primary" disabled={busy || reportedValue === null}>
+            <button className="button-primary" disabled={busy || reportedValue === null || !!estimate.error}>
               {busy ? "Guardando…" : "Guardar conciliación"}
             </button>
           </div>
@@ -149,26 +168,46 @@ export function ReconciliationPanel({
                 </strong>
                 . No se creó ningún ajuste.
               </p>
-              <p>
-                Si confirmaste la diferencia con la cartola (comisiones, intereses, un abono o gasto sin registrar),
-                registra el movimiento que falta o un ajuste manual con su motivo.
-              </p>
-              {onPrepareAdjustment && (
-                <div className={styles.actions}>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() =>
-                      onPrepareAdjustment({
-                        direction: saved.difference > 0 ? "in" : "out",
-                        amount: Math.abs(saved.difference),
-                        note: `Conciliación del ${ymdLabel(saved.date)}`,
-                      })
-                    }
-                  >
-                    Preparar ajuste manual
-                  </button>
-                </div>
+              {saved.complete && !saved.atCutoff && (
+                <p>
+                  Si confirmaste la diferencia con la cartola (comisiones, intereses, un abono o gasto sin registrar),
+                  registra el movimiento que falta o un ajuste manual con su motivo.
+                </p>
+              )}
+              {saved.atCutoff ? (
+                <p>
+                  Esta conciliación es del día de corte: si la cartola de ese día no coincide, corrige el saldo inicial
+                  en vez de registrar un ajuste.
+                </p>
+              ) : !saved.complete ? (
+                <p className={styles.warn} role="note">
+                  <TriangleAlert size={16} aria-hidden="true" />
+                  <span>
+                    {saved.payoutsMissing
+                      ? "No ajustes: el estimado no incluye abonos SumUp."
+                      : "No ajustes: el estimado está incompleto."}{" "}
+                    Gran parte de la diferencia puede deberse a eso; un ajuste ahora se contaría dos veces más adelante.
+                  </span>
+                </p>
+              ) : (
+                onPrepareAdjustment && (
+                  <div className={styles.actions}>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() =>
+                        onPrepareAdjustment({
+                          direction: saved.difference > 0 ? "in" : "out",
+                          amount: Math.abs(saved.difference),
+                          note: `Conciliación del ${ymdLabel(saved.date)}`,
+                          date: saved.date,
+                        })
+                      }
+                    >
+                      Preparar ajuste manual
+                    </button>
+                  </div>
+                )
               )}
             </>
           )}
