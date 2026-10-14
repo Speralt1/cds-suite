@@ -41,6 +41,14 @@ vi.mock("@/lib/finance/hooks", () => ({
   useSummaries: () => ({ data: state.summary ? [state.summary] : [], loading: false, error: "" }),
   useTransactions: () => ({ data: [], loading: false, error: "", synced: true }),
 }));
+// PR D (doc 30): SummaryPage monta la tarjeta de saldo; aquí se reemplaza por un doble.
+vi.mock("@/components/finance/bank/bank-balance-card", () => ({
+  BankBalanceCard: (p: { variant?: string; connectSumupPayouts?: boolean }) => (
+    <p data-testid="bank-tile" data-variant={p.variant} data-connect={String(!!p.connectSumupPayouts)}>
+      Tile bancario
+    </p>
+  ),
+}));
 vi.mock("@/components/finance/charts/finance-charts", () => ({
   FinanceCharts: () => <div>Gráficos</div>,
 }));
@@ -216,9 +224,16 @@ describe("Resumen integrado", () => {
 
   it("Posición de fondos: oculta sin tile, visible con tile y nunca para el líder", () => {
     const tile = <p>Tile de saldo</p>;
-    const first = render(<SummaryPage />);
+    const first = render(<SummaryDashboard />);
     expect(screen.queryByText("Posición de fondos")).toBeNull();
     first.unmount();
+
+    // /finanzas (SummaryPage) monta el saldo bancario en modo "funds" con abonos SumUp conectados.
+    const page = render(<SummaryPage />);
+    expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();
+    expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-variant", "funds");
+    expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-connect", "true");
+    page.unmount();
 
     const second = render(<SummaryDashboard fundsBankTile={tile} />);
     expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();

@@ -9,12 +9,22 @@ const state = vi.hoisted(() => ({
   access: { role: "admin", active: true } as Record<string, unknown>,
   hook: null as unknown as BankBalanceState,
   hookArgs: [] as unknown[],
+  payoutArgs: [] as unknown[],
+  payouts: null as unknown,
 }));
 vi.mock("@/lib/auth/access-provider", () => ({ useAccess: () => state.access }));
 vi.mock("@/lib/finance/bank-hooks", () => ({
+  santiagoToday: () => "2026-10-13",
+  useBankAccount: () => ({ data: { openingDate: "2026-09-30" }, loading: false, error: "" }),
   useBankBalance: (args: unknown) => {
     state.hookArgs.push(args);
     return state.hook;
+  },
+}));
+vi.mock("@/lib/finance/sumup-payouts-client", () => ({
+  useSumupPayoutsForBank: (...args: unknown[]) => {
+    state.payoutArgs.push(args);
+    return state.payouts;
   },
 }));
 vi.mock("next/link", () => ({
@@ -133,7 +143,8 @@ describe("BankBalanceView (stories)", () => {
     expect(bankItems[0]).toHaveTextContent("Saldo inicial según cartola");
     expect(bankItems[0]).toHaveTextContent("$1.250.000");
     expect(within(lists[0]).getByText("Abonos SumUp recibidos (neto)").parentElement).toHaveTextContent("No disponible");
-    expect(within(lists[0]).getAllByLabelText("resta").length).toBeGreaterThan(0);
+    expect(within(lists[0]).getAllByText("resta").length).toBeGreaterThan(0);
+    expect(dialog.querySelector("[aria-label='resta'],[aria-label='suma']")).toBeNull();
     expect(bankItems.at(-1)).toHaveTextContent("Saldo bancario estimado$1.400.000");
     expect(within(dialog).getByText(/Faltan los abonos SumUp/)).toBeInTheDocument();
     expect(within(dialog).getByText(/no es dinero en el banco/)).toBeInTheDocument();
@@ -145,8 +156,32 @@ describe("BankBalanceView (stories)", () => {
   });
 });
 
+describe("BankBalanceView variante funds (Posición de fondos)", () => {
+  it("sin título propio ni resultado contable; tres cifras y ¿Cómo se calcula?", () => {
+    render(<BankBalanceView variant="funds" state={stateFrom()} canConfigure periodResult={{ label: "Octubre 2026", value: 1 }} />);
+    expect(screen.queryByRole("heading", { name: "Banco y caja" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("result-figure")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Resultado contable/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("bank-figure")).toHaveTextContent("Incompleto: faltan abonos SumUp");
+    expect(screen.getByTestId("cash-figure")).toBeInTheDocument();
+    expect(screen.getByTestId("sumup-figure")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Cómo se calcula/ })).toBeInTheDocument();
+  });
+  it("cargando: tres esqueletos", () => {
+    render(<BankBalanceView variant="funds" state={LOADING} canConfigure />);
+    expect(screen.getByRole("status").children).toHaveLength(3);
+  });
+  it("error (p. ej. índice faltante): mensaje y ningún monto", () => {
+    render(<BankBalanceView variant="funds" state={{ ...LOADING, loading: false, error: "La consulta necesita un índice de Firestore." }} canConfigure />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/índice/);
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+});
+
 describe("BankBalanceCard (conectada)", () => {
   beforeEach(() => {
+    state.payoutArgs = [];
+    state.payouts = null;
     state.hookArgs = [];
     state.hook = stateFrom({ account: null });
   });
@@ -167,5 +202,26 @@ describe("BankBalanceCard (conectada)", () => {
     state.access = { role: "admin", active: true };
     render(<BankBalanceCard />);
     expect(screen.getByRole("link", { name: "Configurar saldo inicial" })).toBeInTheDocument();
+  });
+});
+
+describe("BankBalanceCard con abonos SumUp conectados", () => {
+  beforeEach(() => {
+    state.access = { role: "finance", active: true };
+    state.hookArgs = [];
+    state.payoutArgs = [];
+    state.hook = stateFrom();
+  });
+  it("connectSumupPayouts: consulta desde la fecha de corte y pasa el resultado (null = cargando)", () => {
+    state.payouts = null;
+    render(<BankBalanceCard variant="funds" connectSumupPayouts />);
+    expect(state.payoutArgs.at(-1)).toEqual(["2026-09-30", "2026-10-13", true]);
+    expect(state.hookArgs.at(-1)).toMatchObject({ payouts: null, enabled: true });
+    expect(screen.queryByTestId("result-figure")).not.toBeInTheDocument();
+  });
+  it("sin connectSumupPayouts no consulta la callable", () => {
+    render(<BankBalanceCard />);
+    expect(state.payoutArgs.at(-1)).toEqual([expect.anything(), "2026-10-13", false]);
+    expect(state.hookArgs.at(-1)).toMatchObject({ payouts: undefined });
   });
 });

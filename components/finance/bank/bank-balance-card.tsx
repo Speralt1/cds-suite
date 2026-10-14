@@ -11,7 +11,8 @@ import { CircleAlert, Info, Landmark, TriangleAlert } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
 import { clp } from "@/lib/finance/formatters";
-import { useBankBalance, type BankBalanceState } from "@/lib/finance/bank-hooks";
+import { santiagoToday, useBankAccount, useBankBalance, type BankBalanceState } from "@/lib/finance/bank-hooks";
+import { useSumupPayoutsForBank } from "@/lib/finance/sumup-payouts-client";
 import type { BreakdownLine, SumupPayoutsInput } from "@/lib/finance/bank-balance";
 import { DEFAULT_BANK_ACCOUNT_ID } from "@/lib/finance/bank-model";
 import { Modal } from "../shared";
@@ -72,8 +73,9 @@ function Lines({ lines, totalLabel, total }: { lines: BreakdownLine[]; totalLabe
     <div className={styles.lines} role="list">
       {lines.map((l) => (
         <div className={styles.line} role="listitem" key={l.key}>
-          <span className={styles.sign} aria-label={l.sign > 0 ? "suma" : "resta"}>
-            {l.sign > 0 ? "+" : "−"}
+          <span className={styles.sign}>
+            <span aria-hidden="true">{l.sign > 0 ? "+" : "−"}</span>
+            <span className="sr-only">{l.sign > 0 ? "suma" : "resta"}</span>
           </span>
           <span className={styles.lineLabel}>{l.label}</span>
           <span className={styles.lineAmount}>
@@ -150,34 +152,54 @@ export function BankBalanceBreakdown({ state }: { state: BankBalanceState }) {
   );
 }
 
+/**
+ * "card": tarjeta autónoma con título "Banco y caja" y 4 cifras (incluye el
+ * resultado contable como prop). "funds": dentro de "Posición de fondos" del
+ * Resumen (B2): sin título propio y SIN resultado contable (Design Lock: la
+ * posición nunca repite ni suma el resultado); 3 cifras.
+ */
+export type BankBalanceVariant = "card" | "funds";
+
 /** Vista pura (sin datos): la usan la tarjeta y los tests tipo "story". */
 export function BankBalanceView({
   state,
   canConfigure,
   periodResult = null,
   configureHref = BANK_SETTINGS_HREF,
+  variant = "card",
 }: {
   state: BankBalanceState;
   canConfigure: boolean;
   periodResult?: PeriodResultProp | null;
   configureHref?: string;
+  variant?: BankBalanceVariant;
 }) {
+  const funds = variant === "funds";
+  const figures = funds ? 3 : 4;
   const [open, setOpen] = useState(false);
   const r = state.result;
   const partial = r?.status === "partial";
   const payoutsMissing = !!r?.bank?.lines.find((l) => l.key === "sumupPayouts")?.missing;
 
   return (
-    <article className={styles.card} aria-labelledby="bank-balance-title" aria-busy={state.loading || undefined}>
+    <article
+      className={`${styles.card} ${funds ? styles.cardFunds : ""}`}
+      {...(funds ? { "aria-label": "Saldo de banco y caja" } : { "aria-labelledby": "bank-balance-title" })}
+      aria-busy={state.loading || undefined}
+    >
       <div className={styles.header}>
-        <div>
-          <h3 id="bank-balance-title" className={styles.title}>
-            Banco y caja
-          </h3>
-          <p className={styles.subtitle}>
-            Cifras estimadas a partir de la cartola inicial y los registros. No reemplazan la cartola del banco.
-          </p>
-        </div>
+        {funds ? (
+          <p className={styles.subtitle}>Estimado desde la cartola inicial y los registros. No reemplaza la cartola del banco.</p>
+        ) : (
+          <div>
+            <h3 id="bank-balance-title" className={styles.title}>
+              Banco y caja
+            </h3>
+            <p className={styles.subtitle}>
+              Cifras estimadas a partir de la cartola inicial y los registros. No reemplazan la cartola del banco.
+            </p>
+          </div>
+        )}
         {r?.bank && (
           <button type="button" className={styles.textButton} onClick={() => setOpen(true)}>
             <Info size={16} aria-hidden="true" />
@@ -187,8 +209,8 @@ export function BankBalanceView({
       </div>
 
       {state.loading ? (
-        <div className={styles.grid} role="status" aria-label="Cargando saldo bancario estimado">
-          {[0, 1, 2, 3].map((i) => (
+        <div className={`${styles.grid} ${funds ? styles.gridFunds : ""}`} role="status" aria-label="Cargando saldo bancario estimado">
+          {Array.from({ length: figures }, (_, i) => (
             <div className={styles.skeleton} key={i} />
           ))}
         </div>
@@ -199,7 +221,7 @@ export function BankBalanceView({
         </p>
       ) : (
         <>
-          <div className={styles.grid}>
+          <div className={`${styles.grid} ${funds ? styles.gridFunds : ""}`}>
             <Figure
               testId="bank-figure"
               primary
@@ -269,13 +291,15 @@ export function BankBalanceView({
               )}
             </Figure>
 
-            <Figure
-              testId="result-figure"
-              label={periodResult ? `Resultado contable · ${periodResult.label}` : "Resultado contable del período"}
-              hint="Ingresos − gastos del período. Es una cifra contable: no es dinero en el banco."
-            >
-              {periodResult ? <Money value={periodResult.value} /> : <p className={styles.valueMuted}>—</p>}
-            </Figure>
+            {!funds && (
+              <Figure
+                testId="result-figure"
+                label={periodResult ? `Resultado contable · ${periodResult.label}` : "Resultado contable del período"}
+                hint="Ingresos − gastos del período. Es una cifra contable: no es dinero en el banco."
+              >
+                {periodResult ? <Money value={periodResult.value} /> : <p className={styles.valueMuted}>—</p>}
+              </Figure>
+            )}
           </div>
 
           {(state.limitReached || (state.error && r)) && (
@@ -309,21 +333,43 @@ export function BankBalanceView({
 /**
  * Tarjeta con datos. Solo para quien puede ver el detalle financiero
  * (finance.details.read); para el resto no renderiza nada.
- * `payouts`: resultado de la callable sumupPayoutsReconciliation (ver
- * parseSumupPayoutsResponse); si no se entrega, el saldo queda "incompleto".
+ * Abonos SumUp: `payouts` explícito, o `connectSumupPayouts` para consultarlos
+ * con la callable sumupPayoutsReconciliation (falla cerrado a "incompleto").
+ * Sin ninguno de los dos, el saldo queda "incompleto: faltan abonos SumUp".
  */
 export function BankBalanceCard({
   accountId = DEFAULT_BANK_ACCOUNT_ID,
   periodResult = null,
   payouts,
+  connectSumupPayouts = false,
+  variant = "card",
 }: {
   accountId?: string;
   periodResult?: PeriodResultProp | null;
   payouts?: SumupPayoutsInput;
+  connectSumupPayouts?: boolean;
+  variant?: BankBalanceVariant;
 }) {
   const access = useAccess();
   const allowed = can(access, "finance.details.read");
-  const state = useBankBalance({ accountId, payouts, enabled: allowed });
+  const account = useBankAccount(accountId, allowed && connectSumupPayouts);
+  const connected = useSumupPayoutsForBank(
+    account.data?.openingDate ?? null,
+    santiagoToday(),
+    allowed && connectSumupPayouts && !payouts,
+  );
+  const state = useBankBalance({
+    accountId,
+    payouts: payouts ?? (connectSumupPayouts ? connected : undefined),
+    enabled: allowed,
+  });
   if (!allowed) return null;
-  return <BankBalanceView state={state} canConfigure={can(access, "settings.manage")} periodResult={periodResult} />;
+  return (
+    <BankBalanceView
+      state={state}
+      canConfigure={can(access, "settings.manage")}
+      periodResult={variant === "funds" ? null : periodResult}
+      variant={variant}
+    />
+  );
 }

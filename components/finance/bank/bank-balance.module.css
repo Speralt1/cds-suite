@@ -94,7 +94,7 @@
 .hint {
   font-size: 12px;
   line-height: 18px;
-  color: #5f6d65;
+  color: var(--color-muted-strong, #5f6d65);
 }
 
 .badges {
@@ -124,7 +124,7 @@
 
 .badgeWarn {
   background: var(--color-warning-soft, #fbf1de);
-  color: #6f4c14;
+  color: var(--color-warning-ink, #6f4c14);
 }
 
 .badgeInfo {
@@ -184,7 +184,7 @@
   gap: 6px;
   font-size: 12px;
   line-height: 18px;
-  color: #6f4c14;
+  color: var(--color-warning-ink, #6f4c14);
 }
 
 .skeleton {
@@ -230,7 +230,7 @@
 .sheetIntro {
   font-size: 13px;
   line-height: 20px;
-  color: #5f6d65;
+  color: var(--color-muted-strong, #5f6d65);
 }
 
 .lines {
@@ -262,7 +262,7 @@
   grid-column: 2 / 4;
   font-size: 12px;
   line-height: 18px;
-  color: #5f6d65;
+  color: var(--color-muted-strong, #5f6d65);
 }
 
 .lineAmount {
@@ -284,4 +284,27 @@
   border-radius: 10px;
   background: var(--color-canvas, #f8f9f6);
   padding: 10px 12px;
+}
+
+/* Variante "funds" (dentro de Posición de fondos, B2): sin borde propio pesado
+   y 3 cifras. Colores alineados con components/finance/dashboard/tokens.css. */
+.cardFunds {
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.cardFunds .header {
+  margin-bottom: 12px;
+}
+
+@media (min-width: 900px) {
+  .gridFunds {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .gridFunds {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
