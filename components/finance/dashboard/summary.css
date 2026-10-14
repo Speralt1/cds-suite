@@ -17,6 +17,9 @@
   font-weight: 600;
   line-height: 1.4;
 }
+.fin-balance-title:focus:not(:focus-visible) {
+  outline: none;
+}
 .fin-balance-dl {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -168,6 +171,30 @@
   height: 3rem;
 }
 
+/* Muy angosto (teléfonos, 125 %): una columna; la cifra va en su propia fila y
+   la etiqueta (y "Déficit") pueden pasar de línea sin chocar con ella. */
+@container fin-balance (max-width: 24rem) {
+  .fin-balance-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fin-balance-item dt {
+    flex-wrap: wrap;
+  }
+  .fin-balance-amount {
+    grid-column: 1;
+    grid-row: auto;
+    text-align: left;
+  }
+  .fin-balance-item.is-result dt {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  .fin-balance-deficit {
+    margin-left: 0;
+  }
+}
+
 @container fin-balance (min-width: 36rem) {
   .fin-balance-amount {
     font-size: 1.375rem;
@@ -287,6 +314,7 @@
   }
 }
 .fin-income-tables .panel {
+  container: fin-table / inline-size;
   overflow-x: auto;
 }
 .fin-amount-table {
@@ -323,6 +351,22 @@
 .fin-amount-table th[scope="row"] {
   font-weight: 500;
   overflow-wrap: anywhere;
+}
+/* Anchos fijos solo cuando hay lugar: en un panel angosto (teléfono, 125 %,
+   dos columnas en tablet) la tabla vuelve a layout automático para que la
+   columna de texto no quede de pocos píxeles. */
+@container fin-table (max-width: 30rem) {
+  .fin-amount-table {
+    table-layout: auto;
+  }
+  .fin-amount-table col.is-amount,
+  .fin-amount-table col.is-pct,
+  .fin-amount-table col.is-count {
+    width: auto;
+  }
+  .fin-amount-table th[scope="row"] {
+    min-width: 7rem;
+  }
 }
 .fin-amount-table .is-num {
   font-variant-numeric: tabular-nums;
