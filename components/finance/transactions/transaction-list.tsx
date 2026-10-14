@@ -4,7 +4,13 @@ import { ChevronDown, Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
 import { voidTransaction } from "@/lib/finance/transactions";
-import { clp, dateLabel, errorMessage } from "@/lib/finance/formatters";
+import {
+  clp,
+  dateLabel,
+  dateTimeLabel,
+  errorMessage,
+  shortReference,
+} from "@/lib/finance/formatters";
 import { isSumUpTransaction } from "@/lib/finance/insights";
 import { PAYMENT_METHODS } from "@/lib/finance/constants";
 import type { MovementEntry } from "@/lib/finance/movement-groups";
@@ -126,14 +132,14 @@ export function TransactionRow({
                 ["Nota", t.note || "Sin nota"],
                 ["Estado", t.status === "active" ? "Activo" : "Anulado"],
                 ["Creado por", t.createdBy],
-                ["Creado el", dateLabel(t.createdAt)],
+                ["Creado el", dateTimeLabel(t.createdAt)],
                 ["Modificado por", t.updatedBy],
-                ["Modificado el", dateLabel(t.updatedAt)],
+                ["Modificado el", dateTimeLabel(t.updatedAt)],
                 ...(t.status === "voided"
                   ? [
                       ["Motivo de anulación", t.voidReason || ""],
                       ["Anulado por", t.voidedBy || ""],
-                      ["Anulado el", dateLabel(t.voidedAt)],
+                      ["Anulado el", dateTimeLabel(t.voidedAt)],
                     ]
                   : []),
               ].map(([label, value]) => (
@@ -142,6 +148,14 @@ export function TransactionRow({
                   <dd>{value}</dd>
                 </div>
               ))}
+              <div>
+                <dt>Referencia</dt>
+                <dd>
+                  <code className="tx-reference" title={t.id}>
+                    {shortReference(t.id)}
+                  </code>
+                </dd>
+              </div>
             </dl>
           </div>
         </Modal>

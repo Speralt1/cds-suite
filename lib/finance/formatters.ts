@@ -56,6 +56,31 @@ export function dateLabel(value?: Timestamp) {
       }).format(d)
     : "Sin registro";
 }
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", {
+  timeZone: "America/Santiago",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+/**
+ * Fecha y hora de Chile continental (America/Santiago), p. ej. "08-10-2026 14:58".
+ * Para auditoría (Creado el / Modificado el / Anulado el): distingue dos registros del mismo día.
+ */
+export function dateTimeLabel(value?: Timestamp) {
+  const d = value?.toDate?.();
+  if (!d || !Number.isFinite(d.getTime())) return "Sin registro";
+  const part = Object.fromEntries(
+    DATE_TIME_FORMAT.formatToParts(d).map((p) => [p.type, p.value]),
+  );
+  return `${part.day}-${part.month}-${part.year} ${part.hour}:${part.minute}`;
+}
+/** Referencia corta y visible de un movimiento: últimos 6 caracteres del id ("…5UFRhF"). */
+export function shortReference(id: string) {
+  return id.length > 6 ? `…${id.slice(-6)}` : id;
+}
 export function periodId(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
