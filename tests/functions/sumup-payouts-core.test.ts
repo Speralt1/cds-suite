@@ -675,4 +675,37 @@ describe("revisión Atlas (M1, M2, MINOR 2/3, reintento)", () => {
     expect(st.residual).toBe(2);
     expect(st.status).toBe("CON_DIFERENCIA");
   });
+
+  it("MINOR 2 (re-review): 20 filas con decimales y $5 reales de menos → no se esconde como redondeo", () => {
+    const anchors = basisAnchors();
+    const sales: SaleRecord[] = [];
+    const rows = [];
+    for (let i = 0; i < 20; i++) {
+      sales.push(sale("offerings", `G${i}`, "2026-10-07", 10_000));
+      // Comisión 345,4 (redondea a 345); 15 filas pagan 9.654,6 → en total faltan $5 reales.
+      rows.push(row(`G${i}`, i < 15 ? 9654.6 : 9655.6, 345.4, "2026-10-08", "FICT GRP", { id: `g-${i}` }));
+    }
+    const r = account(
+      P.reconcile(input({ accounts: ["offerings"], asOfDate: "2026-10-30", rowsByAccount: { offerings: [...anchors.rows, ...rows] }, salesByAccount: { offerings: [...anchors.sales, ...sales] } })),
+      "offerings",
+    );
+    const st = r.settlements.find((x) => x.reference === "FICT GRP")!;
+    expect(st.residual).toBe(5);
+    expect(st.rawResidual).toBe(5);
+    expect(st.status).toBe("CON_DIFERENCIA");
+    expect(st.reasons).not.toContain("rounding");
+    expect(r.proposals.find((p) => p.settlementId === st.id)?.state).toBe("sin_confirmar");
+  });
+
+  it("regla de redondeo: el caso de mitades conserva rawResidual 0 y sigue CONCILIADO", () => {
+    const anchors = basisAnchors();
+    const s = sale("offerings", "HR3", "2026-10-12", 5000);
+    const rows = [...anchors.rows, row("HR3", 4818.5, 181.5, "2026-10-13", "FICT HALF3")];
+    const st = account(P.reconcile(input({ accounts: ["offerings"], rowsByAccount: { offerings: rows }, salesByAccount: { offerings: [...anchors.sales, s] } })), "offerings").settlements.find(
+      (x) => x.reference === "FICT HALF3",
+    )!;
+    expect(st).toMatchObject({ residual: 1, rawResidual: 0, status: "CONCILIADO", reasons: ["rounding"] });
+    expect(P.parsePayoutRow({ id: "x", amount: 4818.5, fee: 181.5, type: "PAYOUT" }, "offerings")).toMatchObject({ amount: 4819, fee: 182, rawAmount: 4818.5, rawFee: 181.5 });
+    expect(P.parsePayoutRow({ id: "y", amount: 2000.4, fee: 0, type: "REFUND_DEDUCTION" }, "offerings")).toMatchObject({ amount: -2000, rawAmount: -2000.4 });
+  });
 });

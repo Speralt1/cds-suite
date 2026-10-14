@@ -92,6 +92,9 @@ export interface PayoutRow {
   fee: number | null;
   /** true si amount o fee traían decimales y se redondearon. */
   rounded: boolean;
+  /** Monto y comisión tal como vinieron (sin redondear; deducciones ≤ 0). Solo para la regla de redondeo. */
+  rawAmount: number;
+  rawFee: number | null;
   issues: RowIssue[];
   /** Huella estable del contenido: detecta filas repetidas vs. corregidas. */
   fingerprint: string;
@@ -184,6 +187,8 @@ export interface Settlement {
   difference: number;
   /** neto − (bruto − devoluciones previas − comisión + deducciones); 0 = cuadra. */
   residual: number;
+  /** Mismo residual con los montos sin redondear (2 decimales). */
+  rawResidual: number;
   businessDaysSincePayout: number | null;
   /** El abono cae dentro de la ventana pedida (fecha de abono). */
   inWindow: boolean;
@@ -443,7 +448,28 @@ export function parsePayoutRow(raw: RawPayoutRow, account: SumupAccount): Payout
   const fingerprint = shortHash(
     JSON.stringify([type, status, date, reference, transactionCode, currency, str(raw?.amount), str(raw?.fee)]),
   );
-  return { account, id, type, kind, status, statusClass, date, reference, transactionCode, currency, amount, fee, rounded, issues, fingerprint };
+  let rawAmountValue = Number.isFinite(rawAmount) ? rawAmount : 0;
+  if (kind === "deduction") rawAmountValue = rawAmountValue === 0 ? 0 : -Math.abs(rawAmountValue);
+  const rawFeeValue = fee !== null && Number.isFinite(rawFee) ? rawFee : null;
+  return {
+    account,
+    id,
+    type,
+    kind,
+    status,
+    statusClass,
+    date,
+    reference,
+    transactionCode,
+    currency,
+    amount,
+    fee,
+    rounded,
+    rawAmount: rawAmountValue,
+    rawFee: rawFeeValue,
+    issues,
+    fingerprint,
+  };
 }
 
 /**
@@ -577,6 +603,8 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   const statusClass = first.statusClass;
   const anchorRowId = reference ? null : first.id;
   let roundedRows = 0;
+  // Σ (monto + comisión) SIN redondear de las filas PAYOUT vinculadas.
+  let rawPaidPlusFee = 0;
   const linkedCodes: string[] = [];
 
   let netPaid = 0;
@@ -628,6 +656,7 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
     }
     const sale = link.sale;
     linkedCodes.push(sale.transactionCode);
+    rawPaidPlusFee += row.rawAmount + (row.rawFee ?? 0);
     if ((ctx.paidCodeCount.get(sale.transactionCode) ?? 0) > 1) pushReason(reasons, "sale_paid_twice");
     if (!linkedSales.has(sale.transactionCode)) linkedSales.set(sale.transactionCode, sale);
 
@@ -656,6 +685,9 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   const grossSales = [...linkedSales.values()].reduce((s, sale) => s + sale.grossAmount, 0);
   const feeKnown = fee ?? 0;
   const residual = netPaid - (grossSales - refundsBeforePayout - feeKnown + deductions);
+  // Residual con los montos originales (solo significativo con base net y solo
+  // filas PAYOUT vinculadas, que es el único caso en que se evalúa el redondeo).
+  const rawResidual = Math.round((rawPaidPlusFee - grossSales + refundsBeforePayout) * 100) / 100;
   const difference = grossSales - netPaid;
   const saleDays = [...new Set([...linkedSales.values()].map((s) => s.saleDate).filter((d): d is Ymd => !!d))].sort();
 
@@ -683,9 +715,10 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
     status = "PENDIENTE";
   } else if (residual === 0) {
     status = "CONCILIADO";
-  } else if (Math.abs(residual) <= roundedRows) {
-    // Cada fila con decimales redondeados (monto y comisión por separado) puede
-    // desviar a lo más $1: no es una diferencia real.
+  } else if (roundedRows > 0 && Math.abs(residual) <= roundedRows && Math.abs(rawResidual) < 0.5) {
+    // Regla de redondeo: cada fila con decimales (monto y comisión redondeados
+    // por separado) puede desviar a lo más $1, PERO con los montos originales
+    // la diferencia debe ser < $0,5. Si no, es una diferencia real.
     pushReason(reasons, "rounding");
     status = "CONCILIADO";
   } else if ((businessDaysSincePayout ?? 0) >= ctx.differenceBusinessDays) {
@@ -729,6 +762,7 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
     netPaid,
     difference,
     residual,
+    rawResidual,
     businessDaysSincePayout,
     inWindow,
     afterWindow,

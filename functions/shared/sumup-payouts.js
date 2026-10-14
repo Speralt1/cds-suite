@@ -223,7 +223,29 @@ function parsePayoutRow(raw, account) {
     else if (kind === "payout" && amount < 0)
         issues.push("amount_invalid");
     const fingerprint = shortHash(JSON.stringify([type, status, date, reference, transactionCode, currency, str(raw?.amount), str(raw?.fee)]));
-    return { account, id, type, kind, status, statusClass, date, reference, transactionCode, currency, amount, fee, rounded, issues, fingerprint };
+    let rawAmountValue = Number.isFinite(rawAmount) ? rawAmount : 0;
+    if (kind === "deduction")
+        rawAmountValue = rawAmountValue === 0 ? 0 : -Math.abs(rawAmountValue);
+    const rawFeeValue = fee !== null && Number.isFinite(rawFee) ? rawFee : null;
+    return {
+        account,
+        id,
+        type,
+        kind,
+        status,
+        statusClass,
+        date,
+        reference,
+        transactionCode,
+        currency,
+        amount,
+        fee,
+        rounded,
+        rawAmount: rawAmountValue,
+        rawFee: rawFeeValue,
+        issues,
+        fingerprint,
+    };
 }
 /**
  * Deduplica por id: la misma fila repetida (misma huella) se ignora; el mismo
@@ -333,6 +355,8 @@ function buildSettlement(rows, ctx) {
     const statusClass = first.statusClass;
     const anchorRowId = reference ? null : first.id;
     let roundedRows = 0;
+    // Σ (monto + comisión) SIN redondear de las filas PAYOUT vinculadas.
+    let rawPaidPlusFee = 0;
     const linkedCodes = [];
     let netPaid = 0;
     let fee = 0;
@@ -387,6 +411,7 @@ function buildSettlement(rows, ctx) {
         }
         const sale = link.sale;
         linkedCodes.push(sale.transactionCode);
+        rawPaidPlusFee += row.rawAmount + (row.rawFee ?? 0);
         if ((ctx.paidCodeCount.get(sale.transactionCode) ?? 0) > 1)
             pushReason(reasons, "sale_paid_twice");
         if (!linkedSales.has(sale.transactionCode))
@@ -416,6 +441,9 @@ function buildSettlement(rows, ctx) {
     const grossSales = [...linkedSales.values()].reduce((s, sale) => s + sale.grossAmount, 0);
     const feeKnown = fee ?? 0;
     const residual = netPaid - (grossSales - refundsBeforePayout - feeKnown + deductions);
+    // Residual con los montos originales (solo significativo con base net y solo
+    // filas PAYOUT vinculadas, que es el único caso en que se evalúa el redondeo).
+    const rawResidual = Math.round((rawPaidPlusFee - grossSales + refundsBeforePayout) * 100) / 100;
     const difference = grossSales - netPaid;
     const saleDays = [...new Set([...linkedSales.values()].map((s) => s.saleDate).filter((d) => !!d))].sort();
     if (ctx.basis.basis === "indeterminate")
@@ -450,9 +478,10 @@ function buildSettlement(rows, ctx) {
     else if (residual === 0) {
         status = "CONCILIADO";
     }
-    else if (Math.abs(residual) <= roundedRows) {
-        // Cada fila con decimales redondeados (monto y comisión por separado) puede
-        // desviar a lo más $1: no es una diferencia real.
+    else if (roundedRows > 0 && Math.abs(residual) <= roundedRows && Math.abs(rawResidual) < 0.5) {
+        // Regla de redondeo: cada fila con decimales (monto y comisión redondeados
+        // por separado) puede desviar a lo más $1, PERO con los montos originales
+        // la diferencia debe ser < $0,5. Si no, es una diferencia real.
         pushReason(reasons, "rounding");
         status = "CONCILIADO";
     }
@@ -494,6 +523,7 @@ function buildSettlement(rows, ctx) {
         netPaid,
         difference,
         residual,
+        rawResidual,
         businessDaysSincePayout,
         inWindow,
         afterWindow,
