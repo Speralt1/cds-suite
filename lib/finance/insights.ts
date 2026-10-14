@@ -320,6 +320,51 @@ export function reviewDays(
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface DayWarning {
+  kind: "missing-cash" | "no-records";
+  area?: CashAreaLabel;
+  /** "Falta efectivo · Ofrendas" | "Sin registros". */
+  label: string;
+  /** SumUp bruto of `area` on that day (missing-cash only; 0 otherwise). */
+  sumUpAmount: number;
+  /** Movements behind the warning (the area's SumUp charges of that day). */
+  transactions: FinanceTransaction[];
+}
+
+// Warning cards of the day panel (28 §C2 "Panel del día"). Purely derived
+// from `dayStatus` (same rules as the calendar cell and `reviewDays`): one
+// card per missing-cash area, or one "Sin registros" card. Additive selector,
+// no new rule.
+export function dayWarnings(
+  day: DayStatus,
+  transactions: FinanceTransaction[],
+): DayWarning[] {
+  const dayIncome = activeIncome(transactions, day.date);
+  const warnings: DayWarning[] = day.missingCashAreas.map((area) => {
+    const sumUp = dayIncome.filter(
+      (t) =>
+        t.category === area &&
+        t.paymentMethod === "card" &&
+        isSumUpTransaction(t.id, t.createdBy),
+    );
+    return {
+      kind: "missing-cash",
+      area,
+      label: `Falta efectivo · ${area}`,
+      sumUpAmount: sumUp.reduce((sum, t) => sum + t.amount, 0),
+      transactions: sumUp,
+    };
+  });
+  if (day.noRecords)
+    warnings.push({
+      kind: "no-records",
+      label: "Sin registros",
+      sumUpAmount: 0,
+      transactions: [],
+    });
+  return warnings;
+}
+
 export interface AttributionMonthGroup {
   period: string;
   label: string;
