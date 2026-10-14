@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/lib/auth/auth-provider";
 import { PwaRegister } from "@/components/pwa-register";
+import { PREPAINT_SCRIPT } from "@/lib/ui/prepaint";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -57,7 +58,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es-CL">
+    // suppressHydrationWarning: el script previo al pintado fija
+    // data-text-size y data-sidebar en <html> antes de hidratar (Design Lock 28).
+    <html lang="es-CL" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
+      </head>
       <body>
         <PwaRegister />
         <AuthProvider>{children}</AuthProvider>
