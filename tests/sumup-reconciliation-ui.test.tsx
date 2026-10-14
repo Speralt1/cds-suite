@@ -21,13 +21,26 @@ vi.mock("@/lib/offerings/payouts-client", async (orig) => ({
 
 const { SumUpReconciliationPanel } = await import("@/components/finance/offerings/sumup-reconciliation-panel");
 
-function response(over: { pendingOfferings?: boolean; reviewOfferings?: boolean; failCafeteria?: string } = {}): PayoutsResponse {
+function response(
+  over: { pendingOfferings?: boolean; reviewOfferings?: boolean; failCafeteria?: string; diffOfferings?: boolean; failedPayoutOfferings?: boolean; rowLimit?: boolean } = {},
+): PayoutsResponse {
   const caf = cafeteriaCase();
   const ofr = groupedOfferingsCase();
   const ofrSales = [...ofr.sales];
   const ofrRows = [...ofr.rows];
   if (over.pendingOfferings) ofrSales.push(sale("offerings", "PEND1", "2026-10-18", 12_000));
   if (over.reviewOfferings) ofrRows.push(row(null, 2000, 0, "2026-10-15", "FICT DED", { id: "ded", type: "REFUND_DEDUCTION" }));
+  if (over.diffOfferings) {
+    // Tres ventas que SumUp paga con $1 menos cada una (dentro de la tolerancia de base) → residual −3.
+    for (const [i, g] of [10_000, 20_000, 30_000].entries()) {
+      ofrSales.push(sale("offerings", `DF${i}`, "2026-10-01", g));
+      ofrRows.push(row(`DF${i}`, g - 300 - 1, 300, "2026-10-02", "FICT DIFF", { id: `df-${i}` }));
+    }
+  }
+  if (over.failedPayoutOfferings) {
+    ofrSales.push(sale("offerings", "FL1", "2026-10-15", 8000));
+    ofrRows.push(row("FL1", 7724, 276, "2026-10-16", "FICT FAIL", { id: "fl", status: "FAILED" }));
+  }
   const accounts = over.failCafeteria ? (["offerings"] as const) : (["offerings", "cafeteria"] as const);
   const result = reconcile({
     accounts: [...accounts],
@@ -36,7 +49,12 @@ function response(over: { pendingOfferings?: boolean; reviewOfferings?: boolean;
     period: { startDate: "2026-10-01", endDate: "2026-10-31" },
     asOfDate: "2026-10-20",
   });
-  const accountResults: PayoutsResponse["accounts"] = result.accounts.map((a) => ({ ok: true as const, errorClass: null, ...a }));
+  const accountResults: PayoutsResponse["accounts"] = result.accounts.map((a) => ({
+    ok: true as const,
+    errorClass: null,
+    rowLimitReached: !!over.rowLimit && a.account === "offerings",
+    ...a,
+  }));
   if (over.failCafeteria) accountResults.push({ ok: false, account: "cafeteria", errorClass: over.failCafeteria });
   return {
     readOnly: true,
@@ -151,6 +169,37 @@ describe("Conciliación SumUp — panel de solo lectura", () => {
     rejectWith(Object.assign(new Error("x"), { code }));
     await openPanel();
     expect(screen.getByText(/aún no disponible/)).toBeInTheDocument();
+  });
+
+  it("CON DIFERENCIA muestra el monto de la diferencia", async () => {
+    requestMock.mockResolvedValue(response({ diffOfferings: true }));
+    await openPanel();
+    const ofr = screen.getByTestId("recon-offerings");
+    const rowEl = within(ofr).getAllByTestId("settlement-row").find((r) => r.textContent?.includes("02-10"))!;
+    expect(within(rowEl).getByText("Con diferencia")).toBeInTheDocument();
+    expect(within(rowEl).getByTestId("settlement-difference")).toHaveTextContent(`diferencia ${clpText(-3)}`);
+  });
+
+  it("abono fallido: no suma en el total y se explica; la venta queda por abonar", async () => {
+    requestMock.mockResolvedValue(response({ failedPayoutOfferings: true }));
+    await openPanel();
+    const ofr = screen.getByTestId("recon-offerings");
+    expect(within(ofr).getByText(/1 abono fallido o en proceso no se suma/)).toBeInTheDocument();
+    expect(within(ofr).getByTestId("pending-offerings")).toHaveTextContent("$8.000 · comisión pendiente");
+    expect(within(ofr).getByText("Ventas brutas abonadas").nextSibling).toHaveTextContent("$100.522");
+  });
+
+  it("límite de filas de SumUp → aviso", async () => {
+    requestMock.mockResolvedValue(response({ rowLimit: true }));
+    await openPanel();
+    expect(within(screen.getByTestId("recon-offerings")).getByText(/máximo de filas/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("recon-cafeteria")).queryByText(/máximo de filas/)).not.toBeInTheDocument();
+  });
+
+  it("sesión expirada → mensaje de sesión", async () => {
+    rejectWith(Object.assign(new Error("sumup-payouts/unauthenticated"), { code: "functions/unauthenticated" }));
+    await openPanel();
+    expect(screen.getByText(/Tu sesión expiró/)).toBeInTheDocument();
   });
 
   it("sin permiso → mensaje claro", async () => {

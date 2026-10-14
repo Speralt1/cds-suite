@@ -25,7 +25,7 @@ export interface PayoutsRequest {
 }
 
 export type PayoutsAccountResult =
-  | ({ ok: true; errorClass: null } & AccountReconciliation)
+  | ({ ok: true; errorClass: null; rowLimitReached: boolean } & AccountReconciliation)
   | { ok: false; account: SumupAccount; errorClass: string | null };
 
 export interface PayoutsResponse {
@@ -48,7 +48,7 @@ export async function requestPayoutsReconciliation(input: PayoutsRequest): Promi
   return data;
 }
 
-export type PayoutsErrorKind = "unavailable" | "permission" | "invalid";
+export type PayoutsErrorKind = "unavailable" | "permission" | "session" | "invalid";
 
 /**
  * Error del callable → tipo. Todo lo que no sea permiso o rango inválido se
@@ -58,7 +58,8 @@ export type PayoutsErrorKind = "unavailable" | "permission" | "invalid";
 export function payoutsErrorKind(error: unknown): PayoutsErrorKind {
   const code = errorCode(error);
   const key = errorKey(error);
-  if (code === "permission-denied" || code === "unauthenticated" || key === "sumup-payouts/forbidden") return "permission";
+  if (code === "unauthenticated" || key === "sumup-payouts/unauthenticated") return "session";
+  if (code === "permission-denied" || key === "sumup-payouts/forbidden") return "permission";
   if (code === "invalid-argument") return "invalid";
   return "unavailable";
 }
@@ -66,6 +67,7 @@ export function payoutsErrorKind(error: unknown): PayoutsErrorKind {
 export const PAYOUTS_ERROR_MESSAGE: Readonly<Record<PayoutsErrorKind, string>> = {
   unavailable: "Conciliación SumUp aún no disponible. Los montos de arriba no cambian.",
   permission: "No tienes permiso para ver la conciliación SumUp.",
+  session: "Tu sesión expiró. Vuelve a iniciar sesión para ver la conciliación SumUp.",
   invalid: "No pudimos consultar ese rango de fechas.",
 };
 
@@ -111,4 +113,6 @@ export const SETTLEMENT_REASON_LABEL: Readonly<Record<SettlementReason, string>>
   difference_within_term: "diferencia en espera de confirmación",
   difference_after_term: "diferencia sin resolver",
   refunds_before_payout: "incluye devoluciones anteriores al abono",
+  payout_retried: "SumUp reintentó el abono y ese reintento fue exitoso",
+  rounding: "ajustado por redondeo de SumUp",
 };

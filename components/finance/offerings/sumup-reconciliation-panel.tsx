@@ -57,9 +57,16 @@ function feeText(s: Pick<Settlement, "fee" | "feeConfirmed">) {
   return s.feeConfirmed ? clp(s.fee) : `${clp(s.fee)} · sin confirmar`;
 }
 
+/** Diferencia residual (abono vs. bruto − comisión − ajustes): solo cuando es el motivo del estado. */
+function showsDifference(s: Settlement) {
+  return s.residual !== 0 && (s.reasons.includes("difference_after_term") || s.reasons.includes("difference_within_term"));
+}
+
 /** Etiqueta de celda visible solo en teléfono (la tabla oculta su encabezado < 640 px). */
 function CellLabel({ children }: { children: string }) {
-  return <span className="text-muted sm:hidden">{children}: </span>;
+  // Mismo corte que globals.css (`max-width: 640px` oculta el encabezado): las
+  // etiquetas se ven hasta 640 px inclusive.
+  return <span className="text-muted min-[641px]:hidden">{children}: </span>;
 }
 
 function SettlementRow({ s }: { s: Settlement }) {
@@ -93,6 +100,11 @@ function SettlementRow({ s }: { s: Settlement }) {
       </td>
       <td>
         <StatusBadge status={s.status} />
+        {showsDifference(s) && (
+          <span className="field-help block whitespace-normal" data-testid="settlement-difference">
+            diferencia {clp(s.residual)}
+          </span>
+        )}
         {s.status !== "CONCILIADO" && reasons.length > 0 && (
           <span className="field-help block whitespace-normal">{SETTLEMENT_REASON_LABEL[reasons[0]]}</span>
         )}
@@ -139,7 +151,7 @@ function PendingRow({ p }: { p: PendingDay }) {
   );
 }
 
-function AccountBlock({ data }: { data: AccountReconciliation }) {
+function AccountBlock({ data, rowLimitReached }: { data: AccountReconciliation; rowLimitReached: boolean }) {
   const label = SUMUP_ACCOUNT_LABEL[data.account];
   const t = data.totals;
   const rows = data.settlements.length + data.pendingDays.length;
@@ -170,6 +182,19 @@ function AccountBlock({ data }: { data: AccountReconciliation }) {
           {data.pendingAmount > 0 ? `${clp(data.pendingAmount)} · comisión pendiente` : clp(0)}
         </strong>
       </div>
+      {t.notCountedSettlements > 0 && (
+        <p className="field-help">
+          {t.notCountedSettlements === 1
+            ? "1 abono fallido o en proceso no se suma: sus ventas siguen pendientes de abono."
+            : `${t.notCountedSettlements} abonos fallidos o en proceso no se suman: sus ventas siguen pendientes de abono.`}
+        </p>
+      )}
+      {rowLimitReached && (
+        <p className="notice-warning" role="status">
+          <TriangleAlert size={15} aria-hidden="true" />
+          SumUp devolvió el máximo de filas permitido: puede haber abonos que no se muestran.
+        </p>
+      )}
       {rows > 0 ? (
         <div className="offering-days-table-wrap mt-3">
           <table className="offering-days-table">
@@ -284,7 +309,7 @@ export function SumUpReconciliationPanel({
           <div>
             {state.data.accounts.map((a) =>
               a.ok ? (
-                <AccountBlock key={a.account} data={a} />
+                <AccountBlock key={a.account} data={a} rowLimitReached={a.rowLimitReached === true} />
               ) : (
                 <div key={a.account} className="offering-area-block" data-testid={`recon-${a.account}`}>
                   <h3>{SUMUP_ACCOUNT_LABEL[a.account]}</h3>
