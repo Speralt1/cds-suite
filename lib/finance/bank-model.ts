@@ -96,7 +96,8 @@ export function parseClpInput(raw: string): number | null {
   if (!text) return null;
   if (!/^-?\d{1,3}(\.\d{3})*$|^-?\d+$/.test(text)) return null;
   const value = Number(text.replace(/\./g, ""));
-  return Number.isSafeInteger(value) ? value : null;
+  if (!Number.isSafeInteger(value)) return null;
+  return value === 0 ? 0 : value; // "-0" → 0
 }
 
 // ── Documentos ────────────────────────────────────────────────────────────
@@ -142,6 +143,8 @@ export function validateBankAccountInput(
   if (!isYmd(input.openingDate)) return "Selecciona una fecha de corte válida.";
   if (input.openingDate < BANK_MIN_OPENING_DATE) return "La fecha de corte no puede ser anterior a 2020.";
   if (input.openingDate > opts.today) return "La fecha de corte no puede estar en el futuro.";
+  if (input.openingDate === opts.today)
+    return "La fecha de corte debe ser anterior a hoy: el día de hoy todavía no cierra en la cartola.";
   if (input.openingCash !== null && !isSafeAmount(input.openingCash, { allowZero: true }))
     return "El efectivo inicial debe ser un monto entero de 0 o más pesos.";
   if (input.statementReference.length > 120) return "La referencia de la cartola admite hasta 120 caracteres.";

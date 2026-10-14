@@ -4,8 +4,8 @@ import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   computeBankBalance,
-  parseSumupPayoutsResponse,
   PAYOUTS_NOT_CONNECTED,
+  SUMUP_FEE_CATEGORY,
   type BankAccountConfig,
   type BankBalanceInput,
   type BankLedgerRow,
@@ -310,27 +310,55 @@ describe("computeBankBalance", () => {
   });
 });
 
-describe("parseSumupPayoutsResponse", () => {
-  it("acepta la forma acordada", () => {
-    const r = parseSumupPayoutsResponse({
-      settlements: [{ id: "s1", payoutDate: "2026-10-06", netPaid: 9_500, fee: 500, status: "SUCCESSFUL" }],
-      pendingDeposit: 12_000,
-      coverageFrom: "2026-09-01",
+describe("computeBankBalance: abonos SumUp y comisiones (revisión Atlas)", () => {
+  it("las comisiones SumUp no se restan del banco ni de la caja (los abonos ya son netos)", () => {
+    const r = run({
+      ledger: [
+        tx({ type: "expense", paymentMethod: "transfer", amount: 300, category: SUMUP_FEE_CATEGORY }),
+        tx({ type: "expense", paymentMethod: "card", amount: 200, category: SUMUP_FEE_CATEGORY }),
+        tx({ type: "expense", paymentMethod: "cash", amount: 100, category: SUMUP_FEE_CATEGORY }),
+        tx({ type: "expense", paymentMethod: "transfer", amount: 1_000, category: "Servicios básicos" }),
+      ],
     });
-    expect(r).toEqual({
-      status: "available",
-      payouts: [{ id: "s1", payoutDate: "2026-10-06", netPaid: 9_500, fee: 500, status: "SUCCESSFUL" }],
-      pendingDeposit: 12_000,
-      coverageFrom: "2026-09-01",
+    expect(r.bank!.estimated).toBe(999_000);
+    expect(r.cash!.amount).toBe(0);
+    expect(r.counts.sumupFees).toBe(3);
+    expect(r.warnings.join(" ")).toMatch(/ya llegan netos de comisión/);
+  });
+
+  it("abonos no exitosos se cuentan en avisos, nunca suman en silencio", () => {
+    const r = run({
+      payouts: { status: "available", pendingDeposit: null, payouts: [payout({ status: "PENDING" }), payout({ status: "FAILED" }), payout({ netPaid: 100 })] },
     });
+    expect(r.counts.payoutsSkipped).toBe(2);
+    expect(bankLine(r, "sumupPayouts").amount).toBe(100);
+    expect(r.warnings.join(" ")).toMatch(/2 abono\(s\) SumUp no exitosos/);
   });
-  it("cualquier forma desconocida es 'no disponible' (nunca adivina)", () => {
-    for (const raw of [null, 3, {}, { settlements: "x" }, { settlements: [{ payoutDate: "2026-10-06" }] }, { settlements: [{ payoutDate: "06-10-2026", netPaid: 1, status: "SUCCESSFUL" }] }])
-      expect(parseSumupPayoutsResponse(raw).status).toBe("unavailable");
+
+  it("abonos sin id no se deduplican entre sí", () => {
+    const r = run({ payouts: { status: "available", pendingDeposit: null, payouts: [payout({ id: "", netPaid: 10 }), payout({ id: "", netPaid: 10 })] } });
+    expect(bankLine(r, "sumupPayouts")).toMatchObject({ amount: 20, count: 2 });
   });
-  it("pendingDeposit inválido queda como null", () => {
-    const r = parseSumupPayoutsResponse({ settlements: [], pendingDeposit: -1 });
-    expect(r.status === "available" && r.pendingDeposit).toBeNull();
+
+  it("cobertura que empieza después de hoy o termina antes de hoy: parcial", () => {
+    expect(run({ payouts: { status: "available", pendingDeposit: null, payouts: [], coverageFrom: "2026-10-20" } }).status).toBe("partial");
+    const r = run({ payouts: { status: "available", pendingDeposit: null, payouts: [], coverageFrom: "2026-10-01", coverageTo: "2026-10-10" } });
+    expect(r.status).toBe("partial");
+    expect(r.incompleteReasons.join(" ")).toMatch(/hasta el 2026-10-10/);
+    expect(run({ payouts: { status: "available", pendingDeposit: null, payouts: [], coverageFrom: "2026-10-01", coverageTo: "2026-10-13" } }).status).toBe("complete");
+  });
+
+  it("los motivos parciales y avisos de la fuente se propagan", () => {
+    const r = run({ payouts: { status: "available", pendingDeposit: 0, payouts: [], partialReasons: ["base indeterminada"], warnings: ["aviso"] } });
+    expect(r.status).toBe("partial");
+    expect(r.incompleteReasons).toContain("base indeterminada");
+    expect(r.warnings).toContain("aviso");
+  });
+
+  it("un total cero nunca es -0", () => {
+    const r = run({ account: { ...ACCOUNT, openingBalance: -5 }, ledger: [tx({ amount: 5 })] });
+    expect(Object.is(r.bank!.estimated, 0)).toBe(true);
+    expect(Object.is(parseClpInput("-0"), 0)).toBe(true);
   });
 });
 
@@ -360,6 +388,7 @@ describe("validaciones del modelo", () => {
     const ok = { name: "Cuenta", openingBalance: -5_000, openingDate: "2026-09-30", openingCash: null, statementReference: "" };
     expect(validateBankAccountInput(ok, { today })).toBeNull();
     expect(validateBankAccountInput({ ...ok, openingDate: "2026-10-14" }, { today })).toMatch(/futuro/);
+    expect(validateBankAccountInput({ ...ok, openingDate: today }, { today })).toMatch(/anterior a hoy/);
     expect(validateBankAccountInput({ ...ok, openingDate: "2019-12-31" }, { today })).toMatch(/2020/);
     expect(validateBankAccountInput({ ...ok, openingBalance: 1.5 }, { today })).toMatch(/entero/);
     expect(validateBankAccountInput({ ...ok, openingCash: -1 }, { today })).toMatch(/efectivo inicial/);

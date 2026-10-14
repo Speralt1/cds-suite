@@ -40,7 +40,16 @@ export interface BankLedgerRow {
   status: "active" | "voided";
   period: string;
   day: string;
+  /** Opcional: se usa para no restar dos veces las comisiones SumUp (los abonos ya son netos). */
+  category?: string;
 }
+
+/**
+ * Categoría de gasto de las comisiones SumUp (FEE_CATEGORY del PR C). Los abonos
+ * SumUp ya llegan netos de comisión: restar además ese gasto del banco lo
+ * descontaría dos veces. Se excluye del banco y de la caja (doc 30 §5).
+ */
+export const SUMUP_FEE_CATEGORY = "Comisiones SumUp";
 
 export interface TreasuryRow {
   id: string;
@@ -71,6 +80,12 @@ export type SumupPayoutsInput =
       pendingDeposit: number | null;
       /** Primer día que cubre la fuente; si es posterior al día siguiente al corte, el banco queda parcial. */
       coverageFrom?: Ymd | null;
+      /** Último día que cubre la fuente; si es anterior a asOf, el banco queda parcial. */
+      coverageTo?: Ymd | null;
+      /** Motivos de la fuente para considerar el saldo incompleto (p. ej. base indeterminada). */
+      partialReasons?: string[];
+      /** Avisos informativos de la fuente (p. ej. abonos en proceso o fallidos que no se suman). */
+      warnings?: string[];
     };
 
 export const PAYOUTS_NOT_CONNECTED: SumupPayoutsInput = {
@@ -115,6 +130,8 @@ export interface BankBalanceResult {
     otherMethodAmount: number;
     cardIncome: number;
     invalid: number;
+    sumupFees: number;
+    payoutsSkipped: number;
   };
 }
 
@@ -147,7 +164,7 @@ function safeSum(values: number[]): number {
   let total = 0;
   for (const v of values) total += v;
   if (!Number.isSafeInteger(total)) throw new Error("El saldo supera el límite seguro de cálculo.");
-  return total;
+  return total === 0 ? 0 : total; // nunca "-0"
 }
 
 export function computeBankBalance(input: BankBalanceInput): BankBalanceResult {
@@ -160,6 +177,8 @@ export function computeBankBalance(input: BankBalanceInput): BankBalanceResult {
     otherMethodAmount: 0,
     cardIncome: 0,
     invalid: 0,
+    sumupFees: 0,
+    payoutsSkipped: 0,
   };
   const warnings: string[] = [];
   const incompleteReasons: string[] = [];
@@ -224,6 +243,10 @@ export function computeBankBalance(input: BankBalanceInput): BankBalanceResult {
       continue;
     }
     const income = row.type === "income";
+    if (!income && row.category === SUMUP_FEE_CATEGORY) {
+      counts.sumupFees++;
+      continue;
+    }
     switch (row.paymentMethod) {
       case "transfer":
         (income ? transferIncome : transferExpense).add(row.amount);
@@ -288,14 +311,26 @@ export function computeBankBalance(input: BankBalanceInput): BankBalanceResult {
     incompleteReasons.push(`Faltan los abonos SumUp: ${input.payouts.reason}`);
   } else {
     const coverage = input.payouts.coverageFrom;
-    if (coverage && isYmd(coverage) && coverage > addDay(cutoff) && coverage <= asOf) {
+    if (coverage && isYmd(coverage) && coverage > addDay(cutoff)) {
       incompleteReasons.push(`Los abonos SumUp solo están disponibles desde el ${coverage}.`);
     }
+    const coverageTo = input.payouts.coverageTo;
+    if (coverageTo && isYmd(coverageTo) && coverageTo < asOf && asOf > cutoff) {
+      incompleteReasons.push(`Los abonos SumUp solo están disponibles hasta el ${coverageTo}.`);
+    }
+    for (const reason of input.payouts.partialReasons ?? []) incompleteReasons.push(reason);
+    for (const w of input.payouts.warnings ?? []) warnings.push(w);
     const pSeen = new Set<string>();
     for (const p of input.payouts.payouts) {
-      if (pSeen.has(p.id)) continue;
-      pSeen.add(p.id);
-      if (String(p.status).toUpperCase() !== "SUCCESSFUL") continue;
+      // Sin id no se puede deduplicar: se cuenta (la fuente garantiza ids; el adaptador rechaza abonos sin id).
+      if (p.id) {
+        if (pSeen.has(p.id)) continue;
+        pSeen.add(p.id);
+      }
+      if (String(p.status).toUpperCase() !== "SUCCESSFUL") {
+        counts.payoutsSkipped++;
+        continue;
+      }
       if (!isYmd(p.payoutDate) || !isSafeAmount(p.netPaid, { allowZero: true })) {
         counts.invalid++;
         continue;
@@ -314,6 +349,12 @@ export function computeBankBalance(input: BankBalanceInput): BankBalanceResult {
     );
   if (counts.invalid) warnings.push(`${counts.invalid} registro(s) con datos no válidos se omitieron.`);
   if (counts.future) warnings.push(`${counts.future} movimiento(s) con fecha futura no se cuentan todavía.`);
+  if (counts.payoutsSkipped)
+    warnings.push(`${counts.payoutsSkipped} abono(s) SumUp no exitosos (en proceso, fallidos o desconocidos) no se suman.`);
+  if (counts.sumupFees)
+    warnings.push(
+      `${counts.sumupFees} gasto(s) "${SUMUP_FEE_CATEGORY}" no se restan del banco: los abonos SumUp ya llegan netos de comisión.`,
+    );
 
   const line = (
     key: string,
@@ -382,39 +423,5 @@ export function computeBankBalance(input: BankBalanceInput): BankBalanceResult {
     incompleteReasons,
     warnings,
     counts,
-  };
-}
-
-// ── Adaptador de la callable sumupPayoutsReconciliation (rama aparte) ──
-// Contrato asumido (doc 30 §7): { settlements: [{ id?, payoutId?, payoutDate,
-// netPaid, fee, status }], pendingDeposit, coverageFrom? }. Cualquier forma
-// distinta se trata como "no disponible": nunca se adivina un monto.
-export function parseSumupPayoutsResponse(raw: unknown): SumupPayoutsInput {
-  const unavailable = (reason: string): SumupPayoutsInput => ({ status: "unavailable", reason });
-  if (!raw || typeof raw !== "object") return unavailable("La respuesta de SumUp no es válida.");
-  const data = raw as Record<string, unknown>;
-  const list = data.settlements ?? data.payouts;
-  if (!Array.isArray(list)) return unavailable("La respuesta de SumUp no trae abonos.");
-  const payouts: SumupPayout[] = [];
-  for (const [i, item] of list.entries()) {
-    if (!item || typeof item !== "object") return unavailable("La respuesta de SumUp trae abonos con formato desconocido.");
-    const p = item as Record<string, unknown>;
-    const id = typeof p.id === "string" ? p.id : typeof p.payoutId === "string" ? p.payoutId : `row-${i}`;
-    if (!isYmd(p.payoutDate) || typeof p.netPaid !== "number" || typeof p.status !== "string")
-      return unavailable("La respuesta de SumUp trae abonos incompletos.");
-    payouts.push({
-      id,
-      payoutDate: p.payoutDate,
-      netPaid: p.netPaid,
-      fee: typeof p.fee === "number" ? p.fee : null,
-      status: p.status,
-    });
-  }
-  const pending = data.pendingDeposit;
-  return {
-    status: "available",
-    payouts,
-    pendingDeposit: typeof pending === "number" && isSafeAmount(pending, { allowZero: true }) ? pending : null,
-    coverageFrom: isYmd(data.coverageFrom) ? data.coverageFrom : null,
   };
 }
