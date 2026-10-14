@@ -61,7 +61,9 @@ Bloque final, tal como queda:
 
 Medición con relleno sobre el resumen (`PAD_AT=summary`, `MAX_TERMS=200`, `STEP=1`), solo en el emulador y con datos ficticios. Calibración: 142 términos, ≈6,99 expresiones por término. Se corrió lo mismo sobre `firestore.rules` de `18925d6` como referencia.
 
-| Perfil | `18925d6` (fix) | Integración | Mínimo exigido |
+Valores en **expresiones libres** del documento limitante (el resumen mensual), peor caso por perfil: 17 términos de relleno × 6,99 ≈ 118 y 18 × 6,99 ≈ 125. Para 100 expresiones hacen falta 15 términos, así que la holgura sobre `REQUIRED_MARGIN` es de unos 2 términos.
+
+| Perfil (expresiones libres) | `18925d6` (fix) | Integración | Mínimo exigido |
 |---|---|---|---|
 | legacy-admin | ≥118 | **≥118** | 100 |
 | legacy-pastor | ≥118 | **≥118** | 100 |
@@ -121,11 +123,11 @@ El fix (PR #12) no tocó código de app, Functions ni `lib/`. Los archivos de Co
 
 ## 7. Prerrequisitos de deploy (ninguno ejecutado)
 
-1. **Primero C-A1.2:** deploy de las Rules de `18925d6` (fix del presupuesto) en producción, con su propio GO y la verificación del doc 26. Mientras producción siga en el ruleset `2d9939ab…`, **no** se despliegan reglas de Consolidación.
+1. **Primero, C-A1 completo** (doc 25 C-A1 = doc 20 §13 Fases 0–5): Rules de `18925d6` (fase "C-A1.2" del registro operativo de Salvador: el reintento con el fix del doc 26, detenido el 08/10 por la reconciliación financiera A10), Functions de Calendario por nombre (`calendarPublicFeed`, `calendarShareLinkManage`) y Hosting RC1; después **C-A2** (smoke PASS) y **C-A2.5** (merge del PR de Consolidación). Mientras producción siga en el ruleset `2d9939ab…` y el Hosting `3d1dc8bc8d1bcc29`, **no** se despliega nada de Consolidación. Anotar el ruleset y la versión de Hosting resultantes de C-A1 como objetivos de rollback.
 2. **Después, las Rules de Consolidación (C-A4 del doc 25):**
-   - desde `~/cds-deploy`, en el commit exacto de esta integración (o en el que la suceda tras la revisión);
+   - desde `~/cds-deploy`, en el **commit de merge de C-A2.5** (PR de Consolidación mergeado en `feature/preproduccion-mobile-v1`), nunca en la rama de integración; antes: `git merge-base --is-ancestor 18925d67f17de2e42f5061024486d579ed29ce66 HEAD` y `git merge-base --is-ancestor <head revisado de esta rama> HEAD` deben dar 0, y el diff del merge debe mostrar solo Consolidación;
    - con los gates del §4 en verde en un checkout limpio (`npm ci && npm --prefix functions ci`);
-   - el rollback de C-A4 pasa a ser el ruleset de C-A1.2 (`18925d6`), **no** `2d9939ab…`.
+   - el rollback de C-A4 pasa a ser el ruleset de C-A1 (Rules de `18925d6`), **no** `2d9939ab…` (ruleset pre-Platform: con él, un v1 solo de Integrantes guardado como `role = "leader"` leería el resumen financiero, doc 25 §5.1).
 3. **Índices `members*` (C-A3):** aditivos, con GO aparte.
 4. **Functions:** las 6 `members*` (`membersPersonCreate`, `membersPersonUpdate`, `membersStatusChange`, `membersVisitCreate`, `membersFollowUpCreate`, `membersOwnerOptions`) se despliegan **solo por nombre** y **solo con un GO futuro** (C-A5). **Nunca** se redespliegan las Functions de SumUp (`sumupSyncNow`, `sumupSyncScheduled`) ni `campaignShare` como parte de Consolidación. Su revisión debe quedar igual antes y después.
 5. **Hosting con Integrantes (C-A6):** solo después de C-A4 y C-A5, con `check:no-preview` y el modal R0G verificados en `out/`.

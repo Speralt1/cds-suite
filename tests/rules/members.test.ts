@@ -210,6 +210,8 @@ describe("Integrantes: aislamiento de otras colecciones", () => {
       await assertFails(getDocs(collection(dbOf(env, uid), "calendarEvents")));
       await assertFails(getDocs(collection(dbOf(env, uid), "users")));
       await assertFails(getDocs(collection(dbOf(env, uid), "calendarShareLinks")));
+      // Caso expuesto en el rollback legacy (doc 25 §5.1): el resumen financiero tampoco.
+      await assertFails(getDoc(doc(dbOf(env, uid), "financeMonthlySummaries", "2026-10")));
     }
   });
 
