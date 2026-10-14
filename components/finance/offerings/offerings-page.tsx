@@ -32,6 +32,7 @@ import {
 } from "@/lib/offerings/client";
 import { Empty, FinancePageHeader, Loading, Modal, Notice } from "@/components/finance/shared";
 import { CashModal } from "@/components/finance/offerings/cash-modal";
+import { SumUpReconciliationPanel } from "@/components/finance/offerings/sumup-reconciliation-panel";
 
 const SUMUP_LEGACY_CATEGORY = "SumUp histórico sin separar";
 const SPLIT_MONTH = SPLIT.slice(0, 7); // "2026-09"
@@ -634,6 +635,8 @@ export function OfferingsPage() {
           <Empty>Sin ingresos de Ofrendas ni Cafetería en este mes.</Empty>
         )}
       </section>
+
+      <SumUpReconciliationPanel selectedDate={selectedDate} />
 
       <IntegrationLine
         offerings={offeringsIntegration.data}
