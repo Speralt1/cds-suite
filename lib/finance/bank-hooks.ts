@@ -46,6 +46,68 @@ export function useBankAccount(accountId = DEFAULT_BANK_ACCOUNT_ID, enabled = tr
   return useDocument<BankAccountDoc>("bankAccounts", accountId, enabled);
 }
 
+export interface BankSourceState<T> {
+  data: T;
+  loading: boolean;
+  error: string;
+}
+
+/**
+ * Combina las fuentes en el estado de la tarjeta (puro, probado). Falla
+ * cerrado: si CUALQUIER fuente tiene error (consulta denegada, índice
+ * faltante, sin conexión) no hay número — result = null y se muestra el error.
+ * `payouts === null` = los abonos SumUp aún cargan.
+ */
+export function resolveBankBalanceState({
+  account,
+  ledger,
+  treasury,
+  payouts,
+  asOf,
+  accountId,
+  enabled,
+}: {
+  account: BankSourceState<BankAccountDoc | null>;
+  ledger: BankSourceState<FinanceTransaction[]>[];
+  treasury: BankSourceState<TreasuryTransferDoc[]>;
+  payouts: SumupPayoutsInput | null;
+  asOf: Ymd;
+  accountId: string;
+  enabled: boolean;
+}): BankBalanceState {
+  if (!enabled) return { loading: false, error: "", account: null, result: null, limitReached: false };
+  const ready = !!account.data && isYmd(account.data.openingDate);
+  const sources = ready ? [...ledger, treasury] : [];
+  const error = account.error || sources.map((x) => x.error).find(Boolean) || "";
+  const ledgerTruncated = ledger.some((x) => x.data.length >= BANK_LEDGER_LIMIT);
+  const treasuryTruncated = treasury.data.length >= BANK_TREASURY_LIMIT;
+  const limitReached = ready && (ledgerTruncated || treasuryTruncated);
+  if (error) return { loading: false, error, account: account.data, result: null, limitReached };
+  const loading = account.loading || sources.some((x) => x.loading) || (ready && payouts === null);
+  if (loading) return { loading: true, error: "", account: account.data, result: null, limitReached: false };
+  try {
+    const result = computeBankBalance({
+      account: account.data
+        ? {
+            openingBalance: account.data.openingBalance,
+            openingDate: account.data.openingDate,
+            openingCash: account.data.openingCash ?? null,
+          }
+        : null,
+      ledger: ready ? ledger.flatMap((x) => x.data) : [],
+      treasury: ready ? treasury.data : [],
+      payouts: payouts ?? PAYOUTS_NOT_CONNECTED,
+      asOf,
+      accountId,
+      ledgerTruncated: ready && ledgerTruncated,
+      treasuryTruncated: ready && treasuryTruncated,
+    });
+    return { loading: false, error: "", account: account.data, result, limitReached };
+  } catch {
+    return { loading: false, error: "No pudimos calcular el saldo estimado.", account: account.data, result: null, limitReached };
+  }
+}
+
 export function useBankBalance({
   accountId = DEFAULT_BANK_ACCOUNT_ID,
   payouts = PAYOUTS_NOT_CONNECTED,
@@ -53,7 +115,8 @@ export function useBankBalance({
   enabled = true,
 }: {
   accountId?: string;
-  payouts?: SumupPayoutsInput;
+  /** null = cargando; sin valor = no conectado (parcial). */
+  payouts?: SumupPayoutsInput | null;
   asOf?: Ymd;
   enabled?: boolean;
 } = {}): BankBalanceState {
@@ -61,49 +124,14 @@ export function useBankBalance({
   const openingDate = account.data && isYmd(account.data.openingDate) ? account.data.openingDate : null;
   const ready = enabled && !!openingDate;
   const queries = useMemo(() => (openingDate ? bankBalanceQueries(openingDate) : null), [openingDate]);
-  const cashTransfer = queries?.cashTransfer ?? EMPTY;
-  const cardExpense = queries?.cardExpense ?? EMPTY;
-  const treasuryQuery = queries?.treasury ?? EMPTY;
-  const a = useCollection<FinanceTransaction>("financeTransactions", cashTransfer, ready);
-  const b = useCollection<FinanceTransaction>("financeTransactions", cardExpense, ready);
-  const t = useCollection<TreasuryTransferDoc>("treasuryTransfers", treasuryQuery, ready);
+  const a = useCollection<FinanceTransaction>("financeTransactions", queries?.cashTransfer ?? EMPTY, ready);
+  const b = useCollection<FinanceTransaction>("financeTransactions", queries?.cardExpense ?? EMPTY, ready);
+  const t = useCollection<TreasuryTransferDoc>("treasuryTransfers", queries?.treasury ?? EMPTY, ready);
   const day = asOf ?? santiagoToday();
-
-  const ledgerTruncated = a.data.length >= BANK_LEDGER_LIMIT || b.data.length >= BANK_LEDGER_LIMIT;
-  const treasuryTruncated = t.data.length >= BANK_TREASURY_LIMIT;
-  const loading = account.loading || (ready && (a.loading || b.loading || t.loading));
-  const error = account.error || (ready ? a.error || b.error || t.error : "");
-  const result = useMemo(() => {
-    if (loading || !enabled) return null;
-    try {
-      return computeBankBalance({
-        account: account.data
-          ? {
-              openingBalance: account.data.openingBalance,
-              openingDate: account.data.openingDate,
-              openingCash: account.data.openingCash ?? null,
-            }
-          : null,
-        ledger: [...a.data, ...b.data],
-        treasury: t.data,
-        payouts,
-        asOf: day,
-        accountId,
-        ledgerTruncated,
-        treasuryTruncated,
-      });
-    } catch {
-      return null;
-    }
-  }, [loading, enabled, account.data, a.data, b.data, t.data, payouts, day, accountId, ledgerTruncated, treasuryTruncated]);
-
-  return {
-    loading,
-    error: error || (!loading && enabled && !result ? "No pudimos calcular el saldo estimado." : ""),
-    account: account.data,
-    result,
-    limitReached: ledgerTruncated || treasuryTruncated,
-  };
+  return useMemo(
+    () => resolveBankBalanceState({ account, ledger: [a, b], treasury: t, payouts, asOf: day, accountId, enabled }),
+    [account, a, b, t, payouts, day, accountId, enabled],
+  );
 }
 
 export function useBankHistory(accountId = DEFAULT_BANK_ACCOUNT_ID, enabled = true) {
