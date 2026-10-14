@@ -47,6 +47,8 @@ export interface SaveProfileResult {
    * sin clave, y la interfaz avisa "Posible ficha duplicada". Nunca bloquea editar un registro antiguo.
    */
   possibleDuplicateOf?: string;
+  /** Ficha archivada con el mismo nombre que cedió su clave a esta (gemelas antiguas). */
+  releasedFrom?: string;
 }
 /** Ids de registro que apuntan a la ficha (máx. 10). Solo para fichas guardadas sin clave. */
 async function keysOwnedBy(db: Firestore, profileId: string) {
@@ -73,8 +75,8 @@ async function releaseArchivedKey(
   uid: string,
   ownerId: string,
   key: string,
-) {
-  await runTransaction(db, async (tx) => {
+): Promise<boolean> {
+  return runTransaction(db, async (tx) => {
     const ownerRef = doc(db, "titheProfiles", ownerId);
     const keyRef = doc(db, "titheProfileKeys", key);
     const owner = await tx.get(ownerRef);
@@ -85,12 +87,21 @@ async function releaseArchivedKey(
       owner.data().identityKey !== key ||
       registry.data()?.profileId !== ownerId
     )
-      return;
+      return false;
     const data = { ...owner.data() };
     delete data.identityKey;
     tx.set(ownerRef, { ...data, updatedBy: uid, updatedAt: serverTimestamp() });
     tx.delete(keyRef);
+    return true;
   });
+}
+function isPermissionDenied(e: unknown) {
+  return (
+    !!e &&
+    typeof e === "object" &&
+    "code" in e &&
+    String((e as { code: unknown }).code).includes("permission-denied")
+  );
 }
 /**
  * Crea o edita una ficha y su registro de identidad (titheProfileKeys/{identityKey}) en UNA
@@ -125,13 +136,19 @@ export async function saveProfile(
   const orphanCandidates =
     existing && !existing.identityKey ? await keysOwnedBy(db, profileId) : [];
   let possibleDuplicateOf: string | undefined;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    // Un solo intento de cesión; si el estado cambió entretanto, el segundo intento se resuelve
-    // sin cesión (toma la clave libre o avisa possibleDuplicateOf).
-    const allowHandoff = attempt === 0;
+  let releasedFrom: string | undefined;
+  // Como máximo 3 intentos: uno con cesión desde una gemela archivada (una sola vez) y un
+  // reintento si otra ficha tomó la misma clave libre a la vez (el alta del registro sobre un
+  // documento ya existente se evalúa como update y las reglas responden permission-denied).
+  let handoffTried = false;
+  let claimRetried = false;
+  for (;;) {
+    const allowHandoff = !handoffTried;
+    let claimed = false;
     try {
       await runTransaction(db, async (tx) => {
         possibleDuplicateOf = undefined;
+        claimed = false;
         const ref = doc(db, "titheProfiles", profileId);
         const current = await tx.get(ref);
         if (!existing && current.exists()) return; // Retry of an already confirmed create.
@@ -174,7 +191,9 @@ export async function saveProfile(
               )
                 throw new ArchivedOwner(owner);
             }
-            if (existing && !oldKey) possibleDuplicateOf = owner;
+            // Solo se tolera (aviso) si la ficha antigua conserva su nombre. Un cambio de
+            // nombre hacia un nombre ya registrado se rechaza también en fichas antiguas.
+            if (existing && !oldKey && sameName) possibleDuplicateOf = owner;
             else throw new DuplicateProfileError(owner, key);
           }
         }
@@ -182,6 +201,7 @@ export async function saveProfile(
         for (const k of orphanCandidates)
           if (k !== keepKey && (await ownerOf(k)) === profileId) orphans.push(k);
         const stamp = serverTimestamp();
+        claimed = claimKey;
         if (claimKey)
           tx.set(doc(db, "titheProfileKeys", keepKey), {
             profileId,
@@ -206,13 +226,32 @@ export async function saveProfile(
       });
       break;
     } catch (e) {
-      if (!(e instanceof ArchivedOwner)) throw e;
-      await releaseArchivedKey(db, uid, e.profileId, key);
+      if (e instanceof ArchivedOwner) {
+        handoffTried = true;
+        // Si la cesión falla, se sigue sin ella: nunca bloquea editar una ficha antigua
+        // (el siguiente intento avisa possibleDuplicateOf).
+        try {
+          if (await releaseArchivedKey(db, uid, e.profileId, key))
+            releasedFrom = e.profileId;
+        } catch {
+          /* sin cesión */
+        }
+        continue;
+      }
+      if (claimed && !claimRetried && isPermissionDenied(e)) {
+        // Otra ficha registró la misma clave entre la lectura y el commit: se vuelve a leer y
+        // se resuelve como corresponde (aviso, DuplicateProfileError o «La ficha cambió»).
+        claimRetried = true;
+        continue;
+      }
+      throw e;
     }
   }
-  return possibleDuplicateOf
-    ? { id: profileId, possibleDuplicateOf }
-    : { id: profileId };
+  return {
+    id: profileId,
+    ...(possibleDuplicateOf ? { possibleDuplicateOf } : {}),
+    ...(releasedFrom ? { releasedFrom } : {}),
+  };
 }
 export async function addFollowup(
   db: Firestore,

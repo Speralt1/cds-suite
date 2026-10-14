@@ -289,7 +289,7 @@ describe("registro de identidad de fichas (titheProfileKeys)", () => {
     await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", active: false }, await profileDoc("L2"));
     expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L2");
     const r = await saveProfile(db, "finance", { ...base, displayName: "Rosa Díaz", phone: "1" }, await profileDoc("L1"));
-    expect(r).toEqual({ id: "L1" });
+    expect(r).toEqual({ id: "L1", releasedFrom: "L2" });
     expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L1");
     const l2 = await profileDoc("L2");
     expect(l2).not.toHaveProperty("identityKey");
@@ -298,6 +298,43 @@ describe("registro de identidad de fichas (titheProfileKeys)", () => {
     await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", active: true }, l2);
     expect(await saveProfile(db, "finance", { ...base, displayName: "ROSA DIAZ", phone: "2" }, await profileDoc("L2"))).toEqual({ id: "L2", possibleDuplicateOf: "L1" });
     expect((await keyDoc("rosa_diaz"))!.profileId).toBe("L1");
+  });
+
+  it("ficha antigua RENOMBRADA hacia un nombre registrado por otra → DuplicateProfileError (no se tolera)", async () => {
+    await saveProfile(db, "finance", base, undefined, "p1");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const now = Timestamp.now();
+      await setDoc(doc(ctx.firestore(), "titheProfiles", "old"), profileData("finance", "Pedro Rojas", { createdAt: now, updatedAt: now }));
+    });
+    await expect(
+      saveProfile(db, "finance", { ...base, displayName: "JUAN PEREZ" }, await profileDoc("old")),
+    ).rejects.toMatchObject({ name: "DuplicateProfileError", profileId: "p1" });
+    expect((await profileDoc("old")).displayName).toBe("Pedro Rojas");
+  });
+
+  it("gemelas antiguas editadas a la vez: una toma la clave y la otra recibe el aviso (nunca permission-denied)", async () => {
+    for (let round = 0; round < 3; round++) {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const now = Timestamp.now();
+        await setDoc(doc(ctx.firestore(), "users", "finance"), { displayName: "finance", email: "finance@example.test", role: "finance", active: true, createdAt: now });
+        await setDoc(doc(ctx.firestore(), "users", "admin"), { displayName: "admin", email: "admin@example.test", role: "admin", active: true, createdAt: now });
+        await setDoc(doc(ctx.firestore(), "titheProfiles", "T1"), profileData("finance", "Marta Gil", { createdAt: now, updatedAt: now }));
+        await setDoc(doc(ctx.firestore(), "titheProfiles", "T2"), profileData("finance", "MARTA GIL", { createdAt: now, updatedAt: now }));
+      });
+      const [t1, t2] = [await profileDoc("T1"), await profileDoc("T2")];
+      const results = await Promise.allSettled([
+        saveProfile(db, "finance", { ...base, displayName: "Marta Gil", phone: "1" }, t1),
+        saveProfile(dbFor("admin"), "admin", { ...base, displayName: "MARTA GIL", phone: "2" }, t2),
+      ]);
+      expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+      const values = results.map((r) => (r as PromiseFulfilledResult<{ id: string; possibleDuplicateOf?: string }>).value);
+      const owner = (await keyDoc("marta_gil"))!.profileId;
+      const loser = values.find((v) => v.id !== owner)!;
+      expect(loser.possibleDuplicateOf).toBe(owner);
+      expect(values.find((v) => v.id === owner)).toEqual({ id: owner });
+      expect((await profileDoc(loser.id)).phone).toBe(loser.id === "T1" ? "1" : "2");
+    }
   });
 
   it("registro huérfano: un cambio de nombre del cliente anterior se limpia en la siguiente edición", async () => {

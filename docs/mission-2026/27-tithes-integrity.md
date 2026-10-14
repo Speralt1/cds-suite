@@ -49,9 +49,19 @@ Colección nueva `titheProfileKeys/{identityKey}` = `{ profileId, createdAt, cre
 | Edición sin cambio de clave (también archivar/reactivar) | no toca el registro |
 | Cambio de nombre | registra la clave nueva y borra la anterior en el mismo commit; si la nueva es de otra ficha → `DuplicateProfileError` |
 | Ficha antigua sin clave, **activa** | registra su clave si está libre (o si ya apunta a ella). Si la tiene una **gemela archivada** con el mismo nombre, esa gemela la **cede** (commit aparte: se le quita `identityKey` y se borra el registro) y la activa la toma. Si la tiene otra ficha **activa**, guarda **sin** clave y devuelve `possibleDuplicateOf` → aviso «Posible ficha duplicada». **Nunca bloquea editar un registro antiguo** |
+| Ficha antigua sin clave **renombrada** hacia un nombre ya registrado por otra ficha | `DuplicateProfileError`. El aviso tolerante (`possibleDuplicateOf`) aplica solo si conserva su mismo nombre |
+| Carrera: otra ficha registra la misma clave libre entre la lectura y el commit | las reglas evalúan el alta del registro como update y responden `permission-denied`. `saveProfile` reintenta **una vez** y se resuelve como corresponde: aviso, `DuplicateProfileError` o «La ficha cambió». No se muestra el mensaje genérico de permisos |
 | Ficha antigua sin clave, **archivada** (o que se archiva ahora) | **no toma** la clave aunque esté libre, para que la gemela activa pueda tomarla en su próxima edición |
 | Ficha guardada sin clave con registros «huérfanos» | antes de la transacción consulta `titheProfileKeys where profileId == id` (≤ 10). Dentro de la transacción vuelve a leer cada uno y borra los que siguen apuntando a ella y no son la clave que conserva. Esos huérfanos los deja el cliente anterior cuando cambia el nombre y reescribe la ficha sin `identityKey` |
 | Nombre sin letras latinas | se guarda sin clave |
+
+**Cesión desde una gemela archivada (detalle):**
+
+- Es un commit aparte (`releaseArchivedKey`) que reescribe la ficha archivada sin `identityKey`, con `updatedBy`/`updatedAt` de quien edita, y borra su registro. Si alguien tiene abierta la ficha archivada en un formulario, al guardar verá «La ficha cambió».
+- Quien edita ve «Una ficha archivada con el mismo nombre cedió el nombre: ahora lo reserva esta ficha.»
+- Si la cesión falla, la edición se guarda igual, sin clave y con el aviso «Posible ficha duplicada». Nunca bloquea.
+- **Ventana no atómica:** si la cesión se confirma pero el commit que toma la clave falla (red, ficha cambiada), el nombre queda sin reserva en el servidor hasta la próxima edición. Es la misma exposición que cualquier ficha antigua sin clave en Fase 1, y la UI sigue avisando por coincidencia de nombre.
+- **Opción de Fase 2:** una regla de «traspaso» atómico. Permitiría, en un solo commit, cambiar `profileId` de un registro cuando la ficha anterior está archivada y deja la clave, y la nueva la toma. Hoy el registro es inmutable (`allow update: if false`).
 
 Una ficha **con clave** que se archiva **sigue reservando su nombre**: al crear otra igual se ofrece «Revisar y reactivar», salvo que exista una ficha activa con ese nombre, en cuyo caso se ofrece «Usar ficha existente» (las coincidencias exactas se ordenan activas primero). La reserva cede solo ante una gemela antigua **activa** con el mismo nombre (tabla anterior).
 

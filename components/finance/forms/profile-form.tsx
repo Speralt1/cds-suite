@@ -20,6 +20,8 @@ import {
 export const NAME_MATCH_DEBOUNCE_MS = 250;
 export const POSSIBLE_DUPLICATE_WARNING =
   "Posible ficha duplicada: otra ficha ya usa este nombre. Los cambios se guardaron; revisa «Posibles fichas duplicadas» en Diezmos.";
+export const RELEASED_NAME_NOTICE =
+  "Una ficha archivada con el mismo nombre cedió el nombre: ahora lo reserva esta ficha. La ficha archivada conserva su historial.";
 export function ProfileForm({
   existing,
   reactivate = false,
@@ -138,7 +140,11 @@ export function ProfileForm({
       const s = await getDoc(doc(db, "titheProfiles", id));
       onSaved(
         { id, ...s.data() } as TitheProfile,
-        result.possibleDuplicateOf ? POSSIBLE_DUPLICATE_WARNING : undefined,
+        result.possibleDuplicateOf
+          ? POSSIBLE_DUPLICATE_WARNING
+          : result.releasedFrom
+            ? RELEASED_NAME_NOTICE
+            : undefined,
       );
       onClose();
     } catch (e) {
