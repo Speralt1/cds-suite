@@ -2,7 +2,7 @@
 import type { Firestore } from "firebase/firestore";
 import { MONTHS } from "./constants";
 import { isoDate } from "./formatters";
-import { fetchMonthTithes, fetchTransactionMethods } from "./tithe-hooks";
+import { fetchSameDayTithes, fetchTransactionMethods } from "./tithe-hooks";
 import type { PaymentMethod, TitheAttribution } from "./types";
 
 /** "2026-10" → "octubre de 2026". */
@@ -39,9 +39,10 @@ export function sameDateAndAmount(
 }
 
 /**
- * Aportes activos de la ficha con la MISMA fecha, monto y método de pago. Lee los diezmos del
- * mes (consulta acotada con índice existente) y, solo si hay candidatos de misma fecha y monto,
- * su método (documentId-in de ≤ 30 movimientos). Si la consulta falla devuelve [] (nunca bloquea).
+ * Aportes activos de la ficha con la MISMA fecha, monto y método de pago. Lee los diezmos de
+ * ese día (igualdad en profileId+status+date, índice existente, ≤ 30) y, solo si hay candidatos
+ * del mismo monto, su método (documentId-in de ≤ 30 movimientos). Si la consulta falla devuelve
+ * [] (nunca bloquea).
  */
 export async function findExactTitheMatches(
   db: Firestore,
@@ -49,8 +50,8 @@ export async function findExactTitheMatches(
   input: { date: string; amount: number; paymentMethod: PaymentMethod },
 ): Promise<TitheAttribution[]> {
   try {
-    const month = await fetchMonthTithes(db, profileId, input.date.slice(0, 7));
-    const candidates = sameDateAndAmount(month, input.date, input.amount);
+    const day = await fetchSameDayTithes(db, profileId, input.date);
+    const candidates = sameDateAndAmount(day, input.date, input.amount);
     if (!candidates.length) return [];
     const methods = await fetchTransactionMethods(
       db,

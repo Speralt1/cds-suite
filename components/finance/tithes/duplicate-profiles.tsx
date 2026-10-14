@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getFirebaseServices } from "@/lib/firebase";
 import { saveProfile } from "@/lib/finance/profiles";
@@ -13,6 +13,7 @@ import {
 import { duplicateGroups } from "@/lib/shared/names";
 import type { TitheProfile } from "@/lib/finance/types";
 import { Empty, Loading, Notice } from "../shared";
+import "@/components/finance/tithes/tithes-integrity.css";
 
 function profileInput(p: TitheProfile, active: boolean) {
   return {
@@ -39,8 +40,11 @@ function DuplicateRow({
   const count = useActiveTitheCount(profile.id, refresh);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Bloqueo síncrono: un doble toque no inicia dos guardados.
+  const lock = useRef(false);
   async function archive() {
-    if (busy || !user) return;
+    if (lock.current || !user) return;
+    lock.current = true;
     setBusy(true);
     try {
       // Ruta normal de edición: misma transacción, auditoría y reglas. No borra ni fusiona nada.
@@ -54,6 +58,7 @@ function DuplicateRow({
     } catch (e) {
       onArchived("", errorMessage(e));
     } finally {
+      lock.current = false;
       setBusy(false);
       setConfirm(false);
     }
@@ -118,8 +123,12 @@ function DuplicateRow({
 function DuplicateGroups() {
   const [refresh, setRefresh] = useState(0);
   const [message, setMessage] = useState({ success: "", error: "" });
+  const [showResolved, setShowResolved] = useState(false);
   const directory = useProfileDirectory(true, refresh);
-  const groups = useMemo(() => duplicateGroups(directory.data), [directory.data]);
+  const all = useMemo(() => duplicateGroups(directory.data), [directory.data]);
+  // Resuelto: queda como máximo una ficha activa (las demás archivadas). Se ocultan por defecto.
+  const resolvedCount = all.filter((g) => g.resolved).length;
+  const groups = showResolved ? all : all.filter((g) => !g.resolved);
   if (directory.loading) return <Loading />;
   return (
     <>
@@ -138,7 +147,9 @@ function DuplicateGroups() {
             <li key={g.profiles.map((p) => p.id).join(",")} className="panel">
               <p className="duplicate-reason">
                 {g.reason === "exact" ? "Mismo nombre" : "Nombres similares"} ·{" "}
-                {g.profiles.length} fichas
+                {g.profiles.length} fichas · {g.activeCount}{" "}
+                {g.activeCount === 1 ? "activa" : "activas"}
+                {g.resolved ? " · Resuelto" : ""}
               </p>
               <ul>
                 {g.profiles.map((p) => (
@@ -157,7 +168,23 @@ function DuplicateGroups() {
           ))}
         </ol>
       ) : (
-        <Empty>No encontramos fichas con nombres iguales o similares.</Empty>
+        <Empty>
+          {resolvedCount
+            ? "No quedan grupos pendientes: en cada uno hay como máximo una ficha activa."
+            : "No encontramos fichas con nombres iguales o similares."}
+        </Empty>
+      )}
+      {resolvedCount > 0 && (
+        <button
+          type="button"
+          className="button-secondary mt-3"
+          aria-pressed={showResolved}
+          onClick={() => setShowResolved((v) => !v)}
+        >
+          {showResolved
+            ? "Ocultar resueltos"
+            : `Mostrar resueltos (${resolvedCount})`}
+        </button>
       )}
     </>
   );

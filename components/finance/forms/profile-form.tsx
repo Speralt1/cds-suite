@@ -72,7 +72,7 @@ export function ProfileForm({
   const [error, setError] = useState("");
   const [serverDuplicate, setServerDuplicate] = useState<{
     key: string;
-    profileId: string;
+    profile: TitheProfile;
   } | null>(null);
   const lock = useRef(false);
   const matchRef = useRef<HTMLDivElement>(null);
@@ -104,14 +104,7 @@ export function ProfileForm({
     serverDuplicate && serverDuplicate.key === identityKey(input.displayName)
       ? [
           {
-            profile: directory.data.find(
-              (p) => p.id === serverDuplicate.profileId,
-            ) ?? {
-              ...(existing ?? ({} as TitheProfile)),
-              id: serverDuplicate.profileId,
-              displayName: input.displayName.trim(),
-              active: true,
-            },
+            profile: serverDuplicate.profile,
             score: 1,
             reason: "exact",
           },
@@ -150,7 +143,19 @@ export function ProfileForm({
       onClose();
     } catch (e) {
       if (isDuplicateProfileError(e)) {
-        setServerDuplicate({ key: e.identityKey, profileId: e.profileId });
+        // La ficha dueña de la clave, leída tal cual (estado real: activa o archivada).
+        const db = getFirebaseServices().db;
+        const owner =
+          directory.data.find((p) => p.id === e.profileId) ??
+          (await getDoc(doc(db, "titheProfiles", e.profileId))
+            .then((s) =>
+              s.exists()
+                ? ({ id: s.id, ...s.data() } as TitheProfile)
+                : null,
+            )
+            .catch(() => null));
+        if (owner) setServerDuplicate({ key: e.identityKey, profile: owner });
+        else setError(e.message);
         setDebouncedName(input.displayName);
         requestAnimationFrame(() => matchRef.current?.focus());
       } else setError(errorMessage(e));

@@ -6,6 +6,7 @@ import { Timestamp } from "firebase/firestore";
 import { ProfileForm } from "@/components/finance/forms/profile-form";
 import { TransactionForm } from "@/components/finance/forms/transaction-form";
 import { TitheRegister } from "@/components/finance/tithes/tithe-register";
+import { DuplicateProfilesPanel } from "@/components/finance/tithes/duplicate-profiles";
 import { DuplicateProfileError } from "@/lib/finance/profiles";
 import { dateTimeLabel, parseDate, shortReference } from "@/lib/finance/formatters";
 import {
@@ -21,6 +22,8 @@ const m = vi.hoisted(() => ({
   monthCalls: [] as [string, string][],
   methods: {} as Record<string, string>,
   exact: [] as unknown[],
+  docs: {} as Record<string, Record<string, unknown>>,
+  counts: {} as Record<string, number>,
   saveProfile: vi.fn(),
   saveTransaction: vi.fn(),
   findExact: vi.fn(),
@@ -45,7 +48,11 @@ vi.mock("firebase/firestore", async (importOriginal) => ({
   ...(await importOriginal<typeof import("firebase/firestore")>()),
   collection: () => ({}),
   doc: (_db: unknown, ...path: string[]) => ({ id: path[path.length - 1] || "auto-id", path: path.join("/") }),
-  getDoc: async () => ({ data: () => ({ displayName: "Juan Pérez" }) }),
+  getDoc: async (ref: { id: string }) => ({
+    id: ref.id,
+    exists: () => true,
+    data: () => m.docs[ref.id] ?? { displayName: "Juan Pérez", active: true },
+  }),
 }));
 vi.mock("@/lib/finance/profiles", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/finance/profiles")>()),
@@ -69,6 +76,7 @@ vi.mock("@/lib/finance/tithe-hooks", async (importOriginal) => ({
     return { data: profileId ? m.monthTithes : [], loading: false, error: "", synced: true };
   },
   useTransactionMethods: (ids: string[]) => (ids.length ? m.methods : {}),
+  useActiveTitheCount: (profileId: string) => m.counts[profileId] ?? 0,
 }));
 
 HTMLDialogElement.prototype.showModal ||= function (this: HTMLDialogElement) {
@@ -120,6 +128,8 @@ beforeEach(() => {
   m.monthTithes = [];
   m.monthCalls = [];
   m.methods = {};
+  m.docs = {};
+  m.counts = {};
   m.saveProfile.mockReset().mockResolvedValue({ id: "new" });
   m.saveTransaction.mockReset().mockResolvedValue("tx-stable-id");
   m.findExact.mockReset().mockResolvedValue([]);
@@ -229,14 +239,59 @@ describe("ficha: nombre igual o similar", () => {
     expect(m.saveProfile).not.toHaveBeenCalled();
   });
 
-  it("colisión detectada por el servidor (DuplicateProfileError) muestra el bloqueo", async () => {
+  it("colisión detectada por el servidor (DuplicateProfileError): lee la ficha dueña y muestra su estado real", async () => {
     m.saveProfile.mockRejectedValue(new DuplicateProfileError("p77", "maria_soto"));
-    render(<ProfileForm onClose={vi.fn()} onSaved={vi.fn()} />);
+    m.docs.p77 = { ...profile("p77", "MARÍA SOTO", false) };
+    const onReactivate = vi.fn();
+    render(<ProfileForm onClose={vi.fn()} onSaved={vi.fn()} onUseExisting={vi.fn()} onReactivateExisting={onReactivate} />);
     await typeName("María Soto");
     fireEvent.click(saveProfileButton());
     await act(async () => {});
-    expect(screen.getByText("Ya existe una ficha con este nombre")).toBeInTheDocument();
+    const notice = screen.getByText("Ya existe una ficha con este nombre").closest("[role=status]") as HTMLElement;
+    expect(within(notice).getByText(/«MARÍA SOTO» \(archivada\)/)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(within(notice).getByRole("button", { name: "Revisar y reactivar" }));
+    expect(onReactivate.mock.calls[0][0]).toMatchObject({ id: "p77", active: false });
+  });
+
+  it("con una gemela archivada y otra activa, ofrece «Usar ficha existente» sobre la activa", async () => {
+    const active = profile("act", "Juan Pérez", true);
+    m.directory = [profile("arch", "Juan Pérez", false), active];
+    const onUse = vi.fn();
+    render(<ProfileForm onClose={vi.fn()} onSaved={vi.fn()} onUseExisting={onUse} onReactivateExisting={vi.fn()} />);
+    await typeName("juan perez");
+    expect(screen.queryByRole("button", { name: "Revisar y reactivar" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Usar ficha existente" }));
+    expect(onUse).toHaveBeenCalledWith(active);
+  });
+});
+
+describe("panel de posibles fichas duplicadas", () => {
+  it("oculta los grupos resueltos (≤ 1 activa), los muestra a pedido y archiva una sola vez", async () => {
+    m.directory = [
+      profile("a1", "Rosa Díaz", true),
+      profile("a2", "ROSA DIAZ", false),
+      profile("b1", "Marta Gil", true),
+      profile("b2", "Marta Gil.", true),
+    ];
+    m.counts = { b1: 3, b2: 1 };
+    let release: (v: unknown) => void = () => {};
+    m.saveProfile.mockImplementation(() => new Promise((r) => (release = r)));
+    render(<DuplicateProfilesPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Revisar posibles duplicados" }));
+    expect(screen.queryByText(/Rosa Díaz/)).toBeNull();
+    expect(screen.getAllByText(/Marta Gil/)).toHaveLength(2);
+    expect(screen.getByText(/3 diezmos activos/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar resueltos (1)" }));
+    expect(screen.getByText(/· Resuelto/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Archivar" })[0]);
+    const confirm = screen.getByRole("button", { name: "Confirmar archivo" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await act(async () => {});
+    expect(m.saveProfile).toHaveBeenCalledTimes(1);
+    expect(m.saveProfile.mock.calls[0][2]).toMatchObject({ active: false });
+    await act(async () => release({ id: "b1" }));
   });
 });
 

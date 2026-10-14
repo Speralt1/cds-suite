@@ -61,7 +61,7 @@ function ProfileRow({
       <span
         className={`status-pill shrink-0 ${profile.active ? "" : "voided"}`}
       >
-        {profile.active ? "Activo" : "Archivada"}
+        {profile.active ? "Activa" : "Archivada"}
       </span>
       {profile.active && (
         <button

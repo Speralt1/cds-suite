@@ -220,16 +220,26 @@ export function useMonthTithes(profileId: string, period: string) {
     `month-tithes:${profileId}:${period}`,
   );
 }
-/** Lectura puntual (servidor o caché) de los diezmos activos del mes, para la comprobación al guardar. */
-export async function fetchMonthTithes(
+/**
+ * Diezmos activos de la ficha en UNA fecha (comprobación al guardar). Igualdad en profileId,
+ * status y date: mismo índice (profileId, status, date DESC). No depende del tope del mes,
+ * así que no se pierden duplicados en meses con muchos aportes.
+ */
+export const SAME_DAY_TITHES_LIMIT = 30;
+export async function fetchSameDayTithes(
   db: Firestore,
   profileId: string,
-  period: string,
+  date: string,
 ) {
-  const constraints = monthTitheConstraints(profileId, period);
-  if (!constraints) return [];
+  if (!profileId) return [];
   const s = await getDocs(
-    query(collection(db, "titheAttributions"), ...constraints),
+    query(
+      collection(db, "titheAttributions"),
+      where("profileId", "==", profileId),
+      where("status", "==", "active"),
+      where("date", "==", parseDate(date)),
+      safeLimit(SAME_DAY_TITHES_LIMIT),
+    ),
   );
   return s.docs.map((d) => ({ id: d.id, ...d.data() }) as TitheAttribution);
 }
