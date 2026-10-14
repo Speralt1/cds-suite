@@ -400,7 +400,12 @@ function buildSumupPayoutsReconciliation({ db, region, secrets }) {
     fetchImpl: isEmulator ? offlineFetch : (...args) => fetch(...args),
     clock: { now: () => Date.now() },
   });
-  return onCall({ region, timeoutSeconds: 60, memory: "256MiB", maxInstances: 3, secrets }, createPayoutsCallableHandler(service));
+  // En el emulador no se declaran secrets: así el emulador no intenta leer
+  // Secret Manager (ninguna llamada a Google) y la cuenta queda en config_error.
+  return onCall(
+    { region, timeoutSeconds: 60, memory: "256MiB", maxInstances: 3, secrets: isEmulator ? [] : secrets },
+    createPayoutsCallableHandler(service),
+  );
 }
 
 module.exports = {

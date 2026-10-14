@@ -417,5 +417,23 @@ describe("cableado en functions/index.js", () => {
     const endpoint = (fn as unknown as { __endpoint: { region: string[]; callableTrigger: unknown; secretEnvironmentVariables?: { key: string }[] } }).__endpoint;
     expect(endpoint.region).toEqual(["southamerica-west1"]);
     expect(endpoint.callableTrigger).toBeDefined();
+    expect((endpoint.secretEnvironmentVariables ?? []).map((s) => s.key).sort()).toEqual(["SUMUP_CAFETERIA_CONFIG", "SUMUP_OFFERINGS_CONFIG"]);
+  });
+
+  it("en el emulador no declara secrets (sin llamadas a Secret Manager)", () => {
+    const prev = process.env.FUNCTIONS_EMULATOR;
+    process.env.FUNCTIONS_EMULATOR = "true";
+    try {
+      const fn = read.buildSumupPayoutsReconciliation({
+        db: {},
+        region: "southamerica-west1",
+        secrets: [{ name: "SUMUP_OFFERINGS_CONFIG", value: () => FAKE.offerings }, { name: "SUMUP_CAFETERIA_CONFIG", value: () => FAKE.cafeteria }],
+      });
+      const endpoint = (fn as unknown as { __endpoint: { secretEnvironmentVariables?: unknown[] } }).__endpoint;
+      expect(endpoint.secretEnvironmentVariables ?? []).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.FUNCTIONS_EMULATOR;
+      else process.env.FUNCTIONS_EMULATOR = prev;
+    }
   });
 });
