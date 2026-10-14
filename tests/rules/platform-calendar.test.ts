@@ -232,7 +232,7 @@ describe("calendarEvents: crear", () => {
       { revision: 2, lastChangeId: "r2" },
       { createdBy: "otro" },
       { updatedBy: "otro" },
-      { createdAt: Timestamp.now() },
+      { createdAt: CLIENT_TIME },
       { isFeatured: true },
       { cancelReason: "Motivo previo" },
       { exceptions: [{ date: FUTURE, type: "cancelled", reason: "Feriado", by: "v1-leader-jovenes" }] },
