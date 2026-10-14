@@ -518,11 +518,13 @@ describe("planWindow", () => {
         startDate: "2026-10-01",
         endDate: "2026-10-31",
         payoutFetch: { startDate: "2026-10-01", endDate: "2026-11-10" },
-        salesRead: { startDate: "2026-09-21", endDate: "2026-10-31" },
+        // Ventas hasta el último día de abonos pedido (M1: abonos de borde de mes).
+        salesRead: { startDate: "2026-09-21", endDate: "2026-11-10" },
       },
     });
     const b = P.planWindow("2026-10-01", "2026-10-31", "2026-10-13");
     expect(b.ok && b.plan.payoutFetch).toEqual({ startDate: "2026-10-01", endDate: "2026-10-13" });
+    expect(b.ok && b.plan.salesRead).toEqual({ startDate: "2026-09-21", endDate: "2026-10-31" });
     const future = P.planWindow("2026-11-01", "2026-11-30", "2026-10-13");
     expect(future.ok && future.plan.payoutFetch).toBeNull();
   });
@@ -570,5 +572,107 @@ describe("paridad TS ↔ CJS (functions/shared/sumup-payouts.js)", () => {
     });
     expect(PJs.reconcile(inp)).toEqual(P.reconcile(inp));
     expect(PJs.shortHash("abc")).toBe(P.shortHash("abc"));
+  });
+});
+
+describe("revisión Atlas (M1, M2, MINOR 2/3, reintento)", () => {
+  it("M1: abono 03-11 que paga 31-10 + 01-11 → CONCILIADO en la vista de octubre y en la de noviembre, mismo id", () => {
+    const anchors = basisAnchors("2026-10-05", "2026-10-06");
+    const oct31 = sale("offerings", "B31", "2026-10-31", 10_000);
+    const nov01 = sale("offerings", "B01", "2026-11-01", 20_000);
+    const rows = [...anchors.rows, row("B31", 9655, 345, "2026-11-03", "FICT EDGE"), row("B01", 19_310, 690, "2026-11-03", "FICT EDGE")];
+    const sales = [...anchors.sales, oct31, nov01];
+    const plan = P.planWindow("2026-10-01", "2026-10-31", "2026-11-20");
+    if (!plan.ok) throw new Error("plan");
+    // El callable lee ventas hasta salesRead.endDate: incluye el 01-11.
+    const readable = sales.filter((x) => x.saleDate! >= plan.plan.salesRead.startDate && x.saleDate! <= plan.plan.salesRead.endDate);
+    expect(readable.map((x) => x.transactionCode)).toContain("B01");
+    const oct = account(P.reconcile(input({ accounts: ["offerings"], asOfDate: "2026-11-20", rowsByAccount: { offerings: rows }, salesByAccount: { offerings: readable } })), "offerings");
+    const st = oct.settlements.find((x) => x.reference === "FICT EDGE")!;
+    expect(st).toMatchObject({ status: "CONCILIADO", afterWindow: true, grossSales: 30_000, fee: 1035, netPaid: 28_965, unlinkedRowCount: 0 });
+    expect(st.saleDays).toEqual(["2026-10-31", "2026-11-01"]);
+    // Pendientes/totales siguen limitados a octubre: el 01-11 no cuenta como pendiente ni suma.
+    expect(oct.pendingAmount).toBe(0);
+    expect(oct.totals.grossSales).toBe(60_000);
+    const nov = account(
+      P.reconcile(input({ accounts: ["offerings"], period: { startDate: "2026-11-01", endDate: "2026-11-30" }, asOfDate: "2026-11-20", rowsByAccount: { offerings: rows }, salesByAccount: { offerings: sales } })),
+      "offerings",
+    );
+    const stNov = nov.settlements.find((x) => x.reference === "FICT EDGE")!;
+    expect(stNov.status).toBe("CONCILIADO");
+    const pOct = oct.proposals.find((p) => p.settlementId === st.id)!;
+    const pNov = nov.proposals.find((p) => p.settlementId === stNov.id)!;
+    expect([pOct.id, pOct.amount, pOct.state]).toEqual([pNov.id, pNov.amount, pNov.state]);
+    expect(pOct.state).toBe("propuesta");
+  });
+
+  for (const status of ["FAILED", "PENDING"]) {
+    it(`M2: abono ${status} no suma en los totales; su venta queda solo como pendiente`, () => {
+      const anchors = basisAnchors();
+      const s = sale("offerings", "T1", "2026-10-12", 8000);
+      const rows = [...anchors.rows, row("T1", 8000 - 276, 276, "2026-10-14", "FICT T", { status })];
+      const r = account(P.reconcile(input({ accounts: ["offerings"], rowsByAccount: { offerings: rows }, salesByAccount: { offerings: [...anchors.sales, s] } })), "offerings");
+      expect(r.totals).toMatchObject({ settlements: 2, notCountedSettlements: 1, grossSales: 60_000, fee: 2070, netPaid: 57_930, pendingAmount: 8000, feeComplete: true });
+      expect(r.totals.byStatus[status === "FAILED" ? "REQUIERE_REVISION" : "PENDIENTE"]).toBe(1);
+    });
+  }
+
+  it("M2 + reintento: fallido y luego exitoso → total = banco; el fallido queda 'reintentado'", () => {
+    const anchors = basisAnchors();
+    const s = sale("offerings", "RT", "2026-10-12", 8000);
+    const rows = [
+      ...anchors.rows,
+      row("RT", 8000 - 276, 276, "2026-10-14", "FICT RT1", { id: "rt-1", status: "FAILED" }),
+      row("RT", 8000 - 276, 276, "2026-10-16", "FICT RT2", { id: "rt-2" }),
+    ];
+    const r = account(P.reconcile(input({ accounts: ["offerings"], rowsByAccount: { offerings: rows }, salesByAccount: { offerings: [...anchors.sales, s] } })), "offerings");
+    const failed = r.settlements.find((x) => x.reference === "FICT RT1")!;
+    const ok = r.settlements.find((x) => x.reference === "FICT RT2")!;
+    expect(failed.reasons).toEqual(["payout_failed", "payout_retried"]);
+    expect(ok.status).toBe("CONCILIADO");
+    // Banco: 57.930 (anclas) + 7.724 (reintento) = 65.654.
+    expect(r.totals.netPaid).toBe(65_654);
+    expect(r.totals.grossSales).toBe(68_000);
+    expect(r.pendingAmount).toBe(0);
+  });
+
+  it("MINOR 2: dos abonos sin referencia el mismo día → ids de abono y de propuesta distintos", () => {
+    const anchors = basisAnchors();
+    const extra = [sale("offerings", "NR1", "2026-10-06", 10_000), sale("offerings", "NR2", "2026-10-06", 20_000)];
+    const rows = [...anchors.rows, row("NR1", 9655, 345, "2026-10-07", "", { id: "nr-1", reference: undefined }), row("NR2", 19_310, 690, "2026-10-07", "", { id: "nr-2", reference: undefined })];
+    const r = account(P.reconcile(input({ accounts: ["offerings"], rowsByAccount: { offerings: rows }, salesByAccount: { offerings: [...anchors.sales, ...extra] } })), "offerings");
+    const noRef = r.settlements.filter((x) => x.reference === null);
+    expect(noRef).toHaveLength(2);
+    expect(new Set(noRef.map((x) => x.id)).size).toBe(2);
+    const props = r.proposals.filter((p) => noRef.some((x) => x.id === p.settlementId));
+    expect(props).toHaveLength(2);
+    expect(new Set(props.map((p) => p.id)).size).toBe(2);
+    expect(props.map((p) => p.amount).sort((a, b) => a - b)).toEqual([345, 690]);
+    // candidateProposalIds produce los mismos ids (lectura previa del libro).
+    const cands = P.candidateProposalIds("offerings", rows, "payout_date");
+    for (const p of props) expect(cands).toContain(p.id);
+  });
+
+  it("MINOR 3: redondeo de mitades (monto y comisión por separado) → CONCILIADO con motivo 'rounding'", () => {
+    const anchors = basisAnchors();
+    const s = sale("offerings", "HR", "2026-10-12", 5000);
+    const rows = [...anchors.rows, row("HR", 4818.5, 181.5, "2026-10-13", "FICT HALF")];
+    const r = account(P.reconcile(input({ accounts: ["offerings"], asOfDate: "2026-11-30", rowsByAccount: { offerings: rows }, salesByAccount: { offerings: [...anchors.sales, s] } })), "offerings");
+    const st = r.settlements.find((x) => x.reference === "FICT HALF")!;
+    expect(st).toMatchObject({ status: "CONCILIADO", residual: 1, fee: 182, netPaid: 4819 });
+    expect(st.reasons).toEqual(["rounding"]);
+    expect(r.proposals.find((p) => p.settlementId === st.id)?.state).toBe("propuesta");
+  });
+
+  it("MINOR 3: una diferencia mayor que las filas redondeadas sigue siendo diferencia", () => {
+    const anchors = basisAnchors();
+    const sales = [sale("offerings", "HA", "2026-10-12", 5000), sale("offerings", "HB", "2026-10-12", 6000)];
+    // HA: mitades → +1; HB: entero, paga $1 de más (dentro de la tolerancia de base) → residual 2 > 1 fila redondeada.
+    const rows = [...anchors.rows, row("HA", 4818.5, 181.5, "2026-10-13", "FICT HALF2", { id: "ha" }), row("HB", 5794, 207, "2026-10-13", "FICT HALF2", { id: "hb" })];
+    const st = account(P.reconcile(input({ accounts: ["offerings"], asOfDate: "2026-11-30", rowsByAccount: { offerings: rows }, salesByAccount: { offerings: [...anchors.sales, ...sales] } })), "offerings").settlements.find(
+      (x) => x.reference === "FICT HALF2",
+    )!;
+    expect(st.residual).toBe(2);
+    expect(st.status).toBe("CON_DIFERENCIA");
   });
 });

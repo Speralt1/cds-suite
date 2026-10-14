@@ -146,7 +146,9 @@ export type SettlementReason =
   | "status_unknown"
   | "difference_within_term"
   | "difference_after_term"
-  | "refunds_before_payout";
+  | "refunds_before_payout"
+  | "payout_retried"
+  | "rounding";
 
 export interface Settlement {
   id: string;
@@ -154,6 +156,8 @@ export interface Settlement {
   payoutDate: Ymd | null;
   reference: string | null;
   referenceShort: string;
+  /** Id de la primera fila cuando el abono no tiene referencia (entra al id). */
+  anchorRowId: string | null;
   statusClass: RowStatusClass;
   status: SettlementStatus;
   reasons: SettlementReason[];
@@ -222,7 +226,10 @@ export interface FeeProposal {
 }
 
 export interface AccountTotals {
+  /** Abonos con fecha dentro del período (todos los estados). */
   settlements: number;
+  /** De ellos, fallidos/en proceso/desconocidos: no suman montos. */
+  notCountedSettlements: number;
   grossSales: number;
   fee: number;
   feeComplete: boolean;
@@ -353,13 +360,18 @@ export function planWindow(startDate: unknown, endDate: unknown, asOfDate: Ymd):
   if (daysBetween(startDate, endDate) + 1 > MAX_WINDOW_DAYS) return { ok: false, error: "window_too_long" };
   const lookahead = addDays(endDate, PAYOUT_LOOKAHEAD_DAYS);
   const fetchEnd = lookahead < asOfDate ? lookahead : asOfDate;
+  const payoutFetch = fetchEnd >= startDate ? { startDate, endDate: fetchEnd } : null;
+  // Las ventas se leen hasta el último día de abonos pedido: un abono posterior
+  // al período (p. ej. 03-11 que paga 31-10 + 01-11) debe vincular TODAS sus
+  // filas. Pendientes y totales siguen limitados al período.
+  const salesEnd = payoutFetch && payoutFetch.endDate > endDate ? payoutFetch.endDate : endDate;
   return {
     ok: true,
     plan: {
       startDate,
       endDate,
-      payoutFetch: fetchEnd >= startDate ? { startDate, endDate: fetchEnd } : null,
-      salesRead: { startDate: addDays(startDate, -SALES_LOOKBACK_DAYS), endDate },
+      payoutFetch,
+      salesRead: { startDate: addDays(startDate, -SALES_LOOKBACK_DAYS), endDate: salesEnd },
     },
   };
 }
@@ -518,13 +530,24 @@ function linkRow(row: PayoutRow, index: Map<string, SaleRecord>): Link {
   return { status: "linked", sale };
 }
 
-function settlementKeyHash(reference: string | null, statusClass: RowStatusClass): string {
-  return shortHash(`${reference ?? "sin-referencia"}${statusClass === "successful" ? "" : `|${statusClass}`}`);
+/** Sin referencia, cada fila es su propio abono: el id de la fila entra al hash (ids únicos). */
+function settlementKeyHash(reference: string | null, statusClass: RowStatusClass, rowId: string | null = null): string {
+  const ref = reference ?? `sin-referencia:${rowId ?? ""}`;
+  return shortHash(`${ref}${statusClass === "successful" ? "" : `|${statusClass}`}`);
 }
 
-/** Id determinista de la propuesta de comisión de un abono (idempotente entre reruns). */
-export function feeProposalId(account: SumupAccount, payoutDate: Ymd | null, reference: string | null, statusClass: RowStatusClass = "successful"): string {
-  return `sumup_fee_${account}_${payoutDate ?? "sin-fecha"}_${settlementKeyHash(reference, statusClass)}`;
+/**
+ * Id determinista de la propuesta de comisión de un abono (idempotente entre reruns).
+ * `rowId` solo se usa cuando el abono no tiene referencia.
+ */
+export function feeProposalId(
+  account: SumupAccount,
+  payoutDate: Ymd | null,
+  reference: string | null,
+  statusClass: RowStatusClass = "successful",
+  rowId: string | null = null,
+): string {
+  return `sumup_fee_${account}_${payoutDate ?? "sin-fecha"}_${settlementKeyHash(reference, statusClass, reference ? null : rowId)}`;
 }
 
 function emptyByStatus(): Record<SettlementStatus, number> {
@@ -552,6 +575,9 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   const payoutDate = first.date;
   const reference = first.reference;
   const statusClass = first.statusClass;
+  const anchorRowId = reference ? null : first.id;
+  let roundedRows = 0;
+  const linkedCodes: string[] = [];
 
   let netPaid = 0;
   let fee: number | null = 0;
@@ -564,6 +590,7 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   const byDay = new Map<string, { saleDate: Ymd | null; gross: number; fee: number | null; sales: Set<string> }>();
 
   for (const row of rows) {
+    if (row.rounded) roundedRows += 1;
     if (row.issues.includes("currency_missing") || row.issues.includes("currency_not_clp")) pushReason(reasons, "currency_issue");
     if (row.issues.includes("duplicate_conflict")) pushReason(reasons, "duplicate_conflict");
     if (row.issues.includes("id_missing")) pushReason(reasons, "row_id_missing");
@@ -600,6 +627,7 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
       continue;
     }
     const sale = link.sale;
+    linkedCodes.push(sale.transactionCode);
     if ((ctx.paidCodeCount.get(sale.transactionCode) ?? 0) > 1) pushReason(reasons, "sale_paid_twice");
     if (!linkedSales.has(sale.transactionCode)) linkedSales.set(sale.transactionCode, sale);
 
@@ -641,6 +669,8 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   let status: SettlementStatus;
   if (statusClass === "failed") {
     pushReason(reasons, "payout_failed");
+    // Informativo: todas sus ventas tienen otro abono exitoso (SumUp reintentó).
+    if (linkedCodes.length > 0 && linkedCodes.every((c) => (ctx.paidCodeCount.get(c) ?? 0) > 0)) pushReason(reasons, "payout_retried");
     status = "REQUIERE_REVISION";
   } else if (statusClass === "unknown") {
     pushReason(reasons, "status_unknown");
@@ -652,6 +682,11 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
     pushReason(reasons, "payout_in_progress");
     status = "PENDIENTE";
   } else if (residual === 0) {
+    status = "CONCILIADO";
+  } else if (Math.abs(residual) <= roundedRows) {
+    // Cada fila con decimales redondeados (monto y comisión por separado) puede
+    // desviar a lo más $1: no es una diferencia real.
+    pushReason(reasons, "rounding");
     status = "CONCILIADO";
   } else if ((businessDaysSincePayout ?? 0) >= ctx.differenceBusinessDays) {
     pushReason(reasons, "difference_after_term");
@@ -670,11 +705,12 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   const afterWindow = !!payoutDate && payoutDate > ctx.period.endDate;
 
   return {
-    id: `stl_${ctx.account}_${payoutDate ?? "sin-fecha"}_${settlementKeyHash(reference, statusClass)}`,
+    id: `stl_${ctx.account}_${payoutDate ?? "sin-fecha"}_${settlementKeyHash(reference, statusClass, anchorRowId)}`,
     account: ctx.account,
     payoutDate,
     reference,
     referenceShort: shortReference(reference),
+    anchorRowId,
     statusClass,
     status,
     reasons,
@@ -722,7 +758,7 @@ export function buildFeeProposals(
   policy: AccountingDatePolicy,
   previous: Readonly<Record<string, { amount: number }>> = {},
 ): FeeProposal[] {
-  const baseId = feeProposalId(settlement.account, settlement.payoutDate, settlement.reference, settlement.statusClass);
+  const baseId = feeProposalId(settlement.account, settlement.payoutDate, settlement.reference, settlement.statusClass, settlement.anchorRowId);
   const label = SUMUP_ACCOUNT_LABEL[settlement.account];
   const make = (id: string, amount: number, saleDate: Ymd | null, saleDates: Ymd[], accountingDate: Ymd | null): FeeProposal | null => {
     const prev = previous[id];
@@ -761,6 +797,12 @@ export function buildFeeProposals(
   return single ? [single] : [];
 }
 
+/**
+ * Totales del período. Los montos suman SOLO abonos exitosos: un abono fallido
+ * o en proceso no llegó al banco y sus ventas siguen en "pendiente de abono"
+ * (sumarlos contaría dos veces la misma venta). Se cuentan aparte en
+ * `notCountedSettlements` y siguen en `byStatus`.
+ */
 function sumTotals(settlements: readonly Settlement[], pendingAmount: number, pendingSales: number): AccountTotals {
   const byStatus = emptyByStatus();
   let grossSales = 0;
@@ -768,8 +810,13 @@ function sumTotals(settlements: readonly Settlement[], pendingAmount: number, pe
   let feeComplete = true;
   let adjustments = 0;
   let netPaid = 0;
+  let notCountedSettlements = 0;
   for (const s of settlements) {
     byStatus[s.status] += 1;
+    if (s.statusClass !== "successful") {
+      notCountedSettlements += 1;
+      continue;
+    }
     grossSales += s.grossSales;
     if (s.fee === null || !s.feeConfirmed) feeComplete = false;
     fee += s.fee ?? 0;
@@ -778,6 +825,7 @@ function sumTotals(settlements: readonly Settlement[], pendingAmount: number, pe
   }
   return {
     settlements: settlements.length,
+    notCountedSettlements,
     grossSales,
     fee,
     feeComplete,
@@ -895,9 +943,10 @@ export function reconcileAccount(
 
 /**
  * Conciliación completa, cuentas aisladas (cada una con su base y sus abonos).
- * `totals` suma solo abonos con fecha dentro de la ventana (`inWindow`): los
- * abonos posteriores que pagan ventas de la ventana se muestran pero no se
- * suman, para no contar dos veces entre meses.
+ * `totals` suma solo abonos EXITOSOS con fecha dentro del período (`inWindow`):
+ * los abonos posteriores que pagan ventas del período se muestran pero no se
+ * suman, para no contar dos veces entre meses; los fallidos/en proceso tampoco
+ * (sus ventas siguen pendientes de abono).
  */
 export function reconcile(input: ReconcileInput): ReconcileResult {
   const options = input.options ?? {};
@@ -918,9 +967,10 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
 
 export function combineTotals(list: readonly AccountTotals[]): AccountTotals {
   const byStatus = emptyByStatus();
-  const out: AccountTotals = { settlements: 0, grossSales: 0, fee: 0, feeComplete: true, adjustments: 0, netPaid: 0, difference: 0, pendingAmount: 0, pendingSales: 0, byStatus };
+  const out: AccountTotals = { settlements: 0, notCountedSettlements: 0, grossSales: 0, fee: 0, feeComplete: true, adjustments: 0, netPaid: 0, difference: 0, pendingAmount: 0, pendingSales: 0, byStatus };
   for (const t of list) {
     out.settlements += t.settlements;
+    out.notCountedSettlements += t.notCountedSettlements;
     out.grossSales += t.grossSales;
     out.fee += t.fee;
     out.feeComplete = out.feeComplete && t.feeComplete;
@@ -941,7 +991,7 @@ export function candidateProposalIds(account: SumupAccount, rawRows: readonly Ra
   for (const s of sales) if (s.transactionCode && !index.has(s.transactionCode)) index.set(s.transactionCode, s);
   for (const raw of rawRows) {
     const row = parsePayoutRow(raw, account);
-    const base = feeProposalId(account, row.date, row.reference, row.statusClass);
+    const base = feeProposalId(account, row.date, row.reference, row.statusClass, row.id || null);
     if (policy === "payout_date") ids.add(base);
     else {
       const sale = row.transactionCode ? index.get(row.transactionCode) : undefined;
