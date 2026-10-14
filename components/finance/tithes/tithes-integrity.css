@@ -1,0 +1,146 @@
+/* Integridad de diezmos (doc 27) · avisos de fichas duplicadas y de diezmo repetido,
+   panel de posibles duplicados y referencia corta de movimientos.
+   Tamaños en rem (16px base); bordes y radios en px. Botones: clases productivas
+   (button-primary/secondary, min-height 44px = 2.75rem). */
+
+.tx-reference {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  /* Not --color-muted: #5f6d65 keeps ≥ 4.5:1 on white. */
+  color: #5f6d65;
+}
+.tithe-history-ref {
+  display: block;
+  font-size: 0.6875rem;
+}
+
+.profile-match-notice {
+  margin: 0.25rem 0 1rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 10px;
+  border: 1px solid #e3cf9f;
+  background: var(--color-warning-soft);
+  color: #6b4a12;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.profile-match-notice.is-blocking {
+  border-color: #e9c3bc;
+  background: #fff0ed;
+  color: #922f2e;
+}
+.profile-match-notice p {
+  margin: 0 0 0.5rem;
+}
+.profile-match-notice:focus {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.profile-match-actions,
+.tithe-repeat-actions,
+.duplicate-actions,
+.duplicate-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.profile-match-list,
+.tithe-repeat-list {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.625rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.profile-match-list li,
+.tithe-repeat-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.625rem;
+  border-radius: 8px;
+  background: white;
+  color: var(--color-ink);
+}
+.profile-match-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  text-decoration: underline;
+}
+
+.tithe-repeat-warning {
+  align-items: flex-start;
+  margin: 0.25rem 0 1rem;
+}
+.tithe-repeat-warning > svg {
+  flex: none;
+  margin-top: 0.125rem;
+}
+.tithe-repeat-content {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.tithe-repeat-content p {
+  margin: 0;
+}
+
+.tithe-duplicate-confirm {
+  padding: 0.25rem 0 0;
+}
+.tithe-duplicate-confirm h3 {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0 0 0.625rem;
+  font-size: 1.0625rem;
+  color: #922f2e;
+}
+.tithe-duplicate-confirm p {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.tithe-duplicate-confirm .button-primary,
+.tithe-duplicate-confirm .button-secondary {
+  min-height: 2.75rem;
+}
+
+.duplicate-groups {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.duplicate-groups ul {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.duplicate-reason {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-warning);
+}
+.duplicate-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+.duplicate-row > div:first-child {
+  display: grid;
+  gap: 0.125rem;
+}
+.duplicate-row .button-primary {
+  min-height: 2.75rem;
+}

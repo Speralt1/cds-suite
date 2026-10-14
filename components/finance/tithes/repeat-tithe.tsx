@@ -14,6 +14,7 @@ import {
 } from "@/lib/finance/tithe-hooks";
 import { monthLabel, summarizeMonthTithes } from "@/lib/finance/tithe-integrity";
 import type { TitheAttribution } from "@/lib/finance/types";
+import "@/components/finance/tithes/tithes-integrity.css";
 
 function methodLabel(method: string | undefined) {
   if (method === undefined) return "…";

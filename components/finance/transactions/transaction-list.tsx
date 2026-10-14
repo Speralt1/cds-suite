@@ -17,6 +17,7 @@ import type { MovementEntry } from "@/lib/finance/movement-groups";
 import type { FinanceTransaction } from "@/lib/finance/types";
 import { Modal, Notice, TypeIcon } from "../shared";
 import { TransactionForm } from "../forms/transaction-form";
+import "@/components/finance/tithes/tithes-integrity.css";
 
 // El encabezado se dibuja una sola vez en TransactionTable; TransactionRow
 // es la fila (usada por TransactionList y, en Movimientos, mezclada con

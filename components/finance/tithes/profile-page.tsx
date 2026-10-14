@@ -30,6 +30,7 @@ import { ProfileForm } from "../forms/profile-form";
 import { TitheRegister } from "./tithe-register";
 import { PastoralPanel } from "./pastoral-panel";
 import { EvolutionChart } from "../charts/finance-charts";
+import "@/components/finance/tithes/tithes-integrity.css";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const FIRST_YEAR = 2024;

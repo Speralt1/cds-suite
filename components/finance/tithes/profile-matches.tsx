@@ -4,6 +4,7 @@ import { forwardRef, useId, useState } from "react";
 import type { NameMatch } from "@/lib/shared/names";
 import type { TitheProfile } from "@/lib/finance/types";
 import { profileHref } from "@/lib/finance/profile-route";
+import "@/components/finance/tithes/tithes-integrity.css";
 
 export type ProfileMatch = NameMatch<TitheProfile>;
 
