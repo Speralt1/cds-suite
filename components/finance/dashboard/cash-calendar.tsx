@@ -334,7 +334,13 @@ export function CashDayDialog({
         requestClose();
       }}
       // Closed natively (e.g. a second Esc the browser won't let us cancel).
-      onClose={requestClose}
+      // The "close" event is queued asynchronously: when the effect cleanup
+      // closes the dialog and the effect immediately reopens it (React
+      // StrictMode re-runs effects in development), the stale event arrives
+      // while the dialog is open again and must be ignored.
+      onClose={() => {
+        if (!ref.current?.open) requestClose();
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) requestClose();
       }}
