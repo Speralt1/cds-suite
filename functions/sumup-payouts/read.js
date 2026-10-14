@@ -328,7 +328,7 @@ function createPayoutsReconciliationService({ store, getConfig, fetchImpl, clock
       accounts: okAccounts,
       rowsByAccount,
       salesByAccount,
-      window: { startDate: plan.startDate, endDate: plan.endDate },
+      period: { startDate: plan.startDate, endDate: plan.endDate },
       asOfDate,
       options: { ...options, accountingDatePolicy: policy, previousProposals },
     });
@@ -336,7 +336,7 @@ function createPayoutsReconciliationService({ store, getConfig, fetchImpl, clock
     const byAccount = new Map(result.accounts.map((r) => [r.account, r]));
     return {
       readOnly: true,
-      window: result.window,
+      period: result.period,
       payoutFetch: plan.payoutFetch,
       salesRead: plan.salesRead,
       asOfDate,

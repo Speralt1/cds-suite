@@ -259,13 +259,13 @@ export interface ReconcileInput {
   rowsByAccount: Partial<Record<SumupAccount, readonly RawPayoutRow[]>>;
   /** Ventas de AMBAS cuentas (para detectar filas de la otra cuenta), con lookback. */
   salesByAccount: Partial<Record<SumupAccount, readonly SaleRecord[]>>;
-  window: { startDate: Ymd; endDate: Ymd };
+  period: { startDate: Ymd; endDate: Ymd };
   asOfDate: Ymd;
   options?: ReconcileOptions;
 }
 
 export interface ReconcileResult {
-  window: { startDate: Ymd; endDate: Ymd };
+  period: { startDate: Ymd; endDate: Ymd };
   asOfDate: Ymd;
   policy: AccountingDatePolicy;
   differenceBusinessDays: number;
@@ -540,7 +540,7 @@ interface BuildCtx {
   basis: BasisDecision;
   index: Map<string, SaleRecord>;
   paidCodeCount: Map<string, number>;
-  window: { startDate: Ymd; endDate: Ymd };
+  period: { startDate: Ymd; endDate: Ymd };
   asOfDate: Ymd;
   differenceBusinessDays: number;
   holidays: readonly Ymd[];
@@ -666,8 +666,8 @@ function buildSettlement(rows: PayoutRow[], ctx: BuildCtx): Settlement {
   const feeConfirmed =
     statusClass === "successful" && ctx.basis.basis === "net" && fee !== null && unlinked === 0 && status !== "REQUIERE_REVISION";
 
-  const inWindow = !!payoutDate && payoutDate >= ctx.window.startDate && payoutDate <= ctx.window.endDate;
-  const afterWindow = !!payoutDate && payoutDate > ctx.window.endDate;
+  const inWindow = !!payoutDate && payoutDate >= ctx.period.startDate && payoutDate <= ctx.period.endDate;
+  const afterWindow = !!payoutDate && payoutDate > ctx.period.endDate;
 
   return {
     id: `stl_${ctx.account}_${payoutDate ?? "sin-fecha"}_${settlementKeyHash(reference, statusClass)}`,
@@ -795,7 +795,7 @@ export function reconcileAccount(
   account: SumupAccount,
   rawRows: readonly RawPayoutRow[],
   allSales: readonly SaleRecord[],
-  window: { startDate: Ymd; endDate: Ymd },
+  period: { startDate: Ymd; endDate: Ymd },
   asOfDate: Ymd,
   options: ReconcileOptions = {},
 ): AccountReconciliation {
@@ -835,8 +835,8 @@ export function reconcileAccount(
     list.push(row);
     groups.set(key, list);
   }
-  const ctx: BuildCtx = { account, basis, index, paidCodeCount, window, asOfDate, differenceBusinessDays, holidays };
-  const inWindowSale = (sale: SaleRecord) => !!sale.saleDate && sale.saleDate >= window.startDate && sale.saleDate <= window.endDate;
+  const ctx: BuildCtx = { account, basis, index, paidCodeCount, period, asOfDate, differenceBusinessDays, holidays };
+  const inWindowSale = (sale: SaleRecord) => !!sale.saleDate && sale.saleDate >= period.startDate && sale.saleDate <= period.endDate;
 
   const settlements = [...groups.values()]
     .map((g) => buildSettlement(g, ctx))
@@ -844,7 +844,7 @@ export function reconcileAccount(
       if (s.inWindow) return true;
       if (!s.afterWindow) return false;
       // Abono posterior: solo si paga alguna venta de la ventana.
-      return s.saleDays.some((d) => d >= window.startDate && d <= window.endDate);
+      return s.saleDays.some((d) => d >= period.startDate && d <= period.endDate);
     })
     .sort((a, b) => String(a.payoutDate).localeCompare(String(b.payoutDate)) || a.id.localeCompare(b.id));
 
@@ -904,10 +904,10 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
   const allSales: SaleRecord[] = [];
   for (const account of SUMUP_ACCOUNTS) for (const sale of input.salesByAccount[account] ?? []) allSales.push(sale);
   const accounts = input.accounts.map((account) =>
-    reconcileAccount(account, input.rowsByAccount[account] ?? [], allSales, input.window, input.asOfDate, options),
+    reconcileAccount(account, input.rowsByAccount[account] ?? [], allSales, input.period, input.asOfDate, options),
   );
   return {
-    window: input.window,
+    period: input.period,
     asOfDate: input.asOfDate,
     policy: options.accountingDatePolicy ?? "payout_date",
     differenceBusinessDays: options.differenceBusinessDays ?? DEFAULT_DIFFERENCE_BUSINESS_DAYS,

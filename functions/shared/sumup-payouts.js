@@ -442,8 +442,8 @@ function buildSettlement(rows, ctx) {
     // Comisión confirmada: abono exitoso, base net aceptada, todas las filas con
     // fee del proveedor, todas vinculadas y nada que revisar.
     const feeConfirmed = statusClass === "successful" && ctx.basis.basis === "net" && fee !== null && unlinked === 0 && status !== "REQUIERE_REVISION";
-    const inWindow = !!payoutDate && payoutDate >= ctx.window.startDate && payoutDate <= ctx.window.endDate;
-    const afterWindow = !!payoutDate && payoutDate > ctx.window.endDate;
+    const inWindow = !!payoutDate && payoutDate >= ctx.period.startDate && payoutDate <= ctx.period.endDate;
+    const afterWindow = !!payoutDate && payoutDate > ctx.period.endDate;
     return {
         id: `stl_${ctx.account}_${payoutDate ?? "sin-fecha"}_${settlementKeyHash(reference, statusClass)}`,
         account: ctx.account,
@@ -563,7 +563,7 @@ function sumTotals(settlements, pendingAmount, pendingSales) {
     };
 }
 /** Concilia una cuenta. Ver reconcile() para el contrato completo. */
-function reconcileAccount(account, rawRows, allSales, window, asOfDate, options = {}) {
+function reconcileAccount(account, rawRows, allSales, period, asOfDate, options = {}) {
     const differenceBusinessDays = options.differenceBusinessDays ?? exports.DEFAULT_DIFFERENCE_BUSINESS_DAYS;
     const holidays = options.holidays ?? [];
     const policy = options.accountingDatePolicy ?? "payout_date";
@@ -601,8 +601,8 @@ function reconcileAccount(account, rawRows, allSales, window, asOfDate, options 
         list.push(row);
         groups.set(key, list);
     }
-    const ctx = { account, basis, index, paidCodeCount, window, asOfDate, differenceBusinessDays, holidays };
-    const inWindowSale = (sale) => !!sale.saleDate && sale.saleDate >= window.startDate && sale.saleDate <= window.endDate;
+    const ctx = { account, basis, index, paidCodeCount, period, asOfDate, differenceBusinessDays, holidays };
+    const inWindowSale = (sale) => !!sale.saleDate && sale.saleDate >= period.startDate && sale.saleDate <= period.endDate;
     const settlements = [...groups.values()]
         .map((g) => buildSettlement(g, ctx))
         .filter((s) => {
@@ -611,7 +611,7 @@ function reconcileAccount(account, rawRows, allSales, window, asOfDate, options 
         if (!s.afterWindow)
             return false;
         // Abono posterior: solo si paga alguna venta de la ventana.
-        return s.saleDays.some((d) => d >= window.startDate && d <= window.endDate);
+        return s.saleDays.some((d) => d >= period.startDate && d <= period.endDate);
     })
         .sort((a, b) => String(a.payoutDate).localeCompare(String(b.payoutDate)) || a.id.localeCompare(b.id));
     // Ventas por abonar: tarjeta, con saldo, dentro de la ventana, sin fila PAYOUT exitosa.
@@ -674,9 +674,9 @@ function reconcile(input) {
     for (const account of exports.SUMUP_ACCOUNTS)
         for (const sale of input.salesByAccount[account] ?? [])
             allSales.push(sale);
-    const accounts = input.accounts.map((account) => reconcileAccount(account, input.rowsByAccount[account] ?? [], allSales, input.window, input.asOfDate, options));
+    const accounts = input.accounts.map((account) => reconcileAccount(account, input.rowsByAccount[account] ?? [], allSales, input.period, input.asOfDate, options));
     return {
-        window: input.window,
+        period: input.period,
         asOfDate: input.asOfDate,
         policy: options.accountingDatePolicy ?? "payout_date",
         differenceBusinessDays: options.differenceBusinessDays ?? exports.DEFAULT_DIFFERENCE_BUSINESS_DAYS,

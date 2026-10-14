@@ -22,7 +22,7 @@ function input(over: Partial<ReconcileInput> = {}): ReconcileInput {
     accounts: ["offerings", "cafeteria"],
     rowsByAccount: {},
     salesByAccount: {},
-    window: OCT_WINDOW,
+    period: OCT_WINDOW,
     asOfDate: "2026-10-20",
     ...over,
   };
@@ -269,8 +269,8 @@ describe("comisiones corregidas, reruns e idempotencia", () => {
   });
 
   it("ventanas solapadas que ven el mismo abono → mismo id y monto", () => {
-    const w1 = account(P.reconcile({ ...base, window: { startDate: "2026-10-01", endDate: "2026-10-20" } }), "cafeteria").proposals;
-    const w2 = account(P.reconcile({ ...base, window: { startDate: "2026-10-10", endDate: "2026-10-31" } }), "cafeteria").proposals;
+    const w1 = account(P.reconcile({ ...base, period: { startDate: "2026-10-01", endDate: "2026-10-20" } }), "cafeteria").proposals;
+    const w2 = account(P.reconcile({ ...base, period: { startDate: "2026-10-10", endDate: "2026-10-31" } }), "cafeteria").proposals;
     expect(w1.map((p) => [p.id, p.amount])).toEqual([[id, 15_968]]);
     expect(w2.map((p) => [p.id, p.amount])).toEqual([[id, 15_968]]);
   });
