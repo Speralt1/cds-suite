@@ -2,8 +2,10 @@
 //  - mismo perfil (o perfiles gemelos con el mismo nombre normalizado) + misma fecha
 //    contable + mismo monto + mismo medio de pago                         → REVISAR
 //  - mismo perfil/gemelos + mismo monto en el mismo mes (fechas distintas) → INFORMATIVO
-//  - diezmo activo con 0 o ≥ 2 atribuciones activas                       → REVISAR
-import { LEVELS, accountingDate, amountOf, clp, finding, identityKey, isActive, shortId } from "../lib/util.mjs";
+//  - integridad (REVISAR): diezmo activo con 0 o ≥ 2 atribuciones activas; atribución
+//    activa huérfana (movimiento inexistente, anulado o que no es diezmo); atribución
+//    cuyo monto, mes o fecha no coincide con su diezmo
+import { LEVELS, accountingDate, amountOf, clp, finding, identityKey, isActive, localDate, shortId } from "../lib/util.mjs";
 
 const activeAttribution = (a) => !a.status || a.status === "active";
 
@@ -22,10 +24,23 @@ export function detectDuplicateTithes(ctx) {
   const perTithe = new Map();
   const exact = new Map();
   const monthly = new Map();
+  const ledgerById = new Map(ctx.snapshot.ledger.map((t) => [t.id, t]));
+  const orphanAttr = [];
+  const mismatchAttr = [];
+  const dateOf = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d) : localDate(d, ctx.options.timeZone));
   for (const a of ctx.snapshot.attributions) {
     if (!activeAttribution(a)) continue;
     const row = tithes.get(a.transactionId);
-    if (!row) continue;
+    if (!row) {
+      const t = ledgerById.get(a.transactionId);
+      orphanAttr.push({ a, reason: !t ? "sin movimiento" : !isActive(t) ? "movimiento anulado" : "movimiento no es diezmo" });
+      continue;
+    }
+    const diff = [];
+    if (a.amount !== undefined && Math.round(Number(a.amount)) !== amountOf(row)) diff.push("amount");
+    if (a.period !== undefined && a.period !== row.period) diff.push("period");
+    if (a.date !== undefined && a.date !== null && dateOf(a.date) !== accountingDate(row)) diff.push("date");
+    if (diff.length) mismatchAttr.push({ a, diff });
     perTithe.set(row.id, (perTithe.get(row.id) || 0) + 1);
     const g = groupOf(a.profileId);
     const ek = [g, accountingDate(row), amountOf(row), row.paymentMethod].join("|");
@@ -88,15 +103,20 @@ export function detectDuplicateTithes(ctx) {
 
   const orphan = [...tithes.values()].filter((t) => !perTithe.get(t.id));
   const multi = [...tithes.values()].filter((t) => (perTithe.get(t.id) || 0) >= 2);
-  if (orphan.length || multi.length) {
+  if (orphan.length || multi.length || orphanAttr.length || mismatchAttr.length) {
     const bad = [...orphan, ...multi];
     findings.push(
       finding(
         "TITHE_ATTRIBUTION_INTEGRITY",
         LEVELS.REVIEW,
-        `Integridad de atribuciones: ${orphan.length} diezmo(s) activo(s) sin atribución activa y ${multi.length} con 2 o más atribuciones activas (${clp(bad.reduce((a, t) => a + amountOf(t), 0))}). Cada diezmo activo debe tener exactamente una.`,
-        { withoutAttribution: orphan.map((t) => shortId(t.id)), multipleAttributions: multi.map((t) => shortId(t.id)) },
-        bad.map((t) => t.id),
+        `Integridad de atribuciones: ${orphan.length} diezmo(s) activo(s) sin atribución activa, ${multi.length} con 2 o más (${clp(bad.reduce((a, t) => a + amountOf(t), 0))}), ${orphanAttr.length} atribución(es) activa(s) huérfana(s) y ${mismatchAttr.length} que no coinciden con su diezmo en monto, mes o fecha. Cada diezmo activo debe tener exactamente una atribución coherente.`,
+        {
+          withoutAttribution: orphan.map((t) => shortId(t.id)),
+          multipleAttributions: multi.map((t) => shortId(t.id)),
+          orphanAttributions: orphanAttr.map(({ a, reason }) => `${shortId(a.id)} (${reason})`),
+          mismatchedAttributions: mismatchAttr.map(({ a, diff }) => `${shortId(a.id)} (${diff.join("+")})`),
+        },
+        [...bad.map((t) => t.id), ...orphanAttr.map(({ a }) => a.id), ...mismatchAttr.map(({ a }) => a.id)],
       ),
     );
   }

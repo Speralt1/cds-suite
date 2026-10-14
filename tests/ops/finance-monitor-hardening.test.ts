@@ -252,7 +252,7 @@ describe("MINOR 6 · baselines A9/A10", () => {
     const t = row({ period: "2026-07", day: "3", amount: 70000 });
     const voided = { ...t, status: "voided" as const, revision: 2, updateTime: "2026-10-05T12:00:00Z" };
     const base = { createdAt: BASELINE_AT, months: baselineOf([t], ["2026-07"]).months, ledger: { docs: 1, voided: { count: 0, sum: 0 } } };
-    const r = run(snap([voided], { baseline: base as never }));
+    const r = run(snap([voided], { baseline: base as never }), { closedMonthHumanChanges: "informativo" });
     expect(byCode(r.findings, "BASELINE_DELTA_EXPLAINED")[0].evidence).toMatchObject({ priorState: "inferido" });
     expect(formatReport(r)).toContain("baseline sí (estado previo: inferido)");
   });

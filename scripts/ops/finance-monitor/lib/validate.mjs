@@ -59,7 +59,10 @@ function checkRows(rows, label, add) {
     }
     if (t.revision !== undefined && (!isInt(t.revision) || t.revision < 1)) add(`${at}.revision debe ser un entero ≥ 1`);
     for (const f of ["createdBy", "updatedBy"]) if (t[f] !== undefined && typeof t[f] !== "string") add(`${at}.${f} debe ser texto`);
-    for (const f of ["createTime", "updateTime", "voidedAt"]) if (t[f] !== undefined && t[f] !== null && !isIso(t[f])) add(`${at}.${f} no es ISO`);
+    // createTime/updateTime son obligatorios: sin ellos la ventana de escrituras y los
+    // retroactivos se apagarían en silencio. voidedAt es opcional.
+    for (const f of ["createTime", "updateTime"]) if (!isIso(t[f])) add(`${at}.${f} falta o no es ISO`);
+    if (t.voidedAt !== undefined && t.voidedAt !== null && !isIso(t.voidedAt)) add(`${at}.voidedAt no es ISO`);
   });
 }
 
@@ -79,10 +82,11 @@ function checkSummaryValue(s, at, add, requireScalars) {
 
 function checkSummaries(map, label, add, requireScalars) {
   if (!isObj(map)) return add(`${label} debe ser un objeto { "YYYY-MM": resumen }`);
-  for (const [period, s] of Object.entries(map)) {
-    if (!PERIOD_RE.test(period)) add(`${label}: clave de mes inválida`);
-    checkSummaryValue(s, `${label}["${period}"]`, add, requireScalars);
-  }
+  // Nunca se repiten claves ni valores del resumen en el mensaje: solo la posición.
+  Object.entries(map).forEach(([period, s], i) => {
+    if (!PERIOD_RE.test(period)) add(`${label}: la clave de la posición ${i} no es un mes YYYY-MM`);
+    checkSummaryValue(s, `${label}[posición ${i}]`, add, requireScalars);
+  });
 }
 
 function checkSumup(s, add) {
@@ -145,6 +149,8 @@ export function validateSnapshot(raw, { allowEmpty = false } = {}) {
     for (const f of ["id", "transactionId", "profileId"]) if (!isStr(a[f])) add(`${at}.${f} debe ser texto`);
     if (a.status !== undefined && !["active", "voided"].includes(a.status)) add(`${at}.status fuera de dominio`);
     if (a.amount !== undefined && !isNum(a.amount)) add(`${at}.amount no es numérico`);
+    if (a.period !== undefined && (typeof a.period !== "string" || !PERIOD_RE.test(a.period))) add(`${at}.period inválido`);
+    if (a.date !== undefined && a.date !== null && !isIso(a.date) && !isYmd(a.date)) add(`${at}.date debe ser ISO o YYYY-MM-DD`);
   });
   const profileIds = new Set();
   (Array.isArray(raw.profiles) ? raw.profiles : []).forEach((p, i) => {
@@ -198,7 +204,7 @@ export function validateSnapshot(raw, { allowEmpty = false } = {}) {
 
 const capped = (problems) => (problems.length > MAX_PROBLEMS ? [...problems.slice(0, MAX_PROBLEMS), `… y ${problems.length - MAX_PROBLEMS} problema(s) más`] : problems);
 
-const OPTION_KEYS = new Set(["timeZone", "backdate", "payouts", "profileSimilarityThreshold", "acknowledged", "today", "since", "now", "allowEmpty"]);
+const OPTION_KEYS = new Set(["timeZone", "backdate", "payouts", "profileSimilarityThreshold", "acknowledged", "closedMonthHumanChanges", "today", "since", "now", "allowEmpty"]);
 
 /** Valida opciones (config + flags). Claves desconocidas o tipos erróneos → problemas. */
 export function validateOptions(opts) {
@@ -227,6 +233,8 @@ export function validateOptions(opts) {
   if (opts.today !== undefined && !isYmd(opts.today)) add("today debe ser una fecha real YYYY-MM-DD");
   for (const f of ["since", "now"]) if (opts[f] !== undefined && !isIso(opts[f])) add(`${f} debe ser un instante ISO con zona`);
   if (opts.allowEmpty !== undefined && typeof opts.allowEmpty !== "boolean") add("allowEmpty debe ser booleano");
+  if (opts.closedMonthHumanChanges !== undefined && !["informativo", "revisar"].includes(opts.closedMonthHumanChanges))
+    add('closedMonthHumanChanges debe ser "informativo" o "revisar"');
   if (opts.acknowledged !== undefined) {
     if (!Array.isArray(opts.acknowledged)) add("acknowledged debe ser un arreglo");
     else

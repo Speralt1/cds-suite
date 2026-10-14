@@ -198,11 +198,15 @@ describe("meses vs baseline", () => {
     const r = run(snap(ledger, { summaries, baseline: baselineOf(ledger, ["2026-06"]) }));
     expect(codes(r.findings)).toEqual(expect.arrayContaining(["BASELINE_DELTA_UNEXPLAINED:STOP", "SUMMARY_LEDGER_MISMATCH:STOP"]));
   });
-  it("anulación posterior al baseline explica el delta → INFORMATIVO", () => {
+  it("anulación humana posterior al baseline explica el delta → REVISAR por defecto; INFORMATIVO con closedMonthHumanChanges", () => {
     const t = row({ period: "2026-07", day: "3", amount: 70000 });
     const keep = row({ period: "2026-07", day: "4", amount: 5000 });
     const voided = { ...t, status: "voided" as const, revision: 2, updateTime: "2026-10-05T12:00:00Z", voidedAt: "2026-10-05T12:00:00Z" };
-    const r = run(snap([voided, keep], { baseline: baselineOf([t, keep], ["2026-07"]) }));
+    const s = snap([voided, keep], { baseline: baselineOf([t, keep], ["2026-07"]) });
+    const strict = run(s);
+    expect(byCode(strict.findings, "BASELINE_CLOSED_MONTH_HUMAN_CHANGE")[0]).toMatchObject({ level: "REVISAR", evidence: { writes: { kinds: { void: 1 } } } });
+    expect(byCode(strict.findings, "BASELINE_DELTA_EXPLAINED")).toHaveLength(0);
+    const r = run(s, { closedMonthHumanChanges: "informativo" });
     const f = byCode(r.findings, "BASELINE_DELTA_EXPLAINED");
     expect(f[0].evidence).toMatchObject({ delta: { incomeTotal: -70000 }, writes: { kinds: { void: 1 } }, priorState: "inferido" });
     expect(r.verdict).toBe("OK");
@@ -213,7 +217,7 @@ describe("meses vs baseline", () => {
     const noPrior = run(snap([edited], { baseline: baselineOf([t], ["2026-08"]) }));
     const stop = byCode(noPrior.findings, "BASELINE_DELTA_UNEXPLAINED")[0];
     expect(stop.message).toContain("sin estado previo");
-    const withPrior = run(snap([edited], { baseline: baselineOf([t], ["2026-08"], true) }));
+    const withPrior = run(snap([edited], { baseline: baselineOf([t], ["2026-08"], true) }), { closedMonthHumanChanges: "informativo" });
     expect(byCode(withPrior.findings, "BASELINE_DELTA_EXPLAINED")[0].evidence).toMatchObject({ writes: { kinds: { edit: 1 } }, priorState: "ledger" });
     expect(withPrior.verdict).toBe("OK");
   });

@@ -1,6 +1,8 @@
 // Detectores de escrituras (semántica A5 + gap f). Puros.
 // Ventana: desde snapshot previo (previous.takenAt) o ctx.since.
 //  - SUMUP_POS_MUTATION: system:sumup modificó un doc POS ya existente     → REVISAR (A5)
+//    (por ventana de timestamps y, con snapshot previo, por diferencia de campos
+//    contables/status aunque updateTime no haya avanzado; card → cash cuenta como POS)
 //  - SYSTEM_WRITE_FOREIGN_DOC: system:sumup sobre un doc que no es sumup_*  → REVISAR (A5)
 //  - HUMAN_WRITE_ON_SUMUP_DOC: humano modificó un doc sumup_*               → REVISAR
 //  - SUMUP_CASH_MUTATION / SUMUP_CREATIONS / HUMAN_WRITES                   → INFORMATIVO
@@ -13,6 +15,14 @@ import { classifyWrite } from "../lib/classify.mjs";
 import { LEVELS, accountingDate, amountOf, clp, finding, isActive, isoAfter, shortId } from "../lib/util.mjs";
 
 const ACCOUNTING_FIELDS = ["type", "amount", "category", "paymentMethod", "period", "day", "source"];
+const SYSTEM_ACTOR = "system:sumup";
+
+/** Acumula los campos cambiados por doc (un doc aparece una sola vez por hallazgo). */
+function note(map, t, fields) {
+  const cur = map.get(t.id) || { t, fields: new Set() };
+  fields.forEach((f) => cur.fields.add(f));
+  map.set(t.id, cur);
+}
 
 export function detectWrites(ctx) {
   const since = ctx.since;
@@ -23,22 +33,11 @@ export function detectWrites(ctx) {
   for (const t of recent) (by[classifyWrite(t)] ||= []).push(t);
   const findings = [];
   const ids = (xs) => xs.map((t) => shortId(t.id));
-  const pos = (by["sumup-mutation"] || []).filter((t) => t.paymentMethod !== "cash");
-  const cash = (by["sumup-mutation"] || []).filter((t) => t.paymentMethod === "cash");
-  if (pos.length)
-    findings.push(
-      finding(
-        "SUMUP_POS_MUTATION",
-        LEVELS.REVIEW,
-        `${pos.length} escritura(s) system:sumup que modifican docs POS existentes (debe explicarlas un cambio real del proveedor: reembolso/anulación).`,
-        { count: pos.length, ids: ids(pos), statuses: pos.map((t) => `${t.status}/rev${t.revision ?? "?"}`) },
-        pos.map((t) => t.id),
-      ),
-    );
-  if (cash.length)
-    findings.push(
-      finding("SUMUP_CASH_MUTATION", LEVELS.INFO, `${cash.length} modificación(es) system:sumup de CASH (los invariantes CASH siguen en A5).`, { count: cash.length, ids: ids(cash) }, cash.map((t) => t.id)),
-    );
+  // Mutaciones system:sumup: por ventana (timestamps) y, si hay snapshot previo, por
+  // diferencia real de campos contables (no depende de que updateTime haya avanzado).
+  const posMutations = new Map();
+  const cashMutations = new Map();
+  for (const t of by["sumup-mutation"] || []) note(t.paymentMethod !== "cash" ? posMutations : cashMutations, t, ["revision"]);
   const foreign = by["system-foreign-doc"] || [];
   if (foreign.length)
     findings.push(
@@ -80,7 +79,35 @@ export function detectWrites(ctx) {
   }
 
   const prev = ctx.snapshot.previous;
-  if (!prev || !Array.isArray(prev.ledger)) return findings;
+  if (prev && Array.isArray(prev.ledger)) diffPrevious(ctx, prev, findings, posMutations, cashMutations);
+  const pos = [...posMutations.values()];
+  const cash = [...cashMutations.values()];
+  if (pos.length)
+    findings.push(
+      finding(
+        "SUMUP_POS_MUTATION",
+        LEVELS.REVIEW,
+        `${pos.length} doc(s) POS (no efectivo) modificados por system:sumup (debe explicarlos un cambio real del proveedor: reembolso/anulación).`,
+        { count: pos.length, ids: pos.map((m) => shortId(m.t.id)), changes: pos.map((m) => [...m.fields].sort().join("+")), statuses: pos.map((m) => `${m.t.status}/rev${m.t.revision ?? "?"}`) },
+        pos.map((m) => m.t.id),
+      ),
+    );
+  if (cash.length)
+    findings.push(
+      finding(
+        "SUMUP_CASH_MUTATION",
+        LEVELS.INFO,
+        `${cash.length} modificación(es) system:sumup de CASH (los invariantes CASH siguen en A5).`,
+        { count: cash.length, ids: cash.map((m) => shortId(m.t.id)), changes: cash.map((m) => [...m.fields].sort().join("+")) },
+        cash.map((m) => m.t.id),
+      ),
+    );
+  return findings;
+}
+
+/** Diferencias contra el snapshot previo (estado anterior real). */
+function diffPrevious(ctx, prev, findings, posMutations, cashMutations) {
+  const ids = (xs) => xs.map((t) => shortId(t.id));
   const now = new Map(ctx.snapshot.ledger.map((t) => [t.id, t]));
   const missing = [];
   const regress = [];
@@ -91,7 +118,14 @@ export function detectWrites(ctx) {
       continue;
     }
     if (Number(t.revision ?? 0) < Number(p.revision ?? 0) || (p.updateTime && t.updateTime && isoAfter(p.updateTime, t.updateTime))) regress.push(t);
-    const systemMutation = t.updatedBy === "system:sumup";
+    const systemMutation = t.updatedBy === SYSTEM_ACTOR;
+    const changed = ACCOUNTING_FIELDS.filter((f) => String(p[f] ?? "") !== String(t[f] ?? ""));
+    if (p.status !== t.status) changed.push("status");
+    if (systemMutation && changed.length) {
+      // No efectivo antes o después (incluye card → cash) → POS; efectivo → efectivo → CASH.
+      const nonCash = p.paymentMethod !== "cash" || t.paymentMethod !== "cash";
+      note(nonCash ? posMutations : cashMutations, t, changed);
+    }
     if (isActive(p) && !isActive(t)) {
       findings.push(
         finding(
@@ -110,7 +144,6 @@ export function detectWrites(ctx) {
       );
       continue;
     }
-    const changed = ACCOUNTING_FIELDS.filter((f) => String(p[f] ?? "") !== String(t[f] ?? ""));
     if (changed.length && !systemMutation)
       findings.push(
         finding(
@@ -136,5 +169,4 @@ export function detectWrites(ctx) {
     findings.push(
       finding("REVISION_REGRESSION", LEVELS.STOP, `${regress.length} movimiento(s) con revision o updateTime menor que en el snapshot previo (posible restauración o corrupción).`, { count: regress.length, ids: ids(regress) }, regress.map((t) => t.id)),
     );
-  return findings;
 }

@@ -16,11 +16,12 @@ export interface LedgerRow {
   revision?: number;
   createdBy?: string;
   updatedBy?: string;
-  createTime?: string;
-  updateTime?: string;
+  /** Metadatos de Firestore, obligatorios (ISO con zona). */
+  createTime: string;
+  updateTime: string;
   voidedAt?: string;
 }
-export interface Attribution { id: string; transactionId: string; profileId: string; amount?: number; status?: string }
+export interface Attribution { id: string; transactionId: string; profileId: string; amount?: number; status?: string; period?: string; date?: string | null }
 export interface Profile { id: string; displayName: string; active?: boolean; createTime?: string }
 export interface MonthSummary {
   incomeTotal?: number;
@@ -62,6 +63,8 @@ export interface MonitorOptions {
   payouts?: { pendingBusinessDays?: number; holidays?: string[] };
   profileSimilarityThreshold?: number;
   acknowledged?: Acknowledgement[];
+  /** Cambios humanos (anular/editar/mover) en meses cerrados con delta explicado. Por defecto "revisar". */
+  closedMonthHumanChanges?: "informativo" | "revisar";
 }
 export interface Finding {
   code: string;

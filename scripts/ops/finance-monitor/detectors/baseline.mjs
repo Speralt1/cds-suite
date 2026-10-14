@@ -79,6 +79,9 @@ function contributions(writes) {
   return by;
 }
 
+/** Cambios humanos sobre docs existentes (no creaciones): anular, editar (incl. mover de mes), reactivar. */
+const humanChangesIn = (ws) => ws.filter((w) => w.row && isHumanClass(w.cls) && ["void", "edit", "reactivation"].includes(w.kind));
+
 const touchesPeriod = (w, period) => w.row?.period === period || w.before?.period === period;
 
 function summarizeWrites(ws) {
@@ -158,6 +161,20 @@ export function detectBaselineDeltas(ctx) {
           `${monthLabel}: el delta respecto del baseline cuadra, pero ${unknownEdits.length} edición(es) posteriores al baseline no tienen estado previo (${unknownEdits.map((w) => shortId(w.row.id)).join(", ")}); no se puede verificar su efecto. Incluir el ledger en el baseline.`,
           { ...evidence, unverifiable: unknownEdits.map((w) => shortId(w.row.id)) },
           unknownEdits.map((w) => w.row.id),
+        ),
+      );
+    } else if (ws.length && !deleted.length && closed && humanChangesIn(ws).length && ctx.options.closedMonthHumanChanges !== "informativo") {
+      // Decisión de diseño (doc 31 §3): por defecto, anulaciones/ediciones/movimientos
+      // humanos en un mes cerrado se revisan aunque el delta cuadre. Con
+      // closedMonthHumanChanges: "informativo" quedan como BASELINE_DELTA_EXPLAINED.
+      const hc = humanChangesIn(ws);
+      findings.push(
+        finding(
+          "BASELINE_CLOSED_MONTH_HUMAN_CHANGE",
+          LEVELS.REVIEW,
+          `${monthLabel}: el delta respecto del baseline cuadra (${describe(delta, fields)}), pero incluye ${hc.length} anulación(es)/edición(es) humana(s) de movimientos existentes (${hc.map((w) => `${KIND_ES[w.kind]} ${shortId(w.row.id)}`).join(", ")}). Confirmar con Tesorería.`,
+          { ...evidence, humanChanges: hc.map((w) => shortId(w.row.id)) },
+          hc.map((w) => w.row.id),
         ),
       );
     } else if (ws.length && !deleted.length) {

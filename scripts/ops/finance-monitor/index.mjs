@@ -31,6 +31,9 @@ export const DEFAULT_OPTIONS = Object.freeze({
   payouts: { pendingBusinessDays: 3, holidays: [] },
   profileSimilarityThreshold: DEFAULT_SIMILARITY_THRESHOLD,
   acknowledged: [],
+  // Anulaciones/ediciones/movimientos humanos en meses cerrados con delta explicado:
+  // "revisar" (por defecto, conservador) o "informativo" (decisión de diseño, doc 31 §3).
+  closedMonthHumanChanges: "revisar",
 });
 
 /** Valida y completa las opciones. Devuelve { options, problems }. */

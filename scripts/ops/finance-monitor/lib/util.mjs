@@ -67,7 +67,7 @@ export function localDate(iso, timeZone = DEFAULT_TIME_ZONE) {
 const utcDay = (ymd) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd));
   const t = m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
-  if (!m || new Date(t).getUTCDate() !== Number(m[3]) || new Date(t).getUTCMonth() !== Number(m[2]) - 1) throw new Error(`fecha inválida: ${String(ymd).slice(0, 10)}`);
+  if (!m || new Date(t).getUTCDate() !== Number(m[3]) || new Date(t).getUTCMonth() !== Number(m[2]) - 1) throw new Error("fecha inválida (se esperaba YYYY-MM-DD real)");
   return t / 86400e3;
 };
 
