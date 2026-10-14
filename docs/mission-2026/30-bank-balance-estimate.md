@@ -1,6 +1,7 @@
 # 30 — Saldo bancario estimado (Banco y caja V1)
 
-> Rama: `feature/bank-balance-estimate-v1` (desde `18925d6`). **NO DESPLEGADO.**
+> Rama: `feature/bank-balance-estimate-v1` (desde `18925d6`), **apilada sobre B2**
+> (`feature/finance-summary-calendar-v1`, merge `--no-ff`): se integra después de B2. **NO DESPLEGADO.**
 > Validado solo con emuladores (`demo-cds-suite`) y datos ficticios. Sin datos personales.
 
 ## 1. Objetivo
@@ -72,6 +73,11 @@ caja  = efectivo inicial (opcional)
 - Ventas con tarjeta: **no** suman al banco hasta su abono. Un abono agrupado se cuenta una vez, completo,
   en su fecha de abono.
 - Método "Otro": no cuenta ni en banco ni en caja; se avisa cuántos hay.
+- **Comisiones SumUp:** los gastos de categoría `Comisiones SumUp` (los que propone el PR C) **no** se
+  restan ni del banco ni de la caja: los abonos SumUp ya llegan netos de comisión y restarlos otra vez
+  los descontaría dos veces. Se avisa cuántos se omitieron.
+- Abonos no exitosos (en proceso, fallidos, desconocidos o sin fecha) nunca suman; se cuentan en avisos.
+- La fecha de corte debe ser **anterior a hoy** (el día de hoy aún no cierra en la cartola).
 - Estados del resultado: `unconfigured` (sin saldo inicial: **ningún número de banco ni caja**),
   `partial` (faltan abonos SumUp, cobertura de abonos tardía o límite de consulta alcanzado) y
   `complete`.
@@ -86,7 +92,7 @@ caja  = efectivo inicial (opcional)
 |---|---|---|
 | `name` | string 1–80 | |
 | `openingBalance` | int CLP | −1e12 … 1e12. **Puede ser negativo** (sobregiro/línea de crédito): la UI exige marcar una casilla de confirmación |
-| `openingDate` | "YYYY-MM-DD" | ≥ 2020-01-01 y no futura. Saldo al **cierre** de ese día |
+| `openingDate` | "YYYY-MM-DD" | ≥ 2020-01-01 y anterior a hoy. Saldo al **cierre** de ese día |
 | `openingCash` | int ≥ 0 o `null` | Efectivo contado ese día. Opcional |
 | `statementReference` | string 0–120 | Ej. "Cartola N° 45" |
 | `revision` | int | 1 al crear; +1 en cada cambio |
@@ -145,6 +151,12 @@ desde el corte y solo lo necesario:
 Las ventas con tarjeta (la mayor parte del volumen SumUp) **no se leen**. Si una consulta llega a su
 tope, la tarjeta muestra "Límite alcanzado" y el saldo queda `partial`.
 
+**Falla cerrado (revisión Atlas, MAJOR-2):** si **cualquier** fuente falla — cuenta, cualquiera de las
+dos consultas del libro o tesorería (permiso denegado, índice faltante, sin conexión) — no se calcula
+nada: `resolveBankBalanceState` devuelve `result = null` y la tarjeta muestra el error, **nunca** un
+número hecho con datos parciales (sin el índice, "saldo inicial ± tesorería" parecería un saldo). La
+conciliación tampoco se puede guardar mientras el estimado tenga error.
+
 > ⚠️ **Índice compuesto nuevo** (`firestore.indexes.json`): `financeTransactions (type ASC,
 > paymentMethod ASC, date ASC)`. Sirve a las consultas 1 y 2. Sin este índice desplegado la tarjeta
 > muestra el error "La consulta necesita un índice de Firestore". Desplegar índices es aditivo pero
@@ -152,8 +164,17 @@ tope, la tarjeta muestra "Límite alcanzado" y el saldo queda `partial`.
 
 ## 9. UX
 
+- **Montaje en Resumen (B2):** `SummaryPage` pasa
+  `fundsBankTile={<BankBalanceCard variant="funds" connectSumupPayouts />}` a la sección "Posición de
+  fondos" de B2 (que ya la limita a `finance.details.read` y maneja el período actual). La variante
+  `funds` no tiene título propio ("Posición de fondos" lo pone B2) y **no muestra el resultado
+  contable** (Design Lock: la posición nunca repite ni suma el resultado, que vive en la banda de
+  arriba): tres cifras — saldo bancario estimado, efectivo registrado en caja y SumUp pendiente de
+  abono — con sus estados y "¿Cómo se calcula?". Los colores usan los tokens de
+  `components/finance/dashboard/tokens.css` (con respaldo).
 - `components/finance/bank/bank-balance-card.tsx` (+ `bank-balance.module.css`): `BankBalanceCard`
-  (con datos; solo para `finance.details.read`) y `BankBalanceView` (vista pura). Cuatro cifras con
+  (con datos; solo para `finance.details.read`) y `BankBalanceView` (vista pura); variante `card`
+  (autónoma, 4 cifras con el resultado contable como prop) o `funds`. Cuatro cifras con
   etiqueta y explicación corta; insignias de texto ("Estimado", "Corte dd-mm-aaaa", "Incompleto: faltan
   abonos SumUp"), nunca solo color; saldo negativo con texto para lectores de pantalla. Estados:
   cargando, error, sin configurar ("Saldo pendiente de configurar" + "Configurar saldo inicial" para
@@ -164,19 +185,44 @@ tope, la tarjeta muestra "Límite alcanzado" y el saldo queda `partial`.
   saldo inicial con paso de revisión y confirmación + historial; movimientos entre caja y banco
   (`components/finance/bank/treasury-panel.tsx`) con anulación con motivo; conciliación
   (`components/finance/bank/reconciliation-panel.tsx`) que muestra estimado, reportado y diferencia y
-  nunca ajusta sola. Los paneles de tesorería y conciliación son reutilizables en Finanzas (Configuración
+  nunca ajusta sola.
+- **Ajustes y abonos SumUp (revisión Atlas, MAJOR-1):** mientras el estimado no incluya los abonos SumUp
+  (o esté incompleto por otro motivo), una conciliación muestra "No ajustes: el estimado no incluye
+  abonos SumUp" y **no** ofrece "Preparar ajuste manual": la diferencia sería casi toda abonos y, al
+  conectarlos, se contarían dos veces. El formulario de ajuste también lo advierte. Con estimado
+  completo, "Preparar ajuste manual" rellena tipo, sentido, monto, nota y **la fecha de la
+  conciliación** (nunca envía). Si la conciliación es del día de corte, se indica corregir el saldo
+  inicial en vez de ajustar.
+- La conciliación guarda `openingRevision`, que las reglas exigen igual a la revisión vigente del saldo
+  inicial. Los paneles de tesorería y conciliación son reutilizables en Finanzas (Configuración
   solo la ve administración).
 
 ## 10. Plan de despliegue (cada paso con su propio GO)
 
+0. **Orden de PR:** B2 (`feature/finance-summary-calendar-v1`) primero; este PR está apilado sobre él.
 1. **Reglas** (`firestore.rules`): solo agrega colecciones nuevas; verificar ruleset en consola.
 2. **Índices** (`firestore.indexes.json`): aditivo; esperar estado "Enabled" antes del paso 3.
 3. **Hosting**: tarjeta montada en Resumen por el tech lead + panel en Configuración.
 4. **Sin migración de datos.** Tesorería toma una cartola, y un administrador ingresa saldo, fecha de corte
    (y opcionalmente el efectivo contado ese día) en Configuración › Finanzas › Banco y caja.
-5. Cuando exista la callable `sumupPayoutsReconciliation`, pasar su resultado por
-   `parseSumupPayoutsResponse` a la prop `payouts` de la tarjeta (y del panel de conciliación). Hasta
-   entonces el saldo se muestra "Incompleto: faltan abonos SumUp".
+5. **Abonos SumUp** (contrato del PR C, doc 29): `useSumupPayoutsForBank(openingDate, hoy)`
+   (`lib/finance/sumup-payouts-client.ts`) llama `httpsCallable("sumupPayoutsReconciliation")` con
+   `{account: "both", startDate, endDate}` en ventanas contiguas de ≤ 35 días desde el día siguiente al
+   corte hasta hoy (máximo 11 ventanas; más allá, parcial), con caché de 10 minutos por sesión.
+   `adaptSumupReconciliationResponse` (`lib/finance/sumup-payouts-adapter.ts`, puro) convierte la
+   respuesta:
+   - cualquier cuenta `ok: false` → no disponible (con su `errorClass`);
+   - solo suman abonos `statusClass === "successful"` con `payoutDate` dentro de la ventana que los
+     devolvió, deduplicados por cuenta + id entre ventanas; el resto se cuenta en avisos;
+   - `pendingDeposit` = Σ `pendingAmount` de las cuentas; cobertura = primer `period.startDate` y último
+     `period.endDate`;
+   - parcial si alguna `basis.basis === "indeterminate"`, si un abono exitoso `REQUIERE_REVISION` por
+     `currency_issue`/`amount_mismatch` (y ese abono no suma), si hay huecos entre ventanas o si la
+     cobertura empieza después de hoy o termina antes;
+   - vocabulario o forma desconocidos (otro `status`, `statusClass` o `basis`, abonos sin id, montos
+     inválidos) → no disponible: nunca un 0 silencioso.
+   Si la función no existe, no responde o falla, el resultado es "no disponible" y el saldo queda
+   "Incompleto: faltan abonos SumUp". **Requiere el deploy de la Function del PR C** (con su propio GO).
 
 ## 11. Rollback
 
@@ -199,5 +245,9 @@ tope, la tarjeta muestra "Límite alcanzado" y el saldo queda `partial`.
    desde el corte.
 5. **Quién fija el saldo inicial:** hoy solo administración (`settingsManage`). ¿Se delega a Finanzas?
 6. **Movimientos con método "Otro":** hoy no cuentan; ¿deben reclasificarse?
-7. **Dónde registrar depósitos/retiros** las personas de Finanzas (no ven Configuración): montar
-   `TreasuryTransfersPanel` y `ReconciliationPanel` en Finanzas.
+7. **Dónde registrar depósitos/retiros y conciliar** las personas de Finanzas (no ven Configuración):
+   hoy no tienen UI. Seguimiento: montar `TreasuryTransfersPanel` y `ReconciliationPanel` en Finanzas
+   (no se agregan rutas en este PR).
+8. **Comisiones SumUp:** cuando el PR C registre gastos "Comisiones SumUp", seguirán fuera del saldo
+   bancario (los abonos ya son netos). Confirmar que nunca se registren además como gasto pagado por
+   transferencia desde el banco.
