@@ -152,3 +152,10 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
 - Prerrequisitos de deploy actualizados en el doc 25 §0 (valores vigentes, rollback, Functions a vigilar y smoke pendiente de Pastor, Pastora y Líder).
 - **Revisión Atlas (15/10/2026): PASS** del código, Rules, CSS, navegación, Functions e índices; 0 BLOCKER. Los 2 MAJOR eran del runbook (fila de rollback de C-A4/C-A6 y ancestro obligatorio en §3 del doc 25) y quedaron corregidos: rollback a `cbe11685…` / `72e014e5861a25ac` y ancestro `35a234c`.
 - **Acoplamiento conocido (Atlas MINOR-3, aceptado para V1):** `functions/index.js` construye el servicio `members*` al cargar el módulo, en todos los contenedores. Si en un redeploy completo futuro `members/*` fallara al cargar, también fallaría el arranque en frío de SumUp y calendario. Mitigación vigente: Functions solo por nombre, test de cableado y emulador 33/33. Alternativa futura: construirlo de forma diferida dentro del handler.
+
+## 10. Actualización sobre producción R2.6 (`a9eea40`, 15/10/2026)
+
+- Merge `8a05f61` de `feature/preproduccion-mobile-v1` @ `a9eea40b45e213064748b32d937bfea87ebee543` (PR #30, paleta de 24 colores) en esta rama: **sin conflictos** (auto-merge de `app/globals.css`, `firestore.rules`, `lib/shared/types.ts`, `functions/shared/types.js` y `tests/platform/settings-screens.test.tsx`). Sin force push.
+- `firestore.rules` = ruleset productivo `80a69cd5` + **solo** los bloques de Consolidación (28 inserciones, 2 cambios: catálogo de permisos y `permissions.size() <= 10`). La lista de 24 colores de `validArea` queda idéntica a producción.
+- Se conservan Finanzas R2.5, SumUp, los 24 colores (AREA_COLORS 24, los 10 originales primero) y `build-shared --check`.
+- Producción de referencia: Hosting `0a6ab8858afd6a23`, Rules `80a69cd5-a2b4-413e-803e-193b5205c3b0`, `calendarpublicfeed-00002-ver` (doc 25 §0).
