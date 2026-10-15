@@ -65,16 +65,15 @@
 .fin-cal-status svg {
   flex: 0 0 auto;
 }
-.fin-cal-status.is-warning {
-  border-color: var(--color-warning);
-  background: var(--color-warning-soft);
-  color: var(--color-warning-ink);
+/* Pendiente (R2.5): tono neutro, no advertencia. */
+.fin-cal-status.is-pending {
+  border-color: var(--color-muted-strong);
+  background: var(--color-canvas);
+  color: var(--color-muted-strong);
 }
-.fin-cal-status.is-warning svg {
-  color: var(--color-warning);
-}
-.fin-cal-status.is-warning:hover {
-  background: #f7e7c8;
+.fin-cal-status.is-pending:hover {
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .fin-cal-status.is-ok {
   background: var(--color-primary-soft);
@@ -132,13 +131,10 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.fin-cal-legend-sample.is-warning {
-  border-color: var(--color-warning);
-  background: var(--color-warning-soft);
-  color: var(--color-warning-ink);
-}
-.fin-cal-legend-sample.is-warning svg {
-  color: var(--color-warning);
+.fin-cal-legend-sample.is-pending {
+  border-color: var(--color-muted-strong);
+  background: var(--color-canvas);
+  color: var(--color-muted-strong);
 }
 .fin-cal-legend-sample.is-empty {
   border-style: dashed;
@@ -289,6 +285,19 @@
   width: 1rem;
   height: 1rem;
 }
+/* Con "Pendiente" la celda media (28–42rem, p. ej. 1440 con el panel lateral)
+   queda justa: el texto nunca desborda la celda (elipsis de seguridad; el
+   aria-label de la celda lleva el estado completo). */
+.fin-cal-chip {
+  max-width: 100%;
+}
+.fin-cal-chip-full,
+.fin-cal-chip-mid {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .fin-cal-chip-full,
 .fin-cal-chip-mid,
 .fin-cal-amount {
@@ -302,21 +311,12 @@
   white-space: nowrap;
 }
 
-/* Estados (las señales no dependen solo del color: icono, texto, barra). */
-.fin-cal-cell.has-warning {
-  border-color: var(--color-warning);
-  background: var(--color-warning-soft);
-  color: var(--color-warning-ink);
-}
-.fin-cal-cell.has-warning::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: var(--color-warning);
-  content: "";
-}
-.fin-cal-cell.has-warning .fin-cal-chip svg {
-  color: var(--color-warning);
+/* Estados (las señales no dependen solo del color: icono, texto, borde).
+   "Efectivo pendiente" (R2.5) es neutro: borde sólido gris, ícono de reloj. */
+.fin-cal-cell.has-pending {
+  border-color: var(--color-muted-strong);
+  background: var(--color-canvas);
+  color: var(--color-muted-strong);
 }
 .fin-cal-cell.has-empty {
   border-style: dashed;
@@ -324,8 +324,9 @@
   background: var(--color-canvas);
   color: var(--color-muted-strong);
 }
-/* Compacto: sin montos; una barra de 3px marca el efectivo registrado. */
-.fin-cal-cell.has-cash:not(.has-warning)::after {
+/* Compacto: sin montos; una barra de 3px marca el efectivo registrado
+   (también en un día pendiente: el monto puede convivir con el pendiente). */
+.fin-cal-cell.has-cash::after {
   position: absolute;
   inset: auto 0.375rem 0.25rem;
   height: 3px;
@@ -359,7 +360,19 @@
   .fin-cal-amount {
     display: inline;
   }
-  .fin-cal-cell.has-cash:not(.has-warning)::after {
+  .fin-cal-chip {
+    gap: 0.125rem;
+  }
+  .fin-cal-chip svg {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+  /* En la celda media "Pendiente" va sin reloj para que la palabra quepa
+     entera; el estado sigue en el texto, el borde sólido y el aria-label. */
+  .fin-cal-cell.has-pending .fin-cal-chip svg {
+    display: none;
+  }
+  .fin-cal-cell.has-cash::after {
     display: none;
   }
 }
@@ -384,6 +397,15 @@
   }
   .fin-cal-chip-full {
     display: inline;
+  }
+  .fin-cal-chip {
+    gap: 0.25rem;
+  }
+  .fin-cal-chip svg,
+  .fin-cal-cell.has-pending .fin-cal-chip svg {
+    display: inline;
+    width: 1rem;
+    height: 1rem;
   }
   .fin-cal-amount {
     font-size: 0.8125rem;
@@ -417,7 +439,7 @@
 }
 .fin-review-list li > svg {
   flex: 0 0 auto;
-  color: var(--color-warning);
+  color: var(--color-muted-strong);
 }
 .fin-review-list li > span {
   flex: 1;
@@ -503,107 +525,91 @@
   color: var(--color-muted-strong);
   font-size: 0.8125rem;
 }
-.fin-warning-list {
+/* "Efectivo por área" (R2.5): lista simple con separadores de 1px, sin
+   tarjetas. Estados neutros: registrado, pendiente de confirmar, sin registros. */
+.fin-area-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fin-area-row {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.625rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--color-line);
 }
-.fin-warning-card {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--color-line);
-  border-left: 4px solid var(--color-warning);
-  border-radius: 10px;
-  background: white;
+.fin-area-row:first-child {
+  border-top: 1px solid var(--color-line);
 }
-.fin-warning-type {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-warning-ink);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.fin-warning-type svg {
-  flex: 0 0 auto;
-  color: var(--color-warning);
-}
-.fin-warning-cause {
-  color: var(--color-ink);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.fin-warning-label {
-  display: block;
-  margin-bottom: 0.125rem;
+.fin-area-row > svg {
+  margin-top: 0.125rem;
   color: var(--color-muted-strong);
-  font-size: 0.75rem;
-  font-weight: 600;
 }
-.fin-warning-movs {
+.fin-area-row.is-registered > svg {
+  color: var(--color-income);
+}
+.fin-area-body {
   display: grid;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.8125rem;
-}
-.fin-warning-movs li {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.fin-warning-movs li > span:first-child {
+  gap: 0.375rem;
   min-width: 0;
-  overflow-wrap: anywhere;
 }
-.fin-warning-movs li > span:last-child {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.fin-warning-link {
-  justify-self: start;
-  min-height: var(--tap-min);
-  color: var(--color-primary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.fin-warning-state {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 0.125rem 0.625rem;
-  border: 1px solid var(--color-warning);
-  border-radius: 999px;
-  background: var(--color-warning-soft);
-  color: var(--color-warning-ink);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.fin-warning-actions {
+.fin-area-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.125rem 0.375rem;
+  line-height: 1.4;
 }
-.fin-warning-actions .button-secondary {
-  flex: 1 1 auto;
-  min-height: var(--tap-min);
+.fin-area-name {
+  font-weight: 600;
 }
-.fin-readonly-note {
+.fin-area-amount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fin-area-sub {
   color: var(--color-muted-strong);
   font-size: 0.8125rem;
   line-height: 1.45;
 }
+.fin-day-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.fin-day-actions .button-secondary {
+  flex: 1 1 auto;
+  min-height: var(--tap-min);
+}
+.fin-readonly-note {
+  margin-top: 0.625rem;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.fin-day-expenses {
+  margin-top: 0.75rem;
+  color: var(--color-muted-strong);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
 
+/* "Resumen del día": Fuente | SumUp | Efectivo | Depósitos | [Otros medios] | Total. */
 .fin-day-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8125rem;
+}
+.fin-day-table caption {
+  margin-bottom: 0.375rem;
+  caption-side: top;
+  color: var(--color-muted-strong);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: left;
 }
 .fin-day-table th,
 .fin-day-table td {
@@ -623,16 +629,45 @@
   font-weight: 500;
   text-align: left;
 }
+.fin-day-table td.is-zero {
+  color: var(--color-muted-strong);
+}
 .fin-day-table tfoot th,
 .fin-day-table tfoot td {
   border-top: 2px solid var(--color-line);
   border-bottom: 0;
 }
+.fin-day-table tfoot th[scope="row"],
 .fin-day-table .is-strong {
   font-weight: 600;
 }
-/* Panel angosto (<24rem): la tabla pasa a filas, sin perder la semántica. */
-@container fin-day-panel (max-width: 23.99rem) {
+/* Panel angosto (<26rem): cada fila es un bloque. Línea 1: fuente y total;
+   línea 2 (atenuada): solo los medios con monto ("SumUp $120.000 · Efectivo
+   $125.000"). La tabla conserva th/scope y data-label. */
+@container fin-day-panel (max-width: 25.99rem) {
+  /* Fila de área angosta: área y monto arriba, estado debajo (sin el "·"
+     colgando al final de la línea). */
+  .fin-area-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.125rem 0.5rem;
+  }
+  .fin-area-sep {
+    display: none;
+  }
+  .fin-area-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fin-area-amount {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+  .fin-area-state {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
   .fin-day-table thead {
     position: absolute;
     width: 1px;
@@ -642,26 +677,55 @@
     white-space: nowrap;
   }
   .fin-day-table tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    padding: 0.375rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.375rem;
+    padding: 0.5rem 0;
     border-bottom: 1px solid var(--color-line);
+  }
+  /* Salto de línea entre la línea 1 y la línea de medios. */
+  .fin-day-table tr::after {
+    flex-basis: 100%;
+    order: 2;
+    content: "";
   }
   .fin-day-table th,
   .fin-day-table td {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.125rem 0;
+    padding: 0;
     border: 0;
   }
-  .fin-day-table td[data-label]::before {
-    color: var(--color-muted-strong);
-    content: attr(data-label);
-    font-weight: 400;
+  .fin-day-table th[scope="row"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    order: 0;
   }
-  .fin-day-table td.is-blank {
+  .fin-day-table td.is-total {
+    order: 1;
+    font-weight: 600;
+  }
+  .fin-day-table td.is-method {
+    order: 3;
+    margin-top: 0.125rem;
+    color: var(--color-muted-strong);
+    font-size: 0.8125rem;
+    text-align: left;
+  }
+  /* Cada medio es indivisible ("SumUp $22.500"); sin "·" entre medios para
+     que un salto de línea nunca deje un separador colgando. */
+  .fin-day-table td.is-method {
+    margin-right: 0.5rem;
+    white-space: nowrap;
+  }
+  .fin-day-table td.is-method::before {
+    content: attr(data-label) " ";
+  }
+  .fin-day-table td.is-zero {
     display: none;
+  }
+  .fin-day-table tfoot tr {
+    border-top: 1px solid var(--color-line);
+    border-bottom: 0;
   }
   .fin-day-table tfoot th,
   .fin-day-table tfoot td {

@@ -271,13 +271,16 @@ describe("Resumen integrado", () => {
     expect(within(dialog).getByLabelText(/Fecha correspondiente/)).toHaveValue("2026-10-04");
   });
 
-  it("'Revisar movimientos' pasa a Diario y lleva el foco al título de la banda", () => {
+  it("el panel del calendario no enlaza movimientos; el módulo Movimientos sigue disponible", () => {
+    state.tx = { data: [sumUp("p4", "4", 30000)], loading: false, error: "" };
     render(<SummaryPage />);
     const aside = screen.getByRole("complementary", { name: "Detalle del día" });
-    fireEvent.click(within(aside).getByRole("button", { name: "Revisar movimientos" }));
-    expect(screen.getByRole("button", { name: "Diario" })).toHaveAttribute("aria-pressed", "true");
-    expect(document.activeElement).toHaveAttribute("id", "fin-balance-title");
-    expect(document.activeElement).toHaveTextContent("Resultado del dom 4 oct");
+    expect(within(aside).queryByText(/Ver movimientos/)).toBeNull();
+    expect(within(aside).queryAllByRole("link")).toHaveLength(0);
+    expect(within(aside).queryByText("Cobro SumUp p4")).toBeNull();
+    // Fuera del calendario, el acceso al módulo Movimientos no cambia.
+    expect(screen.getByRole("link", { name: "Ver todos" })).toHaveAttribute("href", "/finanzas/movimientos");
+    expect(screen.getByRole("button", { name: "Mensual" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("Diario: sin el chip de gastos en cero y con el conteo del día", () => {
@@ -289,7 +292,7 @@ describe("Resumen integrado", () => {
     expect(screen.getByRole("heading", { name: "Resultado del jue 15 oct" })).toBeInTheDocument();
     expect(screen.queryByText("Sin gastos registrados. ¿Faltan egresos?")).toBeNull();
     expect(screen.getByRole("heading", { name: "Movimientos del día · 1" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Ingresos del día" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Resumen del día" })).toBeInTheDocument();
   });
 
   it("Diario con error: sin panel ni conteo falso", () => {
@@ -297,7 +300,7 @@ describe("Resumen integrado", () => {
     render(<SummaryPage />);
     fireEvent.click(screen.getByRole("button", { name: "Diario" }));
     expect(screen.getAllByRole("alert")[0]).toHaveTextContent("Sin conexión con el servidor.");
-    expect(screen.queryByRole("region", { name: "Ingresos del día" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Resumen del día" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Registrar efectivo ·/ })).toBeNull();
     expect(screen.getByRole("heading", { name: "Movimientos del día" })).toBeInTheDocument();
   });
@@ -308,7 +311,7 @@ describe("Resumen integrado", () => {
     fireEvent.click(screen.getByRole("button", { name: "Diario" }));
     expect(screen.getByRole("region", { name: "Resultado del jue 15 oct" })).toHaveAttribute("aria-busy", "true");
     expect(screen.getAllByRole("status")).toHaveLength(1);
-    expect(screen.queryByRole("region", { name: "Ingresos del día" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Resumen del día" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Movimientos del día" })).toBeInTheDocument();
   });
 
@@ -355,15 +358,6 @@ describe("Resumen integrado", () => {
     expect(efectivoRow.querySelector("td.is-count")).toHaveTextContent("1");
   });
 
-  it("si la banda de Diario falla, el foco cae en el botón Diario", () => {
-    render(<SummaryPage />);
-    const aside = screen.getByRole("complementary", { name: "Detalle del día" });
-    state.summaryError = "No pudimos cargar el resumen del día.";
-    fireEvent.click(within(aside).getByRole("button", { name: "Revisar movimientos" }));
-    expect(screen.queryByRole("region", { name: /^Resultado del/ })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Diario" }));
-  });
-
   it("Anual cargando: un solo aviso de estado", () => {
     state.tx = { data: [], loading: true, error: "" };
     render(<SummaryPage />);
@@ -405,8 +399,8 @@ function tx(over: Partial<FinanceTransaction> & { id: string; day: string; amoun
 const sumUp = (id: string, day: string, amount: number, category = "Ofrendas") =>
   tx({ id: `sumup_${id}`, day, amount, category, paymentMethod: "card", createdBy: "system:sumup", description: `Cobro SumUp ${id}` });
 
-// dom 4: falta efectivo de Ofrendas (4 cobros SumUp, $85.000)
-// mié 7: sin registros · dom 11: efectivo $165.000 · mié 14: faltan 2 áreas
+// dom 4: efectivo pendiente de Ofrendas (4 cobros SumUp, $85.000)
+// mié 7: sin registros · dom 11: efectivo $165.000 · mié 14: pendiente en 2 áreas
 const TX: FinanceTransaction[] = [
   sumUp("a", "4", 30000),
   sumUp("b", "4", 25000),
@@ -417,9 +411,8 @@ const TX: FinanceTransaction[] = [
   sumUp("f", "14", 15000, "Cafetería"),
 ];
 
-function Harness({ manage = true, onViewDay = vi.fn(), onRegisterCash = vi.fn() }: {
+function Harness({ manage = true, onRegisterCash = vi.fn() }: {
   manage?: boolean;
-  onViewDay?: (date: string) => void;
   onRegisterCash?: (area: string, date: string) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -435,7 +428,6 @@ function Harness({ manage = true, onViewDay = vi.fn(), onRegisterCash = vi.fn() 
       selected={selected || defaultSelectedDay(calendar, review, TODAY)!}
       onSelect={setSelected}
       onRegisterCash={manage ? onRegisterCash : undefined}
-      onViewDay={onViewDay}
     />
   );
 }
@@ -447,13 +439,17 @@ describe("Calendario de caja · celdas", () => {
   it("estados con etiqueta además del color, aria-current y aria-pressed", () => {
     render(<Harness />);
     const oct4 = cell("domingo 4 de octubre");
-    expect(oct4).toHaveAccessibleName("domingo 4 de octubre, día de culto, falta efectivo de Ofrendas, 1 advertencia");
-    expect(oct4).toHaveClass("has-warning");
-    expect(oct4).toHaveTextContent("Falta efectivo · Ofrendas");
-    expect(oct4).toHaveAttribute("aria-pressed", "true"); // primera advertencia por defecto
+    expect(oct4).toHaveAccessibleName(
+      "domingo 4 de octubre, día de culto, efectivo pendiente de confirmar en Ofrendas, 1 pendiente",
+    );
+    expect(oct4).toHaveClass("has-pending");
+    expect(oct4).not.toHaveClass("has-warning");
+    expect(oct4).toHaveTextContent("Pendiente · Ofrendas");
+    expect(oct4).not.toHaveTextContent(/Falta/);
+    expect(oct4).toHaveAttribute("aria-pressed", "true"); // primer pendiente por defecto
 
     const oct7 = cell("miércoles 7 de octubre");
-    expect(oct7).toHaveAccessibleName("miércoles 7 de octubre, día de culto, sin registros de Ofrendas ni Cafetería, 1 advertencia");
+    expect(oct7).toHaveAccessibleName("miércoles 7 de octubre, día de culto, sin registros de Ofrendas ni Cafetería, 1 pendiente");
     expect(oct7).toHaveClass("has-empty");
     expect(oct7).toHaveTextContent("Sin registros");
 
@@ -463,8 +459,9 @@ describe("Calendario de caja · celdas", () => {
     expect(oct11).toHaveAttribute("aria-pressed", "false");
 
     const oct14 = cell("miércoles 14 de octubre");
-    expect(oct14).toHaveAccessibleName(/falta efectivo de Ofrendas y Cafetería, 2 advertencias$/);
-    expect(oct14).toHaveTextContent("Falta efectivo · 2 áreas");
+    expect(oct14).toHaveAccessibleName(/efectivo pendiente de confirmar en Ofrendas y Cafetería, 2 pendientes$/);
+    expect(oct14).toHaveTextContent("Pendiente · 2 áreas");
+    expect(oct14).toHaveClass("has-pending");
 
     const oct15 = cell("jueves 15 de octubre");
     expect(oct15).toHaveAccessibleName("jueves 15 de octubre, hoy");
@@ -509,15 +506,18 @@ describe("Calendario de caja · celdas", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Jueves 1 de octubre" })).toBeInTheDocument();
   });
 
-  it("chip de estado: cuenta advertencias y días; Revisar selecciona la primera y lleva el foco al panel", () => {
+  it("chip de estado: cuenta pendientes y días; Revisar selecciona el primero y lleva el foco al panel", () => {
     render(<Harness />);
     fireEvent.click(cell("domingo 11 de octubre"));
-    fireEvent.click(screen.getByRole("button", { name: "4 advertencias en 3 días · Revisar" }));
+    const chip = screen.getByRole("button", { name: "4 pendientes en 3 días · Revisar" });
+    expect(chip).toHaveClass("is-pending");
+    expect(chip).not.toHaveClass("is-warning");
+    fireEvent.click(chip);
     expect(cell("domingo 4 de octubre")).toHaveAttribute("aria-pressed", "true");
     expect(document.activeElement).toHaveTextContent("Domingo 4 de octubre · Culto");
   });
 
-  it("sin advertencias: mensaje de todo registrado", () => {
+  it("sin pendientes: mensaje de todo registrado", () => {
     const calendar = buildMonthCalendar([], 2026, 11, TODAY);
     render(
       <CashCalendarSection
@@ -528,12 +528,11 @@ describe("Calendario de caja · celdas", () => {
         transactions={[]}
         selected="2026-11-01"
         onSelect={() => {}}
-        onViewDay={() => {}}
       />,
     );
     expect(screen.getByText("Todo registrado en los días de culto de este mes.")).toBeInTheDocument();
     expect(cell("domingo 1 de noviembre")).toHaveTextContent("1");
-    expect(screen.queryByRole("navigation", { name: "Advertencias del mes" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Días pendientes del mes" })).toBeNull();
   });
 });
 
@@ -543,7 +542,7 @@ describe("Leyenda", () => {
     const list = screen.getByRole("list", { name: "Leyenda del calendario" });
     const items = within(list).getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toEqual([
-      "Falta efectivo: SumUp registró cobros y no hay efectivo del área",
+      "Efectivo pendiente: SumUp registró ventas y aún no hay efectivo registrado del área",
       "Sin registros: día de culto sin Ofrendas ni Cafetería",
       "$165 milEfectivo registrado",
       "3Hoy",
@@ -558,15 +557,15 @@ describe("Leyenda", () => {
 });
 
 describe("Panel del día", () => {
-  it("navegación entre advertencias: anterior / siguiente y posición", () => {
+  it("navegación entre días pendientes: anterior / siguiente y posición", () => {
     render(<Harness />);
-    const nav = () => screen.getByRole("navigation", { name: "Advertencias del mes" });
-    expect(nav()).toHaveTextContent("1 de 3");
-    expect(within(nav()).getByRole("button", { name: "Advertencia anterior" })).toHaveAttribute("aria-disabled", "true");
-    fireEvent.click(within(nav()).getByRole("button", { name: "Siguiente advertencia" }));
+    const nav = () => screen.getByRole("navigation", { name: "Días pendientes del mes" });
+    expect(nav()).toHaveTextContent("1 de 3 días pendientes");
+    expect(within(nav()).getByRole("button", { name: "Día pendiente anterior" })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(within(nav()).getByRole("button", { name: "Siguiente día pendiente" }));
     expect(screen.getByRole("heading", { level: 3, name: "Miércoles 7 de octubre · Culto" })).toBeInTheDocument();
     expect(nav()).toHaveTextContent("2 de 3");
-    const next = within(nav()).getByRole("button", { name: "Siguiente advertencia" });
+    const next = within(nav()).getByRole("button", { name: "Siguiente día pendiente" });
     next.focus();
     fireEvent.click(next);
     expect(nav()).toHaveTextContent("3 de 3");
@@ -576,65 +575,81 @@ describe("Panel del día", () => {
     fireEvent.click(next);
     expect(nav()).toHaveTextContent("3 de 3");
     expect(document.activeElement).toBe(next);
-    // Desde un día sin advertencias: la anterior y la siguiente del mes.
+    // Desde un día sin pendientes: el anterior y el siguiente del mes.
     fireEvent.click(cell("domingo 11 de octubre"));
-    expect(nav()).toHaveTextContent("3 días con advertencias");
-    fireEvent.click(within(nav()).getByRole("button", { name: "Advertencia anterior" }));
+    expect(nav()).toHaveTextContent("3 días pendientes");
+    fireEvent.click(within(nav()).getByRole("button", { name: "Día pendiente anterior" }));
     expect(cell("miércoles 7 de octubre")).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("tarjeta de advertencia: tipo, causa, movimientos asociados, estado y acciones con manage", () => {
+  it("día pendiente: efectivo por área sin tarjeta de advertencia ni movimientos individuales; acciones con manage", () => {
     const onRegisterCash = vi.fn();
-    const onViewDay = vi.fn();
-    render(<Harness onRegisterCash={onRegisterCash} onViewDay={onViewDay} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Domingo 4 de octubre: 1 advertencia");
-    const warnings = screen.getByRole("region", { name: "Advertencias (1)" });
-    expect(within(warnings).getByText("Falta efectivo · Ofrendas")).toBeInTheDocument();
-    expect(
-      within(warnings).getByText(
-        "SumUp registró $85.000 en Ofrendas este día, pero no hay efectivo de Ofrendas registrado.",
-      ),
-    ).toBeInTheDocument();
-    expect(within(warnings).getByText("Cobro SumUp a")).toBeInTheDocument();
-    expect(within(warnings).queryByText("Cobro SumUp d")).toBeNull();
-    expect(within(warnings).getByText("Pendiente")).toBeInTheDocument();
-    fireEvent.click(within(warnings).getByRole("button", { name: "Ver los 4 movimientos" }));
-    expect(onViewDay).toHaveBeenLastCalledWith("2026-10-04");
-    fireEvent.click(within(warnings).getByRole("button", { name: "Registrar efectivo · Ofrendas" }));
+    render(<Harness onRegisterCash={onRegisterCash} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Domingo 4 de octubre: 1 pendiente");
+    const panel = screen.getByRole("complementary", { name: "Detalle del día" });
+    const areas = within(panel).getByRole("region", { name: "Efectivo por área" });
+    const rows = within(areas).getAllByRole("listitem");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent("Ofrendas");
+    expect(rows[0]).toHaveTextContent("Efectivo pendiente de confirmar");
+    expect(rows[0]).toHaveTextContent("SumUp registró ventas. El efectivo aún no se ha registrado.");
+    // El pendiente no muestra monto, ni "Falta", ni la tarjeta de advertencia.
+    expect(rows[0]).not.toHaveTextContent("$");
+    expect(panel).not.toHaveTextContent(/Falta|Advertencia|Causa|Movimientos asociados/);
+    expect(within(panel).queryByText("Pendiente")).toBeNull();
+    for (const description of ["Cobro SumUp a", "Cobro SumUp b", "Cobro SumUp c", "Cobro SumUp d"])
+      expect(within(panel).queryByText(description)).toBeNull();
+    for (const single of ["$30.000", "$25.000", "$20.000", "$10.000"])
+      expect(within(panel).queryByText(single)).toBeNull();
+    expect(within(panel).queryByText(/Ver los/)).toBeNull();
+    expect(within(panel).queryByRole("button", { name: "Revisar movimientos" })).toBeNull();
+    fireEvent.click(within(areas).getByRole("button", { name: "Registrar efectivo · Ofrendas" }));
     expect(onRegisterCash).toHaveBeenCalledWith("offerings", "2026-10-04");
-    fireEvent.click(within(warnings).getByRole("button", { name: "Revisar movimientos" }));
-    expect(onViewDay).toHaveBeenCalledTimes(2);
-    expect(within(warnings).queryByText(/no registrar movimientos/)).toBeNull();
-    // Ingresos del día
-    const income = screen.getByRole("region", { name: "Ingresos del día" });
-    expect(within(income).getByRole("rowheader", { name: "Ofrendas" })).toBeInTheDocument();
+    expect(within(areas).queryByRole("button", { name: "Registrar efectivo · Cafetería" })).toBeNull();
+    expect(within(panel).queryByText(/no registrar movimientos/)).toBeNull();
+    // Resumen del día: solo el agregado, sin enlaces ni acciones para ver movimientos.
+    const summary = within(panel).getByRole("region", { name: "Resumen del día" });
+    expect(within(summary).getByRole("rowheader", { name: "Ofrendas" })).toBeInTheDocument();
+    expect(within(summary).getAllByText("$85.000")).toHaveLength(4); // SumUp y Total, fila y Total del día
+    expect(within(panel).queryByText(/Ver movimientos/)).toBeNull();
+    expect(within(panel).queryAllByRole("link")).toHaveLength(0);
+    expect(within(summary).queryAllByRole("button")).toHaveLength(0);
   });
 
   it("sin manage: lectura con nota y sin registrar", () => {
     render(<Harness manage={false} />);
     expect(screen.queryByRole("button", { name: /Registrar efectivo/ })).toBeNull();
-    expect(screen.getByText("Puedes revisar este día, pero no registrar movimientos.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Revisar movimientos" })).toBeInTheDocument();
+    const areas = screen.getByRole("region", { name: "Efectivo por área" });
+    expect(within(areas).getByText("Puedes revisar este día, pero no registrar movimientos.")).toBeInTheDocument();
+    expect(screen.getAllByText("Puedes revisar este día, pero no registrar movimientos.")).toHaveLength(1);
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
   });
 
-  it("sin registros: causa de día de culto y registrar por área; día futuro", () => {
+  it("sin registros: una fila del día y registrar por área; día futuro", () => {
     render(<Harness />);
     fireEvent.click(cell("miércoles 7 de octubre"));
-    expect(screen.getByText("Es día de culto y no hay ingresos de Ofrendas ni de Cafetería registrados.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Registrar efectivo · Ofrendas" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Registrar efectivo · Cafetería" })).toBeInTheDocument();
+    const areas = screen.getByRole("region", { name: "Efectivo por área" });
+    const rows = within(areas).getAllByRole("listitem");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent("Sin registros de Ofrendas ni Cafetería");
+    expect(within(areas).getByRole("button", { name: "Registrar efectivo · Ofrendas" })).toBeInTheDocument();
+    expect(within(areas).getByRole("button", { name: "Registrar efectivo · Cafetería" })).toBeInTheDocument();
+    expect(screen.getByText("Sin movimientos activos este día.")).toBeInTheDocument();
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
     fireEvent.click(cell("martes 20 de octubre"));
     expect(screen.getByText("Día futuro: aún no hay registros.")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Martes 20 de octubre: sin advertencias");
+    expect(screen.queryByRole("region", { name: "Efectivo por área" })).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Martes 20 de octubre: sin pendientes");
   });
 
-  it("vista Diario: el panel sin navegación enlaza a la lista de movimientos", () => {
+  it("vista Diario: el panel sin navegación tampoco enlaza movimientos", () => {
     const calendar = buildMonthCalendar(TX, 2026, 10, TODAY);
     const day = calendar.days.find((d) => d.date === "2026-10-04")!;
     expect(dayWarnings(day, TX)).toHaveLength(1);
     render(<CashDayPanel date="2026-10-04" status={day} transactions={TX} />);
     expect(screen.queryByRole("navigation")).toBeNull();
-    expect(screen.getByRole("link", { name: "Revisar movimientos" })).toHaveAttribute("href", "#fin-movements");
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
   });
 });
 
@@ -660,7 +675,8 @@ describe("Modo apilado (<52rem): diálogo del día", () => {
     oct11.focus();
     fireEvent.click(oct11);
     const dialog = screen.getByRole("dialog", { name: "Domingo 11 de octubre · Culto" });
-    expect(within(dialog).getByRole("region", { name: "Ingresos del día" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "Resumen del día" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("region", { name: "Efectivo por área" })).toHaveTextContent("Efectivo registrado$165.000");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cerrar" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(cell("domingo 11 de octubre"));
@@ -670,7 +686,7 @@ describe("Modo apilado (<52rem): diálogo del día", () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Ver día domingo 4 de octubre" }));
     let dialog = screen.getByRole("dialog", { name: "Domingo 4 de octubre · Culto" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Siguiente advertencia" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Siguiente día pendiente" }));
     dialog = screen.getByRole("dialog", { name: "Miércoles 7 de octubre · Culto" });
     act(() => {
       dialog.dispatchEvent(new Event("cancel", { cancelable: true }));

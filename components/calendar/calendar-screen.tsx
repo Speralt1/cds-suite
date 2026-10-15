@@ -2,11 +2,13 @@
 
 // /calendario: Calendario global (16b §5.1–5.5, 18b §2.1–2.2).
 // Estado en la URL: ?vista=mes|semana|agenda&fecha=YYYY-MM-DD&areas=a,b&solo=1
-// ?crear=1 abre el formulario (atajo "+ Crear" de la barra móvil).
+// ?crear=1 abre el formulario (atajo "+ Nueva" de la barra móvil); si aún no
+// hay áreas activas, Administración y Pastor ven la guía "Antes de crear".
 // Mes por defecto en escritorio; Agenda por defecto en móvil (<768), donde
 // Semana no existe.
 
 import { useEffect, useId, useMemo, useState } from "react";
+import Link from "next/link";
 import { CalendarX2, Eye, EyeOff, Plus, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { canCreateEvents, filterByAreas, monthGrid, weekRange } from "@/lib/calendar/calendar";
 import { CALENDAR_ERROR_MESSAGES } from "@/lib/calendar/errors";
@@ -21,7 +23,7 @@ import { DESKTOP_QUERY, MOBILE_QUERY, useMedia, WIDE_QUERY } from "./hooks";
 import { monthName, weekTitle } from "./labels";
 import { DayDialog, MonthGrid, MonthGridCompact } from "./month-view";
 import { AreaFilter, CalendarToolbar, NO_AREAS, type AreaFilterOption, type CalendarView } from "./toolbar";
-import { EmptyState, ErrorState, InlineNotice, Skeleton } from "./ui";
+import { CalDialog, EmptyState, ErrorState, InlineNotice, Skeleton } from "./ui";
 import { useCalendarBase } from "./use-calendar-base";
 import { replaceQueryParam, useQueryParam } from "./use-query";
 import { WeekGrid } from "./week-view";
@@ -104,8 +106,8 @@ export function OfflineBanner() {
 }
 
 /**
- * "+ Crear" flotante del móvil (<768): la barra superior del Calendario no deja
- * "Crear actividad" en la primera pantalla, así que queda fijo abajo a la
+ * "+ Nueva" flotante del móvil (<768): la barra superior del Calendario no deja
+ * "Nueva actividad" en la primera pantalla, así que queda fijo abajo a la
  * derecha, 16 px sobre la barra inferior. Solo para quien puede crear.
  */
 export function CreateFab({ onCreate, disabledReason }: { onCreate: () => void; disabledReason?: string }) {
@@ -115,12 +117,12 @@ export function CreateFab({ onCreate, disabledReason }: { onCreate: () => void; 
       <button
         type="button"
         className="button-primary cal-fab"
-        aria-label="Crear actividad"
+        aria-label="Nueva actividad"
         aria-disabled={disabledReason ? true : undefined}
         aria-describedby={disabledReason ? helpId : undefined}
         onClick={() => !disabledReason && onCreate()}
       >
-        <Plus size={18} aria-hidden="true" /> Crear
+        <Plus size={18} aria-hidden="true" /> Nueva
       </button>
       {disabledReason && (
         <span className="cal-sr" id={helpId}>
@@ -128,6 +130,46 @@ export function CreateFab({ onCreate, disabledReason }: { onCreate: () => void; 
         </span>
       )}
     </>
+  );
+}
+
+export const AREAS_SETTINGS_HREF = "/configuracion/areas";
+
+/**
+ * Guía cuando aún no hay áreas activas: toda actividad necesita un área
+ * responsable. Administración puede ir a configurarlas; Pastor debe pedirlo.
+ */
+export function AreasNeededDialog({ canConfigure, onClose }: { canConfigure: boolean; onClose: () => void }) {
+  return (
+    <CalDialog
+      variant="center"
+      onClose={onClose}
+      title="Antes de crear actividades"
+      footer={
+        <div className="cal-dialog-actions">
+          {canConfigure ? (
+            <>
+              <button type="button" className="button-secondary" onClick={onClose}>
+                Cancelar
+              </button>
+              <Link href={AREAS_SETTINGS_HREF} className="button-primary">
+                Configurar áreas
+              </Link>
+            </>
+          ) : (
+            <button type="button" className="button-primary" onClick={onClose}>
+              Entendido
+            </button>
+          )}
+        </div>
+      }
+    >
+      <p className="cal-dialog-text">
+        {canConfigure
+          ? "Cada actividad necesita un área responsable. Configura las áreas de la iglesia para comenzar."
+          : "Cada actividad necesita un área responsable. Pide a Administración que configure las áreas de la iglesia."}
+      </p>
+    </CalDialog>
   );
 }
 
@@ -175,6 +217,16 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
   const filtered = selected.includes(NO_AREAS) ? [] : filterByAreas(all, selected, onlyResponsible);
 
   const canCreate = canCreateEvents(actor, areas);
+  // Sin áreas activas nadie puede crear (toda actividad necesita área
+  // responsable). Administración y Pastor igual ven "Nueva actividad", que abre
+  // la guía en vez del formulario; no amplía permisos.
+  const canConfigureAreas = actor.can("settings.manage");
+  const noActiveAreas = !base.areasLoading && !base.areasError && !areas.some((a) => a.active);
+  const needsAreas = noActiveAreas && (canConfigureAreas || actor.can("calendar.events.manage_all"));
+  const showCreate = canCreate || needsAreas;
+  const [areasGuide, setAreasGuide] = useState(false);
+  // ?crear=1 sin áreas: la guía se deriva de la URL y el parámetro se quita al cerrarla.
+  const crearGuide = crearParam === "1" && needsAreas && !canCreate && !offline;
   const sheets = useEventSheets({
     base,
     events,
@@ -184,15 +236,22 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
     },
   });
   const { openCreate } = sheets;
-  const create = () => {
-    if (!offline) openCreate();
+  const createDisabledReason = offline ? CALENDAR_ERROR_MESSAGES.offline : undefined;
+  const create = (date?: Ymd) => {
+    if (offline) return;
+    if (canCreate) openCreate(date);
+    else if (needsAreas) setAreasGuide(true);
+  };
+  const closeAreasGuide = () => {
+    setAreasGuide(false);
+    if (crearGuide) replaceQueryParam("crear", null);
   };
 
   useEffect(() => {
-    if (crearParam !== "1" || base.areasLoading) return;
+    if (crearParam !== "1" || base.areasLoading || crearGuide) return;
     replaceQueryParam("crear", null);
     if (canCreate && !offline) openCreate();
-  }, [crearParam, canCreate, openCreate, offline, base.areasLoading]);
+  }, [crearParam, canCreate, crearGuide, openCreate, offline, base.areasLoading]);
 
   const setAnchor = (d: Ymd) => replaceQueryParam("fecha", d === today ? null : d);
   const step = (dir: 1 | -1) => {
@@ -244,6 +303,25 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
           </button>
         }
       />
+    ) : noActiveAreas ? (
+      <EmptyState
+        icon={CalendarX2}
+        title="Aún no hay actividades programadas."
+        body={
+          canConfigureAreas
+            ? "Configura las áreas de la iglesia para comenzar a organizar el calendario."
+            : actor.can("calendar.events.manage_all")
+              ? "Cuando Administración configure las áreas de la iglesia, podrás crear actividades aquí."
+              : "Cuando se publiquen actividades, aparecerán aquí."
+        }
+        action={
+          canConfigureAreas ? (
+            <Link href={AREAS_SETTINGS_HREF} className="button-primary">
+              Configurar áreas
+            </Link>
+          ) : undefined
+        }
+      />
     ) : (
       <EmptyState
         icon={CalendarX2}
@@ -251,8 +329,8 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
         body={canCreate ? "Prueba con otras áreas o crea una actividad." : "Prueba con otras áreas o con otro mes."}
         action={
           canCreate && !offline ? (
-            <button type="button" className="button-primary" onClick={create}>
-              Crear actividad
+            <button type="button" className="button-primary" onClick={() => create()}>
+              Nueva actividad
             </button>
           ) : undefined
         }
@@ -286,7 +364,17 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
       body = (
         <div className="cal-month-wrap">
           {mobile ? (
-            <MonthGridCompact year={y} month={m} title={title} occurrences={filtered} areas={areas} today={today} onOpen={sheets.openDetail} />
+            <MonthGridCompact
+              year={y}
+              month={m}
+              title={title}
+              occurrences={filtered}
+              areas={areas}
+              today={today}
+              onOpen={sheets.openDetail}
+              onCreate={showCreate ? create : undefined}
+              createDisabledReason={createDisabledReason}
+            />
           ) : (
             <div className="panel cal-panel is-flush">
               <MonthGrid
@@ -318,7 +406,7 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
     }
   }
 
-  const showFab = mobile && canCreate;
+  const showFab = mobile && showCreate;
 
   return (
     <div className={`cal-screen${showFab ? " has-fab" : ""}`}>
@@ -338,9 +426,9 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
         prevLabel={view === "semana" ? "Semana anterior" : "Mes anterior"}
         nextLabel={view === "semana" ? "Semana siguiente" : "Mes siguiente"}
         filter={filter}
-        canCreate={canCreate}
-        createDisabledReason={offline ? CALENDAR_ERROR_MESSAGES.offline : undefined}
-        onCreate={create}
+        canCreate={showCreate && !mobile}
+        createDisabledReason={createDisabledReason}
+        onCreate={() => create()}
         canShare={actor.can("calendar.events.manage_all")}
       />
       {!mobile && view !== "agenda" && !isLoading && !loadError && legendAreas.length > 0 && (
@@ -373,9 +461,19 @@ function CalendarScreenInner({ onRetry }: { onRetry: () => void }) {
             setDay(null);
             sheets.openDetail(o);
           }}
+          onCreate={
+            showCreate
+              ? (date) => {
+                  setDay(null);
+                  create(date);
+                }
+              : undefined
+          }
+          createDisabledReason={createDisabledReason}
         />
       )}
-      {showFab && <CreateFab onCreate={create} disabledReason={offline ? CALENDAR_ERROR_MESSAGES.offline : undefined} />}
+      {showFab && <CreateFab onCreate={() => create()} disabledReason={createDisabledReason} />}
+      {(areasGuide || crearGuide) && <AreasNeededDialog canConfigure={canConfigureAreas} onClose={closeAreasGuide} />}
       {sheets.sheets}
     </div>
   );

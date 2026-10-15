@@ -186,9 +186,18 @@ describe("Tarjeta de área — efectivo SumUp y Caja del día el mismo día", ()
   it("con solo SumUp: muestra el origen, no alerta de faltante ni de doble registro", () => {
     card({ cashDay: 163500, sumUpCashDay: 163500 });
     expect(screen.getByText("Incluye $163.500 registrado en SumUp")).toBeInTheDocument();
-    expect(screen.queryByText("Falta efectivo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Efectivo pendiente")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Falta efectivo/)).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Registrar efectivo/ })).toHaveClass("button-secondary");
+  });
+
+  it("SumUp sin efectivo del día: estado neutro 'Efectivo pendiente' (no 'Falta')", () => {
+    card({ cashDay: 0, sumUpCashDay: 0 });
+    const pending = screen.getByText("Efectivo pendiente");
+    expect(pending).toHaveClass("text-muted");
+    expect(pending).not.toHaveClass("text-warning");
+    expect(screen.queryByText(/Falta efectivo/)).not.toBeInTheDocument();
   });
 
   it("sin permiso de escritura (onCash omitido) la tarjeta no ofrece registrar efectivo", () => {

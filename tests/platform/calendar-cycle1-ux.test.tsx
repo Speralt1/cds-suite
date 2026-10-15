@@ -210,14 +210,14 @@ describe("B1 · Reporte: Fecha y Hora no se pegan", () => {
   });
 });
 
-describe("B2 · «+ Crear» flotante en móvil", () => {
-  it("en móvil, quien puede crear ve «Crear» (nombre accesible «Crear actividad») y abre el formulario", () => {
+describe("B2 · «+ Nueva» flotante en móvil", () => {
+  it("en móvil, quien puede crear ve «Nueva» (nombre accesible «Nueva actividad») y abre el formulario", () => {
     mockMedia(true);
     render(<CalendarScreen />);
     const fab = document.querySelector<HTMLButtonElement>(".cal-fab");
     expect(fab).not.toBeNull();
-    expect(fab).toHaveAccessibleName("Crear actividad");
-    expect(fab?.textContent?.trim()).toBe("Crear");
+    expect(fab).toHaveAccessibleName("Nueva actividad");
+    expect(fab?.textContent?.trim()).toBe("Nueva");
     expect(fab?.closest(".cal-screen")).toHaveClass("has-fab");
     fireEvent.click(fab as HTMLButtonElement);
     expect(screen.getByRole("dialog", { name: "Nueva actividad" })).toBeInTheDocument();

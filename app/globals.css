@@ -3425,7 +3425,7 @@ button:disabled {
   gap: 6px;
   color: var(--color-muted);
 }
-.offering-area-warning {
+.offering-area-pending {
   display: inline-flex;
   align-items: center;
   gap: 4px;

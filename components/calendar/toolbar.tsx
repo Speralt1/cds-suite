@@ -243,8 +243,9 @@ export function CalendarToolbar({
   prevLabel: string;
   nextLabel: string;
   filter: React.ReactNode;
+  /** Muestra "Nueva actividad" (≥768; en móvil la reemplaza el botón flotante). */
   canCreate: boolean;
-  /** Si hay texto, "Crear actividad" queda aria-disabled con esta explicación (p. ej. sin conexión). */
+  /** Si hay texto, "Nueva actividad" queda aria-disabled con esta explicación (p. ej. sin conexión). */
   createDisabledReason?: string;
   onCreate: () => void;
   canShare: boolean;
@@ -286,7 +287,7 @@ export function CalendarToolbar({
             aria-describedby={createDisabledReason ? helpId : undefined}
             onClick={() => !createDisabledReason && onCreate()}
           >
-            <Plus size={16} aria-hidden="true" /> Crear actividad
+            <Plus size={16} aria-hidden="true" /> Nueva actividad
           </button>
           {createDisabledReason && (
             <span className="cal-sr" id={helpId}>
