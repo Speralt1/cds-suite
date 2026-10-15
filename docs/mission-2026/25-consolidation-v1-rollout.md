@@ -52,6 +52,8 @@ Entre el 14 y el 15/10 se desplegaron C-A1 completo (C-A1.2–C-A1.6), R2 (R2.1�
 
 ### 1.1 C-A0 preparado (NO ejecutado; espera el GO de C-A0)
 
+> **Vigente:** los valores esperados de producción y los montos son los del §0 (Rules `80a69cd5…`, Hosting `0a6ab8858afd6a23`, 6 Functions, 7 índices, baseline A10 r2 + A6 0 STOP). La tabla de commits de abajo es histórica.
+
 Commits exactos a verificar al iniciar C-A0 (`git fetch` + `gh pr view`):
 
 | Pieza | Commit esperado |
@@ -64,8 +66,8 @@ Commits exactos a verificar al iniciar C-A0 (`git fetch` + `gh pr view`):
 Checklist de C-A0, en orden (cada ítem deja evidencia en el doc 21, sin PII):
 1. **Commits:** los heads de PR #5 y PR #7 coinciden con la tabla; ambos PR en Draft, sin commits nuevos no revisados.
 2. **A5:** último reporte de `~/cds-ops/a5-check.mjs` sin STOP (y uno nuevo corrido al iniciar C-A0).
-3. **Snapshot de solo lectura** (`~/cds-ops/prod-snap.sh`): ruleset, versión de Hosting, `functions:list`, índices = la fila "Producción hoy". Se anotan como **objetivos de rollback**.
-4. **Montos = baseline A9 post-CASH** (ene–sep 34.752.315 / 6.910.000 / diezmos 3.126.397 / 6.387 movs; `~/cds-ops/baseline-a9.json`), resumen de octubre = ledger 9/9 y `~/cds-ops/r0g-fin-snap.mjs snap` como foto previa. Las escrituras `system:sumup` de la ventana se aceptan solo si son creaciones legítimas (rev 1, nunca modificadas, autor `system:sumup`, activas).
+3. **Snapshot de solo lectura** (`~/cds-ops/prod-snap.sh`): ruleset, versión de Hosting, `functions:list`, índices = los valores del §0 (**STOP si difieren**). Se anotan como **objetivos de rollback**.
+4. **Montos = baseline A10 r2 aprobado** (`~/cds-ops/baseline-a10-20261014-r2.json`) + deltas explicados por A6 (0 STOP) y ledger = resúmenes 9/9. *Histórico:* baseline A9 post-CASH (ene–sep 34.752.315 / 6.910.000 / diezmos 3.126.397 / 6.387 movs; `~/cds-ops/baseline-a9.json`), resumen de octubre = ledger 9/9 y `~/cds-ops/r0g-fin-snap.mjs snap` como foto previa. Las escrituras `system:sumup` de la ventana se aceptan solo si son creaciones legítimas (rev 1, nunca modificadas, autor `system:sumup`, activas).
 5. **Backup** (solo con el GO de C-A0): `gcloud firestore export gs://cds-administracion-backups/pre-consolidacion-$(date +%Y%m%d-%H%M) --project cds-administracion` → SUCCESSFUL.
 6. **Decisiones:** D1–D5 y la excepción de eliminación registradas (esta sección).
 7. **Gates del §2** en un checkout limpio de los commits exactos.
@@ -83,7 +85,7 @@ Se mantienen **intactos** y siguen siendo STOP: montos y summaries vs. baseline,
 
 ## 2. Gates que deben estar en verde en el commit exacto
 
-En un **checkout limpio** del commit a desplegar (`~/cds-deploy`):
+En un **checkout limpio** del commit a desplegar (`~/cds-deploy-r2`, §0):
 
 ```bash
 npm ci && npm --prefix functions ci
@@ -115,7 +117,7 @@ Reglas comunes: cada fase que despliega (C-A3, C-A4, C-A5, C-A6) empieza en `~/c
 |---|---|---|---|---|---|
 | **C-A0 · Backup, snapshot, A5** | `gcloud firestore export gs://cds-administracion-backups/pre-consolidacion-$(date +%Y%m%d-%H%M) --project cds-administracion` · snapshot de solo lectura (ruleset, versión de Hosting, `functions:list`, índices) · correr `~/cds-ops/a5-check.mjs` | Export SUCCESSFUL; producción = valores del §0 (Rules `80a69cd5…`, Hosting `0a6ab8858afd6a23`, las 6 Functions del §0, 7 índices READY: **STOP si difieren**; histórico: `a312c96`, `2d9939ab…`, `3d1dc8bc8d1bcc29`, `-00007-wut/-00008-nek/-00002-dij`); A5 sin STOP; **montos = baseline A10 r2 + A6 sin STOP** (histórico: baseline A9) | Todo OK y D1–D5 resueltos | Export falla, A5 con STOP, producción distinta | Nada cambió |
 | **C-A1 · Etapa B (PR #5)** · *HECHO (14/10), ver §0; fila histórica* | Fases 0–5 del doc 20 §13 (índice de calendario, reglas RC1, **Functions de calendario por nombre** — `calendarPublicFeed`, `calendarShareLinkManage` —, Hosting RC1, smoke). **Sin** Fases 6–7 (migración) salvo GO aparte | Las del doc 20 (Finanzas idéntico, modal de efectivo R0G y aviso SumUp CASH intactos, calendario OK; `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`, `campaignshare-00002-dij` **sin cambio**) | Smoke del doc 20 Fase 5 PASS | Cualquier diferencia en Finanzas | Doc 20 §14 |
-| **C-A2 · Smoke Platform + Calendar** · *Admin PASS; Pastor, Pastora y Líder PENDIENTE (§0)* | Admin y pastor, solo lectura | Finanzas: montos = baseline A10 r2 (histórico: A9 post-CASH); Calendario visible; **Integrantes NO aparece** (aún no hay Hosting de Consolidación); 0 DENY nuevos | Todo igual | Diferencias | Doc 20 §14 |
+| **C-A2 · Smoke Platform + Calendar** · *Admin PASS; Pastor, Pastora y Líder PENDIENTE (§0)* | Admin y pastor, solo lectura | Finanzas: montos = baseline A10 r2 (histórico: A9 post-CASH); Calendario visible; **Integrantes NO aparece** (aún no hay Hosting de Consolidación); 0 DENY nuevos | Todo igual | Diferencias | Nada que revertir (solo lectura): STOP y reporte |
 | **C-A2.5 · Merge del PR de Consolidación** | Con PR #5 ya mergeado: cambiar la base del PR de Consolidación a `feature/preproduccion-mobile-v1`, verificar que el diff muestre solo Consolidación, mergear (merge commit) | `git diff --stat <merge> <head-de-la-rama>` vacío | Diff vacío | Diff no vacío | `git revert -m 1` |
 | **C-A3 · Índices** *(adelantado: ver §4)* | `./node_modules/.bin/firebase deploy --only firestore:indexes --project cds-administracion` | `firebase firestore:indexes` lista los 3 índices `members*`; en la consola pasan a **Habilitado** | 3 índices READY | El CLI propone **borrar** índices → responder **No** y STOP | No hace falta (aditivos, sin datos) |
 | **C-A4 · Rules de Consolidación** | `./node_modules/.bin/firebase deploy --only firestore:rules --project cds-administracion` | Ruleset nuevo = `firestore.rules` del commit (byte a byte). Simulación de reglas (API `:test`): admin lee `membersPeople`; pastor legacy, leader y finance **no**; nadie escribe. Finanzas: smoke admin + pastor sin DENY nuevos | Simulación esperada y 0 DENY nuevos | Cualquier DENY en Finanzas o Calendario | R4: restaurar `80a69cd5-a2b4-413e-803e-193b5205c3b0` (consola › Reglas › historial; §0) |
