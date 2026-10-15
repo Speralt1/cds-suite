@@ -5,7 +5,7 @@ import type { FinanceTransaction, TitheAttribution } from "./types";
 // Date SumUp started separating Ofrendas y Cafetería into different
 // merchants. Before this date every SumUp charge lands in the shared
 // "SumUp histórico sin separar" category and never counts toward the
-// "Falta efectivo" check for either area.
+// "Efectivo pendiente" check for either area.
 export const SPLIT = "2026-09-09";
 
 export const CASH_AREAS = ["Ofrendas", "Cafetería"] as const;
@@ -159,7 +159,7 @@ export interface DayStatus {
   isWorshipDay: boolean;
   isToday: boolean;
   isFuture: boolean;
-  missingCashAreas: CashAreaLabel[];
+  pendingCashAreas: CashAreaLabel[];
   noRecords: boolean;
   calendarCash: number;
   totalIncome: number;
@@ -183,7 +183,10 @@ export function dayStatus(
 
   const dayIncome = activeIncome(transactions, date);
 
-  const missingCashAreas: CashAreaLabel[] = [];
+  // "Efectivo pendiente": SumUp registered sales of the area and no cash of
+  // that area is registered yet. Neutral state (not an error): the cash is
+  // usually counted and registered after the service.
+  const pendingCashAreas: CashAreaLabel[] = [];
   if (date >= SPLIT && date <= todayStr) {
     for (const area of CASH_AREAS) {
       const sumUp = sumWhere(
@@ -197,7 +200,7 @@ export function dayStatus(
         dayIncome,
         (t) => t.category === area && t.paymentMethod === "cash",
       );
-      if (sumUp > 0 && cash === 0) missingCashAreas.push(area);
+      if (sumUp > 0 && cash === 0) pendingCashAreas.push(area);
     }
   }
 
@@ -218,9 +221,9 @@ export function dayStatus(
   const totalIncome = dayIncome.reduce((sum, t) => sum + t.amount, 0);
 
   let statusLabel = "";
-  if (missingCashAreas.length === 2) statusLabel = "Falta efectivo · 2 áreas";
-  else if (missingCashAreas.length === 1)
-    statusLabel = `Falta efectivo · ${missingCashAreas[0]}`;
+  if (pendingCashAreas.length === 2) statusLabel = "Pendiente · 2 áreas";
+  else if (pendingCashAreas.length === 1)
+    statusLabel = `Pendiente · ${pendingCashAreas[0]}`;
   else if (noRecords) statusLabel = "Sin registros";
   else if (!isFuture && calendarCash > 0) statusLabel = clpShort(calendarCash);
 
@@ -230,7 +233,7 @@ export function dayStatus(
     isWorshipDay,
     isToday,
     isFuture,
-    missingCashAreas,
+    pendingCashAreas,
     noRecords,
     calendarCash,
     totalIncome,
@@ -280,7 +283,7 @@ export function buildMonthCalendar(
 
 export interface ReviewItem {
   date: string;
-  kind: "missing-cash" | "no-records";
+  kind: "cash-pending" | "no-records";
   area?: CashAreaLabel;
   label: string;
 }
@@ -303,12 +306,12 @@ export function reviewDays(
   );
   const items: ReviewItem[] = [];
   for (const d of days) {
-    for (const area of d.missingCashAreas)
+    for (const area of d.pendingCashAreas)
       items.push({
         date: d.date,
-        kind: "missing-cash",
+        kind: "cash-pending",
         area,
-        label: `Falta efectivo · ${area}`,
+        label: `Efectivo pendiente · ${area}`,
       });
     if (d.noRecords)
       items.push({
@@ -321,26 +324,27 @@ export function reviewDays(
 }
 
 export interface DayWarning {
-  kind: "missing-cash" | "no-records";
+  kind: "cash-pending" | "no-records";
   area?: CashAreaLabel;
-  /** "Falta efectivo · Ofrendas" | "Sin registros". */
+  /** "Efectivo pendiente · Ofrendas" | "Sin registros". */
   label: string;
-  /** SumUp bruto of `area` on that day (missing-cash only; 0 otherwise). */
+  /** SumUp bruto of `area` on that day (cash-pending only; 0 otherwise). */
   sumUpAmount: number;
   /** Movements behind the warning (the area's SumUp charges of that day). */
   transactions: FinanceTransaction[];
 }
 
-// Warning cards of the day panel (28 §C2 "Panel del día"). Purely derived
+// Pending items of a day (28 §C2 "Panel del día", R2.5). Purely derived
 // from `dayStatus` (same rules as the calendar cell and `reviewDays`): one
-// card per missing-cash area, or one "Sin registros" card. Additive selector,
-// no new rule.
+// item per cash-pending area ("Efectivo pendiente · {área}"), or one
+// "Sin registros" item. The day panel only counts them (sr announcement);
+// it never lists the individual movements. Additive selector, no new rule.
 export function dayWarnings(
   day: DayStatus,
   transactions: FinanceTransaction[],
 ): DayWarning[] {
   const dayIncome = activeIncome(transactions, day.date);
-  const warnings: DayWarning[] = day.missingCashAreas.map((area) => {
+  const warnings: DayWarning[] = day.pendingCashAreas.map((area) => {
     const sumUp = dayIncome.filter(
       (t) =>
         t.category === area &&
@@ -348,9 +352,9 @@ export function dayWarnings(
         isSumUpTransaction(t.id, t.createdBy),
     );
     return {
-      kind: "missing-cash",
+      kind: "cash-pending",
       area,
-      label: `Falta efectivo · ${area}`,
+      label: `Efectivo pendiente · ${area}`,
       sumUpAmount: sumUp.reduce((sum, t) => sum + t.amount, 0),
       transactions: sumUp,
     };

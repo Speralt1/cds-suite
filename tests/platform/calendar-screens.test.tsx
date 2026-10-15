@@ -118,7 +118,7 @@ beforeEach(() => {
 describe("Calendario › formulario", () => {
   it("el líder solo puede elegir sus áreas activas como responsable", () => {
     render(<CalendarScreen />);
-    fireEvent.click(screen.getAllByRole("button", { name: /Crear actividad/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Nueva actividad/ })[0]);
     const dialog = screen.getByRole("dialog", { name: "Nueva actividad" });
     const select = within(dialog).getByLabelText(/Área responsable/) as HTMLSelectElement;
     expect([...select.options].map((o) => o.textContent)).toEqual(["Alabanza", "Jóvenes"]);
@@ -126,7 +126,7 @@ describe("Calendario › formulario", () => {
 
   it("sin permiso de publicar, «Pública» queda aria-disabled con la explicación visible", () => {
     render(<CalendarScreen />);
-    fireEvent.click(screen.getAllByRole("button", { name: /Crear actividad/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Nueva actividad/ })[0]);
     const dialog = screen.getByRole("dialog", { name: "Nueva actividad" });
     const pub = within(dialog).getByRole("radio", { name: /Pública/ });
     expect(pub).toHaveAttribute("aria-disabled", "true");
@@ -141,7 +141,7 @@ describe("Calendario › formulario", () => {
   it("con permiso de publicar, «Pública» se puede elegir", () => {
     h.user = { ...LEADER, permissions: [...(LEADER.permissions as string[]), "calendar.events.publish_assigned"] };
     render(<CalendarScreen />);
-    fireEvent.click(screen.getAllByRole("button", { name: /Crear actividad/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Nueva actividad/ })[0]);
     const pub = within(screen.getByRole("dialog")).getByRole("radio", { name: /Pública/ });
     expect(pub).not.toHaveAttribute("aria-disabled");
     fireEvent.click(pub);
@@ -375,7 +375,7 @@ describe("Copy de producción", () => {
     h.events = [ev(), ev({ id: "s", title: "Culto", recurrence: { freq: "weekly", until: "2026-12-27" }, lastDate: "2026-12-27" })];
     render(<CalendarScreen />);
     expect(document.body.textContent).not.toMatch(FORBIDDEN);
-    fireEvent.click(screen.getAllByRole("button", { name: /Crear actividad/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Nueva actividad/ })[0]);
     expect(document.body.textContent).not.toMatch(FORBIDDEN);
     const dir = path.join(process.cwd(), "components/calendar");
     for (const file of fs.readdirSync(dir).filter((f) => /\.(tsx?|css)$/.test(f))) {

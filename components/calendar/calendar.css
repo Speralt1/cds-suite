@@ -1062,6 +1062,13 @@
 .cds-calendar .cal-day-empty {
   padding: 0.25rem 0 0.75rem;
 }
+/* "Nueva actividad este día" bajo el encabezado del día (móvil): ancho completo, 44 px. */
+.cds-calendar .cal-day-create.is-block {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  margin: 0.25rem 0 0.75rem;
+}
 
 /* ---------- Semana ---------- */
 .cds-calendar .cal-week {
@@ -1913,13 +1920,17 @@
   .cds-calendar .cal-nav .cal-btn-icon {
     width: 44px;
   }
+  /* R2.5: el selector de vista ocupa su propia fila. Antes compartía la fila
+     con "Áreas (Todas)" y "…": a 375 px "Mes" quedaba tapado (132 px de
+     contenido en 125 px al 100 %; 163 en 87 px al 125 %). */
   .cds-calendar .cal-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
   }
   .cds-calendar .cal-view-switch {
     display: grid;
+    grid-column: 1 / -1;
     grid-template-columns: 1fr 1fr;
   }
   .cds-calendar .cal-view-switch button {
@@ -2123,7 +2134,7 @@
   white-space: nowrap;
 }
 
-/* "+ Crear" flotante (solo se monta en móvil y si el usuario puede crear). */
+/* "+ Nueva" flotante (solo se monta en móvil y si el usuario puede crear). */
 .cds-calendar .cal-fab {
   display: none;
 }

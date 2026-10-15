@@ -4,7 +4,7 @@
 // estado, leyenda, grilla con roving tabindex, panel del día en línea (≥52rem)
 // o en un diálogo (modo apilado) y "Días por revisar" debajo en modo apilado.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
-import { ChevronDown, CircleCheck, CircleDashed, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, CircleCheck, CircleDashed, Clock3, X } from "lucide-react";
 import { clp, clpShort } from "@/lib/finance/formatters";
 import type { DayStatus, MonthCalendar, ReviewItem } from "@/lib/finance/insights";
 import { MONTHS } from "@/lib/finance/constants";
@@ -67,23 +67,25 @@ function useStackedLayout(ref: RefObject<HTMLElement | null>) {
   return stacked;
 }
 
-/** aria-label de la celda: "sábado 3 de octubre, hoy, día de culto, falta efectivo de Ofrendas, 1 advertencia". */
+/** aria-label de la celda: "sábado 3 de octubre, hoy, día de culto, efectivo pendiente de confirmar en Ofrendas, 1 pendiente". */
 export function cellLabel(day: DayStatus) {
   const parts = [longDayLabel(day.date)];
   if (day.isToday) parts.push("hoy");
   if (day.isWorshipDay) parts.push("día de culto");
-  if (day.missingCashAreas.length)
-    parts.push(`falta efectivo de ${day.missingCashAreas.join(" y ")}`);
+  if (day.pendingCashAreas.length)
+    parts.push(`efectivo pendiente de confirmar en ${day.pendingCashAreas.join(" y ")}`);
   if (day.noRecords) parts.push("sin registros de Ofrendas ni Cafetería");
   if (!day.isFuture && day.calendarCash > 0)
     parts.push(`efectivo registrado ${clp(day.calendarCash)}`);
-  const warnings = day.missingCashAreas.length + (day.noRecords ? 1 : 0);
-  if (warnings) parts.push(plural(warnings, "advertencia", "advertencias"));
+  const pending = day.pendingCashAreas.length + (day.noRecords ? 1 : 0);
+  if (pending) parts.push(plural(pending, "pendiente", "pendientes"));
   return parts.join(", ");
 }
 
+// Prioridad del chip: pendiente > sin registros. El monto de efectivo
+// registrado puede convivir con el pendiente (la otra área sí tiene efectivo).
 function CellContent({ day }: { day: DayStatus }) {
-  const missing = day.missingCashAreas.length;
+  const pending = day.pendingCashAreas.length;
   const showCash = !day.isFuture && day.calendarCash > 0;
   return (
     <>
@@ -91,13 +93,13 @@ function CellContent({ day }: { day: DayStatus }) {
         <span className="fin-cal-num">{Number(day.date.slice(8, 10))}</span>
         {day.isWorshipDay && <span className="fin-cal-worship">Culto</span>}
       </span>
-      {missing > 0 ? (
+      {pending > 0 ? (
         <span className="fin-cal-chip">
-          <TriangleAlert aria-hidden="true" />
+          <Clock3 aria-hidden="true" />
           <span className="fin-cal-chip-full">
-            Falta efectivo · {missing === 2 ? "2 áreas" : day.missingCashAreas[0]}
+            Pendiente · {pending === 2 ? "2 áreas" : day.pendingCashAreas[0]}
           </span>
-          <span className="fin-cal-chip-mid">Falta</span>
+          <span className="fin-cal-chip-mid">Pendiente</span>
         </span>
       ) : day.noRecords ? (
         <span className="fin-cal-chip">
@@ -196,7 +198,7 @@ export function CashCalendarGrid({
                       "fin-cal-cell",
                       day.isToday && "is-today",
                       day.isFuture && "is-future",
-                      day.missingCashAreas.length ? "has-warning" : day.noRecords && "has-empty",
+                      day.pendingCashAreas.length ? "has-pending" : day.noRecords && "has-empty",
                       !day.isFuture && day.calendarCash > 0 && "has-cash",
                     ]
                       .filter(Boolean)
@@ -242,10 +244,10 @@ export function CashCalendarLegend() {
       </button>
       <ul id={listId} className="fin-cal-legend-list" aria-label="Leyenda del calendario">
         <li>
-          <span className="fin-cal-legend-sample is-warning" aria-hidden="true">
-            <TriangleAlert size={16} />
+          <span className="fin-cal-legend-sample is-pending" aria-hidden="true">
+            <Clock3 size={16} />
           </span>
-          Falta efectivo: SumUp registró cobros y no hay efectivo del área
+          Efectivo pendiente: SumUp registró ventas y aún no hay efectivo registrado del área
         </li>
         <li>
           <span className="fin-cal-legend-sample is-empty" aria-hidden="true">
@@ -371,7 +373,7 @@ export interface CashCalendarSectionProps {
   onSelect: (date: string) => void;
   /** Solo con finance.records.manage. */
   onRegisterCash?: (area: CashArea, date: string) => void;
-  /** Vista Diario de esa fecha ("Revisar movimientos"). */
+  /** Vista Diario de esa fecha ("Ver movimientos del día"). */
   onViewDay: (date: string) => void;
 }
 
@@ -448,10 +450,10 @@ export function CashCalendarSection({
             Montos: efectivo de Ofrendas y Cafetería. Toca un día para ver el detalle y los diezmos.
           </p>
           {review.length ? (
-            <button type="button" className="fin-cal-status is-warning" onClick={reviewFirst}>
-              <TriangleAlert size={16} aria-hidden="true" />
+            <button type="button" className="fin-cal-status is-pending" onClick={reviewFirst}>
+              <Clock3 size={16} aria-hidden="true" />
               <span>
-                {plural(review.length, "advertencia", "advertencias")} en{" "}
+                {plural(review.length, "pendiente", "pendientes")} en{" "}
                 {plural(reviewDates.length, "día", "días")} ·{" "}
                 <span className="fin-cal-status-action">Revisar</span>
               </span>
@@ -479,8 +481,8 @@ export function CashCalendarSection({
               <ul className="fin-review-list">
                 {visibleReview.map((item) => (
                   <li key={`${item.date}-${item.kind}-${item.area || ""}`}>
-                    {item.kind === "missing-cash" ? (
-                      <TriangleAlert size={16} aria-hidden="true" />
+                    {item.kind === "cash-pending" ? (
+                      <Clock3 size={16} aria-hidden="true" />
                     ) : (
                       <CircleDashed size={16} aria-hidden="true" />
                     )}
@@ -504,7 +506,7 @@ export function CashCalendarSection({
                   className="button-secondary fin-review-more"
                   onClick={() => setShowAllReview(true)}
                 >
-                  Ver las {review.length} advertencias
+                  Ver los {review.length} pendientes
                 </button>
               )}
             </div>

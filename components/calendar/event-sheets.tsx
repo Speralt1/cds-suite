@@ -17,7 +17,7 @@ import type { CalendarBase } from "./use-calendar-base";
 type Mode =
   | { kind: "none" }
   | { kind: "detail"; key: string }
-  | { kind: "form"; eventId: string | null; returnKey?: string }
+  | { kind: "form"; eventId: string | null; returnKey?: string; date?: Ymd }
   | { kind: "cancel"; key: string }
   | { kind: "archive"; key: string }
   | { kind: "publish"; key: string }
@@ -25,7 +25,8 @@ type Mode =
 
 export interface EventSheetsApi {
   openDetail: (o: Occurrence) => void;
-  openCreate: () => void;
+  /** Abre el formulario de nueva actividad; `date` prellena la fecha (editable). */
+  openCreate: (date?: Ymd) => void;
   openEdit: (o: Occurrence) => void;
   openCancel: (o: Occurrence) => void;
   openArchive: (o: Occurrence) => void;
@@ -78,11 +79,12 @@ export function useEventSheets({
     );
   } else if (mode.kind === "form" && (!mode.eventId || formEvent)) {
     const returnKey = mode.returnKey;
+    const formDate = mode.date ?? defaultDate;
     sheets = (
       <EventFormSheet
         key={mode.eventId ?? "new"}
         event={formEvent}
-        defaultDate={defaultDate}
+        defaultDate={formDate}
         actor={actor}
         areas={areas}
         today={today}
@@ -123,7 +125,7 @@ export function useEventSheets({
 
   return {
     openDetail: useCallback((o: Occurrence) => setMode({ kind: "detail", key: o.key }), []),
-    openCreate: useCallback(() => setMode({ kind: "form", eventId: null }), []),
+    openCreate: useCallback((date?: Ymd) => setMode({ kind: "form", eventId: null, date }), []),
     openEdit,
     openCancel: useCallback((o: Occurrence) => setMode({ kind: "cancel", key: o.key }), []),
     openArchive: useCallback((o: Occurrence) => setMode({ kind: "archive", key: o.key }), []),

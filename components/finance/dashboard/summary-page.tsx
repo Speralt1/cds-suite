@@ -367,8 +367,8 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
 
   function defaultCashArea(): CashArea {
     const status = dayStatus(today(), dailyTransactions.data, today(), WORSHIP_WEEKDAYS);
-    return status.missingCashAreas.length
-      ? AREA_TO_KEY[status.missingCashAreas[0]]
+    return status.pendingCashAreas.length
+      ? AREA_TO_KEY[status.pendingCashAreas[0]]
       : "offerings";
   }
 
@@ -387,7 +387,7 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
   const dailyBandReady =
     !dailySummaries.loading && !(details && dailyTransactions.loading) && !dailySummaries.error;
 
-  // "Revisar movimientos" switches to Diario and unmounts the calendar: the
+  // "Ver movimientos del día" switches to Diario and unmounts the calendar: the
   // focus moves to the Diario band title once it is rendered (not the skeleton).
   // If the Diario band fails to load, the focus falls back to the pressed
   // "Diario" toggle (the error Notice itself is not focusable).

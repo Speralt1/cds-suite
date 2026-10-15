@@ -94,10 +94,10 @@ describe("incomeByMethod", () => {
   });
 });
 
-describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
+describe("dayStatus — Efectivo pendiente (SPLIT = 2026-09-09)", () => {
   const today = "2026-09-22";
 
-  it("flags Falta efectivo when SumUp has income and cash is 0, on/after the split, up to today", () => {
+  it("flags Efectivo pendiente when SumUp has income and cash is 0, on/after the split, up to today", () => {
     const status = dayStatus(
       "2026-09-16",
       [
@@ -105,11 +105,11 @@ describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
       ],
       today,
     );
-    expect(status.missingCashAreas).toEqual(["Cafetería"]);
-    expect(status.statusLabel).toBe("Falta efectivo · Cafetería");
+    expect(status.pendingCashAreas).toEqual(["Cafetería"]);
+    expect(status.statusLabel).toBe("Pendiente · Cafetería");
   });
 
-  it("does not flag Falta efectivo when cash was also registered that day", () => {
+  it("does not flag Efectivo pendiente when cash was also registered that day", () => {
     const status = dayStatus(
       "2026-09-16",
       [
@@ -118,10 +118,10 @@ describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
       ],
       today,
     );
-    expect(status.missingCashAreas).toEqual([]);
+    expect(status.pendingCashAreas).toEqual([]);
   });
 
-  it("flags both areas as 'Falta efectivo · 2 áreas' on 2026-09-13", () => {
+  it("flags both areas as 'Pendiente · 2 áreas' on 2026-09-13", () => {
     const status = dayStatus(
       "2026-09-13",
       [
@@ -130,11 +130,11 @@ describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
       ],
       today,
     );
-    expect(status.missingCashAreas).toEqual(["Ofrendas", "Cafetería"]);
-    expect(status.statusLabel).toBe("Falta efectivo · 2 áreas");
+    expect(status.pendingCashAreas).toEqual(["Ofrendas", "Cafetería"]);
+    expect(status.statusLabel).toBe("Pendiente · 2 áreas");
   });
 
-  it("never flags Falta efectivo before the split date (2026-09-09)", () => {
+  it("never flags Efectivo pendiente before the split date (2026-09-09)", () => {
     const status = dayStatus(
       "2026-09-08",
       [
@@ -142,7 +142,7 @@ describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
       ],
       today,
     );
-    expect(status.missingCashAreas).toEqual([]);
+    expect(status.pendingCashAreas).toEqual([]);
   });
 
   it("flags exactly on the split date, 2026-09-09", () => {
@@ -153,10 +153,10 @@ describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
       ],
       today,
     );
-    expect(status.missingCashAreas).toEqual(["Ofrendas"]);
+    expect(status.pendingCashAreas).toEqual(["Ofrendas"]);
   });
 
-  it("does not flag Falta efectivo for a future day (2026-09-20 relative to an earlier today)", () => {
+  it("does not flag Efectivo pendiente for a future day (2026-09-20 relative to an earlier today)", () => {
     const status = dayStatus(
       "2026-09-20",
       [
@@ -165,7 +165,7 @@ describe("dayStatus — Falta efectivo (SPLIT = 2026-09-09)", () => {
       "2026-09-18",
     );
     expect(status.isFuture).toBe(true);
-    expect(status.missingCashAreas).toEqual([]);
+    expect(status.pendingCashAreas).toEqual([]);
     expect(status.statusLabel).toBe("");
   });
 });
@@ -325,7 +325,7 @@ describe("buildMonthCalendar / reviewDays", () => {
     const dates = review.map((r) => r.date);
     expect(dates).toEqual([...dates].sort());
     expect(review.some((r) => r.kind === "no-records" && r.date === "2026-09-02")).toBe(true);
-    expect(review.some((r) => r.kind === "missing-cash" && r.date === "2026-09-16")).toBe(true);
-    expect(review.some((r) => r.kind === "missing-cash" && r.date === "2026-09-20")).toBe(true);
+    expect(review.some((r) => r.kind === "cash-pending" && r.date === "2026-09-16")).toBe(true);
+    expect(review.some((r) => r.kind === "cash-pending" && r.date === "2026-09-20")).toBe(true);
   });
 });
