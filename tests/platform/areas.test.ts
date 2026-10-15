@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  AREA_COLOR_DISPLAY_ORDER,
   AREA_COLORS,
   AREA_ERRORS,
   AREA_PALETTE,
@@ -55,19 +56,60 @@ const AREAS: Area[] = [
 ];
 
 describe("paleta de áreas", () => {
-  it("tiene exactamente los 10 colores cerrados con nombre en español y tonos hex", () => {
+  it("tiene exactamente los 24 colores cerrados con nombre en español y tonos hex", () => {
     expect(Object.keys(AREA_PALETTE).sort()).toEqual([...AREA_COLORS].sort());
-    expect(AREA_COLORS).toHaveLength(10);
+    expect(AREA_COLORS).toHaveLength(24);
     const labels = new Set<string>();
     for (const color of AREA_COLORS) {
+      expect(color).toMatch(/^[a-z]+$/);
       const tone = AREA_PALETTE[color];
       expect(tone.label).toMatch(/^[A-ZÁÉÍÓÚÑ]/);
       labels.add(tone.label);
       for (const part of [tone.swatch, tone.ink, tone.soft]) expect(part).toMatch(/^#[0-9a-f]{6}$/);
     }
-    expect(labels.size).toBe(10);
+    expect(labels.size).toBe(24);
     expect(AREA_PALETTE.teal.label).toBe("Verde azulado");
     expect(AREA_PALETTE.carmin.label).toBe("Carmín");
+    expect(AREA_PALETTE.petroleo.label).toBe("Petróleo");
+  });
+
+  it("conserva los 10 colores originales: mismas claves, orden y tonos (datos guardados)", () => {
+    expect(AREA_COLORS.slice(0, 10)).toEqual(["azul", "indigo", "naranjo", "ambar", "frambuesa", "cafe", "teal", "pizarra", "verde", "carmin"]);
+    expect(AREA_PALETTE.azul).toEqual({ label: "Azul", swatch: "#2f6fb0", ink: "#245a8f", soft: "#e6eef7" });
+    expect(AREA_PALETTE.indigo).toEqual({ label: "Índigo", swatch: "#5b5fc7", ink: "#464aa6", soft: "#ebebf8" });
+    expect(AREA_PALETTE.naranjo).toEqual({ label: "Naranjo", swatch: "#c4561d", ink: "#a3461a", soft: "#f8ebe3" });
+    expect(AREA_PALETTE.ambar).toEqual({ label: "Ámbar", swatch: "#a06a00", ink: "#7d5300", soft: "#f5eedf" });
+    expect(AREA_PALETTE.frambuesa).toEqual({ label: "Frambuesa", swatch: "#b03a8a", ink: "#8f2e70", soft: "#f5e7f1" });
+    expect(AREA_PALETTE.cafe).toEqual({ label: "Café", swatch: "#8a5a3c", ink: "#6e4529", soft: "#f1ebe7" });
+    expect(AREA_PALETTE.teal).toEqual({ label: "Verde azulado", swatch: "#1f7f86", ink: "#17646a", soft: "#e3f0f1" });
+    expect(AREA_PALETTE.pizarra).toEqual({ label: "Pizarra", swatch: "#5e6b78", ink: "#4a5560", soft: "#edeff1" });
+    expect(AREA_PALETTE.verde).toEqual({ label: "Verde", swatch: "#3d8a3f", ink: "#2e6e30", soft: "#e7f1e7" });
+    expect(AREA_PALETTE.carmin).toEqual({ label: "Carmín", swatch: "#b83a4b", ink: "#962d3c", soft: "#f6e7e9" });
+  });
+
+  it("cumple contraste WCAG: swatch ≥3:1 sobre blanco; tinta ≥4,5:1 sobre blanco y sobre su fondo suave", () => {
+    const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16) / 255));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    for (const color of AREA_COLORS) {
+      const { swatch, ink, soft } = AREA_PALETTE[color];
+      expect(ratio(swatch, "#ffffff"), `${color} swatch`).toBeGreaterThanOrEqual(3);
+      expect(ratio(ink, "#ffffff"), `${color} ink`).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(ink, soft), `${color} ink/soft`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("orden de presentación: los 24 colores por tono, sin repetir, con Pizarra al final", () => {
+    expect([...AREA_COLOR_DISPLAY_ORDER].sort()).toEqual([...AREA_COLORS].sort());
+    expect(new Set(AREA_COLOR_DISPLAY_ORDER).size).toBe(24);
+    expect(AREA_COLOR_DISPLAY_ORDER[0]).toBe("carmin");
+    expect(AREA_COLOR_DISPLAY_ORDER.at(-1)).toBe("pizarra");
   });
 
   it("expone tokens CSS con respaldo hex", () => {
@@ -143,7 +185,9 @@ describe("freeColors / selectableAreas / orden", () => {
     expect(free).not.toContain("azul");
     expect(free).not.toContain("verde");
     expect(free).toContain("carmin");
-    expect(free).toHaveLength(8);
+    expect(free).toHaveLength(22);
+    // En el orden de presentación (por tono), no en el de almacenamiento.
+    expect(free).toEqual(AREA_COLOR_DISPLAY_ORDER.filter((c) => c !== "azul" && c !== "verde"));
     expect(freeColors(AREAS, "jovenes")).toContain("azul");
   });
 

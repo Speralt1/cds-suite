@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Area } from "@/lib/shared/types";
+import { AREA_COLORS, type Area } from "@/lib/shared/types";
 import type { ManagedUser } from "@/lib/settings/users";
 
 const state = vi.hoisted(() => ({
@@ -111,11 +111,14 @@ describe("Configuración › Áreas", () => {
     const dialog = openDialog("Nueva área");
     const radios = within(dialog).getAllByRole("radio");
     const labels = radios.map((r) => r.closest("label")?.textContent);
-    expect(radios).toHaveLength(8);
+    expect(radios).toHaveLength(22);
+    // Por tono: Carmín, Burdeo, Rosado… y Pizarra al final.
+    expect(labels.slice(0, 3)).toEqual(["Carmín", "Burdeo", "Rosado"]);
+    expect(labels.at(-1)).toBe("Pizarra");
     expect(labels).not.toContain("Azul");
     expect(labels).not.toContain("Verde");
     expect(labels).toContain("Carmín");
-    expect(within(dialog).getByText("Los demás colores están en uso por otras áreas activas.")).toBeVisible();
+    expect(within(dialog).getByText("Cada área activa tiene un color distinto. Disponibles: 22 de 24.")).toBeVisible();
     expect(within(dialog).getByText("Carmín: libre (lo usaba Matrimonios, inactiva).")).toBeVisible();
     expect(within(dialog).getByText("Así se verá:")).toBeVisible();
   });
@@ -144,8 +147,7 @@ describe("Configuración › Áreas", () => {
   });
 
   it("sin colores libres explica y deshabilita Guardar", () => {
-    const colors = ["azul", "indigo", "naranjo", "ambar", "frambuesa", "cafe", "teal", "pizarra", "verde", "carmin"] as const;
-    state.areas = { areas: colors.map((c, i) => area(`a${i}`, `Área ${i}`, c)), loading: false, error: "" };
+    state.areas = { areas: AREA_COLORS.map((c, i) => area(`a${i}`, `Área ${i}`, c)), loading: false, error: "" };
     render(<AreasPanel />);
     fireEvent.click(screen.getAllByRole("button", { name: /Nueva área/ })[0]);
     const dialog = openDialog("Nueva área");

@@ -1,4 +1,4 @@
-// Áreas de la iglesia (18a §C.2, 18b §3.2): paleta cerrada de 10 colores,
+// Áreas de la iglesia (18a §C.2, 18b §3.2): paleta cerrada de 24 colores,
 // slug estable, validación de nombre y color únicos entre áreas activas y el
 // color de cada actividad (siempre el de su área responsable).
 //
@@ -33,7 +33,55 @@ export const AREA_PALETTE: Readonly<Record<AreaColor, Readonly<AreaTone>>> = {
   pizarra: { label: "Pizarra", swatch: "#5e6b78", ink: "#4a5560", soft: "#edeff1" },
   verde: { label: "Verde", swatch: "#3d8a3f", ink: "#2e6e30", soft: "#e7f1e7" },
   carmin: { label: "Carmín", swatch: "#b83a4b", ink: "#962d3c", soft: "#f6e7e9" },
+  // R2.6: 14 colores más (doc 35). Los claros (Coral, Rosado, Lila, Celeste, Menta, Mostaza)
+  // tienen swatch ≥3:1; el nombre del color y del área siempre acompañan al color.
+  coral: { label: "Coral", swatch: "#d3675b", ink: "#983c34", soft: "#fbe9e6" },
+  burdeo: { label: "Burdeo", swatch: "#802543", ink: "#711f3a", soft: "#fbe8ec" },
+  rosado: { label: "Rosado", swatch: "#e25099", ink: "#a62069", soft: "#fae8ef" },
+  ciruela: { label: "Ciruela", swatch: "#6e446e", ink: "#623c62", soft: "#f4eaf3" },
+  violeta: { label: "Violeta", swatch: "#6f35a8", ink: "#632f96", soft: "#f1eaf7" },
+  lila: { label: "Lila", swatch: "#8b7bd2", ink: "#5b4f9a", soft: "#eeebf8" },
+  marino: { label: "Marino", swatch: "#304480", ink: "#293b71", soft: "#ebecf9" },
+  celeste: { label: "Celeste", swatch: "#488fb3", ink: "#16607f", soft: "#e2eef7" },
+  petroleo: { label: "Petróleo", swatch: "#114e5b", ink: "#0d4450", soft: "#e2eff3" },
+  esmeralda: { label: "Esmeralda", swatch: "#0e7358", ink: "#0a664e", soft: "#e0f0ea" },
+  menta: { label: "Menta", swatch: "#4a947a", ink: "#20654f", soft: "#e1f0ea" },
+  musgo: { label: "Musgo", swatch: "#33532c", ink: "#2c4926", soft: "#e7efe5" },
+  oliva: { label: "Oliva", swatch: "#645b0a", ink: "#5a5109", soft: "#f1eddf" },
+  mostaza: { label: "Mostaza", swatch: "#a68d26", ink: "#6a5801", soft: "#f2ecdf" },
 };
+
+/**
+ * Orden de presentación en el selector: por tono, para buscar por familia ("un verde") y
+ * elegir por el nombre. Pizarra va al final (es el color de respaldo). AREA_COLORS conserva
+ * el orden de almacenamiento (los 10 originales primero).
+ */
+export const AREA_COLOR_DISPLAY_ORDER: readonly AreaColor[] = [
+  "carmin",
+  "burdeo",
+  "rosado",
+  "frambuesa",
+  "ciruela",
+  "violeta",
+  "lila",
+  "indigo",
+  "marino",
+  "azul",
+  "celeste",
+  "petroleo",
+  "teal",
+  "esmeralda",
+  "menta",
+  "verde",
+  "musgo",
+  "oliva",
+  "mostaza",
+  "ambar",
+  "cafe",
+  "naranjo",
+  "coral",
+  "pizarra",
+];
 
 /** Color neutro para actividades cuya área ya no existe. */
 export const FALLBACK_AREA_COLOR: AreaColor = "pizarra";
@@ -100,10 +148,10 @@ export function eventColor(
   return { color, ...AREA_PALETTE[color] };
 }
 
-/** Colores libres: los que no usa ninguna otra área activa (en el orden de la paleta). */
+/** Colores libres: los que no usa ninguna otra área activa (en el orden de presentación). */
 export function freeColors(areas: readonly Pick<Area, "id" | "color" | "active">[], editingId?: string): AreaColor[] {
   const used = new Set(areas.filter((a) => a.active && a.id !== editingId).map((a) => a.color));
-  return AREA_COLORS.filter((c) => !used.has(c));
+  return AREA_COLOR_DISPLAY_ORDER.filter((c) => !used.has(c));
 }
 
 /** Área inactiva que tenía un color hoy libre (para "libre, lo usaba Matrimonios"). */

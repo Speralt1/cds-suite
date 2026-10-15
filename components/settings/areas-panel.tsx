@@ -12,6 +12,7 @@ import { getFirebaseServices } from "@/lib/firebase";
 import {
   AREA_DESCRIPTION_MAX,
   AREA_NAME_MAX,
+  AREA_COLORS,
   AREA_PALETTE,
   activityCount,
   areaVar,
@@ -131,7 +132,11 @@ function ColorPicker({
         <WarningNote>Todos los colores están en uso. Desactiva un área para liberar el suyo.</WarningNote>
       )}
       <div id={helpId} className="mt-2 space-y-1 text-xs text-muted">
-        {options.length > 0 && <p>Los demás colores están en uso por otras áreas activas.</p>}
+        {options.length > 0 && (
+          <p>
+            Cada área activa tiene un color distinto. Disponibles: {options.length} de {AREA_COLORS.length}.
+          </p>
+        )}
         {freedBy.map(({ color, owner }) => (
           <p key={color}>
             {AREA_PALETTE[color].label}: libre (lo usaba {owner}, inactiva).
