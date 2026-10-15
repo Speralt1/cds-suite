@@ -19,6 +19,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { AREA_COLORS } from "@/lib/shared/types";
 import {
   addDays,
   area,
@@ -102,6 +103,18 @@ describe("areas", () => {
         name: "Mía", updatedAt: serverTimestamp(), updatedBy: uid,
       }));
     }
+  });
+
+  it("paleta de 24: acepta cada color de AREA_COLORS (los 10 originales y los 14 nuevos) y nada más", async () => {
+    const admin = dbOf(env, "v1-admin");
+    expect(AREA_COLORS).toHaveLength(24);
+    for (const color of AREA_COLORS)
+      await assertSucceeds(setDoc(doc(admin, "areas", `color-${color}`), newArea("v1-admin", `color-${color}`, { color })));
+    // Editar un área existente a un color nuevo y volver a uno original.
+    await assertSucceeds(updateDoc(doc(admin, "areas", "jovenes"), { color: "petroleo", updatedAt: serverTimestamp(), updatedBy: "v1-admin" }));
+    await assertSucceeds(updateDoc(doc(admin, "areas", "jovenes"), { color: "azul", updatedAt: serverTimestamp(), updatedBy: "v1-admin" }));
+    for (const color of ["Petroleo", "petróleo", "rojo", "", "azul "])
+      await assertFails(setDoc(doc(admin, "areas", "c-bad"), newArea("v1-admin", "c-bad", { color })));
   });
 
   it("validación: paleta cerrada, slug == id inmutable, textos, campos y auditoría", async () => {

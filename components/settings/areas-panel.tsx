@@ -12,6 +12,7 @@ import { getFirebaseServices } from "@/lib/firebase";
 import {
   AREA_DESCRIPTION_MAX,
   AREA_NAME_MAX,
+  AREA_COLORS,
   AREA_PALETTE,
   activityCount,
   areaVar,
@@ -131,7 +132,11 @@ function ColorPicker({
         <WarningNote>Todos los colores están en uso. Desactiva un área para liberar el suyo.</WarningNote>
       )}
       <div id={helpId} className="mt-2 space-y-1 text-xs text-muted">
-        {options.length > 0 && <p>Los demás colores están en uso por otras áreas activas.</p>}
+        {options.length > 0 && (
+          <p>
+            Cada área activa tiene un color distinto. Disponibles: {options.length} de {AREA_COLORS.length}.
+          </p>
+        )}
         {freedBy.map(({ color, owner }) => (
           <p key={color}>
             {AREA_PALETTE[color].label}: libre (lo usaba {owner}, inactiva).
@@ -172,8 +177,12 @@ function AreaEditor({
     editing && !willBeActive && !free.includes(editing.color) ? [editing.color, ...free] : free;
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
+  // Preselección: el primer color libre en el orden de almacenamiento (Azul primero, como con
+  // 10 colores); el selector los muestra por tono.
   const [color, setColor] = useState<AreaColor | null>(() =>
-    editing && options.includes(editing.color) ? editing.color : (options[0] ?? null),
+    editing && options.includes(editing.color)
+      ? editing.color
+      : (AREA_COLORS.find((c) => options.includes(c)) ?? options[0] ?? null),
   );
   const [tried, setTried] = useState(false);
   const [serverErrors, setServerErrors] = useState<AreaErrors>({});

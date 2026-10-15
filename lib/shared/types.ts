@@ -104,6 +104,21 @@ export const AREA_COLORS = [
   "pizarra",
   "verde",
   "carmin",
+  // R2.6 (24 colores): se agregan al final; los 10 originales no cambian.
+  "coral",
+  "burdeo",
+  "rosado",
+  "ciruela",
+  "violeta",
+  "lila",
+  "marino",
+  "celeste",
+  "petroleo",
+  "esmeralda",
+  "menta",
+  "musgo",
+  "oliva",
+  "mostaza",
 ] as const;
 export type AreaColor = (typeof AREA_COLORS)[number];
 
