@@ -271,15 +271,16 @@ describe("Resumen integrado", () => {
     expect(within(dialog).getByLabelText(/Fecha correspondiente/)).toHaveValue("2026-10-04");
   });
 
-  it("'Ver movimientos del día' pasa a Diario y lleva el foco al título de la banda", () => {
-    // La acción solo aparece cuando el día tiene movimientos.
+  it("el panel del calendario no enlaza movimientos; el módulo Movimientos sigue disponible", () => {
     state.tx = { data: [sumUp("p4", "4", 30000)], loading: false, error: "" };
     render(<SummaryPage />);
     const aside = screen.getByRole("complementary", { name: "Detalle del día" });
-    fireEvent.click(within(aside).getByRole("button", { name: "Ver movimientos del día" }));
-    expect(screen.getByRole("button", { name: "Diario" })).toHaveAttribute("aria-pressed", "true");
-    expect(document.activeElement).toHaveAttribute("id", "fin-balance-title");
-    expect(document.activeElement).toHaveTextContent("Resultado del dom 4 oct");
+    expect(within(aside).queryByText(/Ver movimientos/)).toBeNull();
+    expect(within(aside).queryAllByRole("link")).toHaveLength(0);
+    expect(within(aside).queryByText("Cobro SumUp p4")).toBeNull();
+    // Fuera del calendario, el acceso al módulo Movimientos no cambia.
+    expect(screen.getByRole("link", { name: "Ver todos" })).toHaveAttribute("href", "/finanzas/movimientos");
+    expect(screen.getByRole("button", { name: "Mensual" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("Diario: sin el chip de gastos en cero y con el conteo del día", () => {
@@ -357,16 +358,6 @@ describe("Resumen integrado", () => {
     expect(efectivoRow.querySelector("td.is-count")).toHaveTextContent("1");
   });
 
-  it("si la banda de Diario falla, el foco cae en el botón Diario", () => {
-    state.tx = { data: [sumUp("p4", "4", 30000)], loading: false, error: "" };
-    render(<SummaryPage />);
-    const aside = screen.getByRole("complementary", { name: "Detalle del día" });
-    state.summaryError = "No pudimos cargar el resumen del día.";
-    fireEvent.click(within(aside).getByRole("button", { name: "Ver movimientos del día" }));
-    expect(screen.queryByRole("region", { name: /^Resultado del/ })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Diario" }));
-  });
-
   it("Anual cargando: un solo aviso de estado", () => {
     state.tx = { data: [], loading: true, error: "" };
     render(<SummaryPage />);
@@ -420,9 +411,8 @@ const TX: FinanceTransaction[] = [
   sumUp("f", "14", 15000, "Cafetería"),
 ];
 
-function Harness({ manage = true, onViewDay = vi.fn(), onRegisterCash = vi.fn() }: {
+function Harness({ manage = true, onRegisterCash = vi.fn() }: {
   manage?: boolean;
-  onViewDay?: (date: string) => void;
   onRegisterCash?: (area: string, date: string) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -438,7 +428,6 @@ function Harness({ manage = true, onViewDay = vi.fn(), onRegisterCash = vi.fn() 
       selected={selected || defaultSelectedDay(calendar, review, TODAY)!}
       onSelect={setSelected}
       onRegisterCash={manage ? onRegisterCash : undefined}
-      onViewDay={onViewDay}
     />
   );
 }
@@ -539,7 +528,6 @@ describe("Calendario de caja · celdas", () => {
         transactions={[]}
         selected="2026-11-01"
         onSelect={() => {}}
-        onViewDay={() => {}}
       />,
     );
     expect(screen.getByText("Todo registrado en los días de culto de este mes.")).toBeInTheDocument();
@@ -596,8 +584,7 @@ describe("Panel del día", () => {
 
   it("día pendiente: efectivo por área sin tarjeta de advertencia ni movimientos individuales; acciones con manage", () => {
     const onRegisterCash = vi.fn();
-    const onViewDay = vi.fn();
-    render(<Harness onRegisterCash={onRegisterCash} onViewDay={onViewDay} />);
+    render(<Harness onRegisterCash={onRegisterCash} />);
     expect(screen.getByRole("status")).toHaveTextContent("Domingo 4 de octubre: 1 pendiente");
     const panel = screen.getByRole("complementary", { name: "Detalle del día" });
     const areas = within(panel).getByRole("region", { name: "Efectivo por área" });
@@ -620,12 +607,13 @@ describe("Panel del día", () => {
     expect(onRegisterCash).toHaveBeenCalledWith("offerings", "2026-10-04");
     expect(within(areas).queryByRole("button", { name: "Registrar efectivo · Cafetería" })).toBeNull();
     expect(within(panel).queryByText(/no registrar movimientos/)).toBeNull();
-    // Resumen del día: solo el agregado, y una sola acción secundaria.
+    // Resumen del día: solo el agregado, sin enlaces ni acciones para ver movimientos.
     const summary = within(panel).getByRole("region", { name: "Resumen del día" });
     expect(within(summary).getByRole("rowheader", { name: "Ofrendas" })).toBeInTheDocument();
     expect(within(summary).getAllByText("$85.000")).toHaveLength(4); // SumUp y Total, fila y Total del día
-    fireEvent.click(within(panel).getByRole("button", { name: "Ver movimientos del día" }));
-    expect(onViewDay).toHaveBeenCalledWith("2026-10-04");
+    expect(within(panel).queryByText(/Ver movimientos/)).toBeNull();
+    expect(within(panel).queryAllByRole("link")).toHaveLength(0);
+    expect(within(summary).queryAllByRole("button")).toHaveLength(0);
   });
 
   it("sin manage: lectura con nota y sin registrar", () => {
@@ -634,7 +622,7 @@ describe("Panel del día", () => {
     const areas = screen.getByRole("region", { name: "Efectivo por área" });
     expect(within(areas).getByText("Puedes revisar este día, pero no registrar movimientos.")).toBeInTheDocument();
     expect(screen.getAllByText("Puedes revisar este día, pero no registrar movimientos.")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Ver movimientos del día" })).toBeInTheDocument();
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
   });
 
   it("sin registros: una fila del día y registrar por área; día futuro", () => {
@@ -647,20 +635,21 @@ describe("Panel del día", () => {
     expect(within(areas).getByRole("button", { name: "Registrar efectivo · Ofrendas" })).toBeInTheDocument();
     expect(within(areas).getByRole("button", { name: "Registrar efectivo · Cafetería" })).toBeInTheDocument();
     expect(screen.getByText("Sin movimientos activos este día.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ver movimientos del día" })).toBeNull();
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
     fireEvent.click(cell("martes 20 de octubre"));
     expect(screen.getByText("Día futuro: aún no hay registros.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Efectivo por área" })).toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent("Martes 20 de octubre: sin pendientes");
   });
 
-  it("vista Diario: el panel sin navegación enlaza a la lista de movimientos", () => {
+  it("vista Diario: el panel sin navegación tampoco enlaza movimientos", () => {
     const calendar = buildMonthCalendar(TX, 2026, 10, TODAY);
     const day = calendar.days.find((d) => d.date === "2026-10-04")!;
     expect(dayWarnings(day, TX)).toHaveLength(1);
     render(<CashDayPanel date="2026-10-04" status={day} transactions={TX} />);
     expect(screen.queryByRole("navigation")).toBeNull();
-    expect(screen.getByRole("link", { name: "Ver movimientos del día" })).toHaveAttribute("href", "#fin-movements");
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
   });
 });
 

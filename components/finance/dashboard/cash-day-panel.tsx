@@ -169,27 +169,11 @@ export interface CashDayPanelProps {
   transactions: FinanceTransaction[];
   /** Solo con finance.records.manage: abre el CashModal con área y fecha. */
   onRegisterCash?: (area: CashArea) => void;
-  /** Vista Diario de la fecha. Sin él, "Ver movimientos del día" enlaza a la lista de abajo. */
-  onReviewMovements?: () => void;
   /** false dentro del diálogo (el título del diálogo ya nombra el día). */
   showHeading?: boolean;
   headingRef?: Ref<HTMLHeadingElement>;
   navigation?: WarningNavigation;
   variant?: "card" | "plain";
-}
-
-const MOVEMENTS_ANCHOR = "#fin-movements";
-
-function ReviewAction({ onReview, label }: { onReview?: () => void; label: string }) {
-  return onReview ? (
-    <button type="button" className="button-secondary" onClick={onReview}>
-      {label}
-    </button>
-  ) : (
-    <a className="button-secondary" href={MOVEMENTS_ANCHOR}>
-      {label}
-    </a>
-  );
 }
 
 function RegisterCashButtons({
@@ -268,7 +252,6 @@ export function CashDayPanel({
   status,
   transactions,
   onRegisterCash,
-  onReviewMovements,
   showHeading = true,
   headingRef,
   navigation,
@@ -376,11 +359,6 @@ export function CashDayPanel({
                 ? "Sin ingresos este día."
                 : "Sin movimientos activos este día."}
           </p>
-        )}
-        {hasMovements && (
-          <div className="fin-day-actions mt-3">
-            <ReviewAction onReview={onReviewMovements} label="Ver movimientos del día" />
-          </div>
         )}
         {expenses > 0 && <p className="fin-day-expenses">Gastos del día: {clp(expenses)}</p>}
       </section>

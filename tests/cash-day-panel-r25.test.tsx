@@ -124,25 +124,45 @@ describe("Panel del día · Resumen del día", () => {
     expect(screen.getByText("Gastos del día: $40.000")).toHaveClass("fin-day-expenses");
   });
 
-  it("orden: Efectivo por área → Resumen del día → Ver movimientos del día → Gastos del día", () => {
-    render(<CashDayPanel date={SUNDAY} status={status(MIXED)} transactions={MIXED} onReviewMovements={() => {}} />);
+  it("orden: Efectivo por área → Resumen del día → Gastos del día", () => {
+    render(<CashDayPanel date={SUNDAY} status={status(MIXED)} transactions={MIXED} />);
     const order = [
       screen.getByRole("heading", { name: "Domingo 11 de octubre · Culto" }),
       areaRegion()!,
       summary(),
-      screen.getByRole("button", { name: "Ver movimientos del día" }),
       screen.getByText("Gastos del día: $40.000"),
     ];
     for (let i = 1; i < order.length; i++)
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Ver movimientos del día" })).toHaveLength(1);
+  });
+
+  it("sin enlaces ni acciones para consultar movimientos individuales (con y sin manage)", () => {
+    for (const onRegisterCash of [() => {}, undefined]) {
+      const { container, unmount } = render(
+        <CashDayPanel date={SUNDAY} status={status(MIXED)} transactions={MIXED} onRegisterCash={onRegisterCash} />,
+      );
+      expect(screen.queryByText(/Ver movimientos/)).toBeNull();
+      expect(screen.queryAllByRole("link")).toHaveLength(0);
+      expect(container.querySelector("a, [href]")).toBeNull();
+      // Las únicas acciones son registrar efectivo por área (solo con manage).
+      for (const button of screen.queryAllByRole("button"))
+        expect(button).toHaveAccessibleName(/^Registrar efectivo · /);
+      if (!onRegisterCash) expect(screen.queryAllByRole("button")).toHaveLength(0);
+      // Ningún movimiento individual: ni descripciones ni IDs.
+      for (const t of MIXED) {
+        expect(screen.queryByText(t.description)).toBeNull();
+        expect(screen.queryByText(t.id)).toBeNull();
+      }
+      unmount();
+    }
   });
 
   it("día sin movimientos: texto vacío, sin tabla, sin acción ni gastos", () => {
     render(<CashDayPanel date="2026-10-13" status={status([], "2026-10-13")} transactions={MIXED} />);
     expect(within(summary()).getByText("Sin movimientos activos este día.")).toBeInTheDocument();
     expect(within(summary()).queryByRole("table")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Ver movimientos del día" })).toBeNull();
+    expect(screen.queryByText(/Ver movimientos/)).toBeNull();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
     expect(screen.queryByText(/Gastos del día/)).toBeNull();
     expect(areaRegion()).toBeNull(); // martes sin culto ni actividad de área
   });

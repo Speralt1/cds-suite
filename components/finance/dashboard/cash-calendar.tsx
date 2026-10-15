@@ -373,8 +373,6 @@ export interface CashCalendarSectionProps {
   onSelect: (date: string) => void;
   /** Solo con finance.records.manage. */
   onRegisterCash?: (area: CashArea, date: string) => void;
-  /** Vista Diario de esa fecha ("Ver movimientos del día"). */
-  onViewDay: (date: string) => void;
 }
 
 export function CashCalendarSection({
@@ -386,7 +384,6 @@ export function CashCalendarSection({
   selected,
   onSelect,
   onRegisterCash,
-  onViewDay,
 }: CashCalendarSectionProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const gridRef = useRef<HTMLTableElement>(null);
@@ -424,7 +421,6 @@ export function CashCalendarSection({
       status={status}
       transactions={transactions}
       onRegisterCash={onRegisterCash ? (area) => onRegisterCash(area, selected) : undefined}
-      onReviewMovements={() => onViewDay(selected)}
       showHeading={!inDialog}
       headingRef={inDialog ? undefined : headingRef}
       variant={inDialog ? "plain" : "card"}
