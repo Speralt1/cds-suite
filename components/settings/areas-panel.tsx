@@ -177,8 +177,12 @@ function AreaEditor({
     editing && !willBeActive && !free.includes(editing.color) ? [editing.color, ...free] : free;
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
+  // Preselección: el primer color libre en el orden de almacenamiento (Azul primero, como con
+  // 10 colores); el selector los muestra por tono.
   const [color, setColor] = useState<AreaColor | null>(() =>
-    editing && options.includes(editing.color) ? editing.color : (options[0] ?? null),
+    editing && options.includes(editing.color)
+      ? editing.color
+      : (AREA_COLORS.find((c) => options.includes(c)) ?? options[0] ?? null),
   );
   const [tried, setTried] = useState(false);
   const [serverErrors, setServerErrors] = useState<AreaErrors>({});

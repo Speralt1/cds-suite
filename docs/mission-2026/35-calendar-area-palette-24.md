@@ -32,8 +32,10 @@
 
 - Mismo componente y anatomía (radio + muestra + nombre). Sigue en 3 columnas desde `sm` y 2 en móvil: el diálogo mide 600 px y el diseño pide 4 columnas solo con un contenedor ≥ 560 px.
 - **Orden de presentación por tono** (`AREA_COLOR_DISPLAY_ORDER`): Carmín, Burdeo, Rosado, Frambuesa, Ciruela, Violeta, Lila, Índigo, Marino, Azul, Celeste, Petróleo, Verde azulado, Esmeralda, Menta, Verde, Musgo, Oliva, Mostaza, Ámbar, Café, Naranjo, Coral y Pizarra al final (es el color de respaldo). El almacenamiento no cambia de orden.
+- **Preselección al crear un área:** el primer color libre en el orden de almacenamiento (Azul si está libre), igual que con 10 colores. El selector los muestra por tono.
 - Solo se ofrecen los colores libres, como antes. Texto de ayuda nuevo: "Cada área activa tiene un color distinto. Disponibles: N de 24."
 - Un área activa por color: ahora caben hasta 24 áreas activas.
+- **Límites que no cambian:** un usuario puede tener hasta 20 áreas asignadas (`MAX_AREA_IDS`) y una actividad hasta 8 áreas participantes (Rules `areaIdList(…, 8)`). Con más de 20 áreas, un líder no puede quedar asignado a todas; hoy producción tiene 0 áreas.
 
 ## Compatibilidad
 
@@ -47,19 +49,27 @@
 
 ## Orden de despliegue propuesto (cada paso con su GO)
 
-1. **Rules** (`firestore:rules`): solo amplía la lista de colores; el resto del archivo es idéntico a `cbe11685`. Rollback: `cbe11685-61ce-41d1-a8af-3b26a907f1bc`.
-2. **`calendarPublicFeed`**, por nombre (`--only functions:calendarPublicFeed`). Opcional, pero sin él la página pública muestra los nuevos en gris. Nunca `--only functions` sin nombre. Rollback: revisión `calendarpublicfeed-00001-huh`.
-3. **Hosting**. Rollback: `72e014e5861a25ac`.
+1. **Rules** (`firestore:rules`): solo amplía la lista de `validArea` (crear y editar áreas); el resto del archivo es idéntico a `cbe11685`. Es inocuo con el Hosting vivo, que solo escribe los 10 originales. Rollback: `cbe11685-61ce-41d1-a8af-3b26a907f1bc`.
+2. **Hosting**. Rollback: `72e014e5861a25ac`.
+3. **`calendarPublicFeed`**, por nombre (`--only functions:calendarPublicFeed`), opcional. Sin él, la página pública muestra los colores nuevos en gris. No depende del Hosting y va al final para separar el deploy de Functions del de colores. Nunca `--only functions` sin nombre. Rollback: revisión `calendarpublicfeed-00001-huh`.
+   - **Qué lleva además de los colores (Atlas M1):** la revisión viva salió de `18925d6`. Entre `18925d6` y este PR, `functions/calendar/**` y `functions/shared/public-calendar.js` **no cambian**. Lo nuevo en `functions/` son los módulos de R2 (`shared/sumup-payouts.js`, `shared/names.js` y el export de `sumupPayoutsReconciliation` en `index.js`), que el contenedor carga al arrancar. Ese árbol de `functions/` es idéntico al de `10ff117`, ya desplegado en R2.3 para `sumupPayoutsReconciliation`, más las 15 líneas de colores en `shared/types.js`.
+   - El `predeploy` de Functions corre `node scripts/build-shared.mjs --check`.
 
-Si se invierte el orden (Hosting antes que Rules), el selector ofrece colores que las Rules rechazan al guardar.
+Si se invierte el orden de 1 y 2 (Hosting antes que Rules), el selector ofrece colores que las Rules rechazan al guardar.
 
 ## Rollback con colores nuevos ya en uso
 
-- **Hosting anterior:** las áreas con color nuevo se ven en Pizarra. Si alguien edita esa área con el Hosting anterior, el formulario la guardaría como Pizarra. Recomendación: no editar áreas mientras dure el rollback.
+- **Hosting anterior:** las áreas con color nuevo se ven en Pizarra (varias pueden verse iguales). Si alguien edita una de ellas con el Hosting anterior, se guardaría como Pizarra, o como el primer color libre si Pizarra está en uso. **No editar áreas mientras dure el rollback.**
 - **Rules anteriores:** las áreas con color nuevo siguen legibles, pero **no se pueden editar** hasta volver a un color original (la validación rechaza el color guardado). Las actividades no guardan color: no se afectan.
 - **Ningún rollback borra datos.**
 
 ## Pruebas
 
-- **Unit:** 24 colores; los 10 originales intactos (claves, orden y hex); contraste WCAG de los 24; orden de presentación; selector (22 de 24 libres, por tono; "Todos los colores están en uso" con 24 áreas activas); paridad con `functions/shared`; feed público (los 24 pasan y lo desconocido cae en Pizarra); tokens CSS de los 24.
+- **Unit:** 24 colores; preselección en orden de almacenamiento; los 10 originales intactos (claves, orden y hex); contraste WCAG de los 24; orden de presentación; selector (22 de 24 libres, por tono; "Todos los colores están en uso" con 24 áreas activas); paridad con `functions/shared`; feed público (los 24 pasan y lo desconocido cae en Pizarra); tokens CSS de los 24.
 - **Firestore Rules:** se acepta cada uno de los 24 al crear, se puede editar a un color nuevo y volver a uno original, y se rechazan variantes inválidas (`Petroleo`, `petróleo`, `rojo`, vacío, con espacio).
+
+## Revisiones
+
+- **Diseño UX/UI:** paleta de 14 colores nuevos, orden por tono, selector y riesgos (este doc). Contraste y distancias recalculados por script independiente.
+- **Atlas: PASS con condiciones.** M1 (alcance del redeploy de `calendarPublicFeed`) documentado arriba con evidencia; m1 (preselección) corregido; m2 (texto de rollback) corregido; m3 (límites de áreas) anotado.
+- **QA en emulador (datos ficticios):** calendario Mes con 9 áreas en colores nuevos y leyenda; selector 15 de 24 por tono; crear área con "Marino" aceptada por las Rules nuevas; página pública con los colores nuevos (feed del emulador); móvil 375 px al 125 %: 2 columnas, nombres sin cortar. Capturas en `docs/mission-2026/screens-r26/`.

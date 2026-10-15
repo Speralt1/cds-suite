@@ -115,6 +115,8 @@ describe("Configuración › Áreas", () => {
     // Por tono: Carmín, Burdeo, Rosado… y Pizarra al final.
     expect(labels.slice(0, 3)).toEqual(["Carmín", "Burdeo", "Rosado"]);
     expect(labels.at(-1)).toBe("Pizarra");
+    // La preselección sigue el orden de almacenamiento: Azul y Verde están en uso, Índigo es el primero libre.
+    expect(within(dialog).getByRole("radio", { name: "Índigo" })).toBeChecked();
     expect(labels).not.toContain("Azul");
     expect(labels).not.toContain("Verde");
     expect(labels).toContain("Carmín");
