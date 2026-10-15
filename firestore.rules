@@ -925,7 +925,7 @@ service cloud.firestore {
     function validArea(d, areaId) {
       return d.keys().hasAll(areaKeys()) && d.keys().hasOnly(areaKeys())
         && text(d.name,1,40) && d.slug == areaId && isAreaId(d.slug)
-        && d.color in ['azul','indigo','naranjo','ambar','frambuesa','cafe','teal','pizarra','verde','carmin']
+        && d.color in ['azul','indigo','naranjo','ambar','frambuesa','cafe','teal','pizarra','verde','carmin','coral','burdeo','rosado','ciruela','violeta','lila','marino','celeste','petroleo','esmeralda','menta','musgo','oliva','mostaza']
         && text(d.description,0,200) && d.active is bool;
     }
     match /areas/{areaId} {
