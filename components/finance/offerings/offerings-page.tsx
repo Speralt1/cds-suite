@@ -5,6 +5,7 @@ import {
   Banknote,
   CircleCheck,
   CircleDashed,
+  Clock3,
   CloudOff,
   CreditCard,
   ExternalLink,
@@ -253,7 +254,9 @@ export function AreaCard({
   // Omitted when the viewer can't write finance records: no cash button.
   onCash?: () => void;
 }) {
-  const missingDayCash = cardDay > 0 && cashDay === 0;
+  // "Efectivo pendiente" (R2.5): SumUp registró ventas y aún no hay efectivo
+  // registrado del área. Estado neutro, no una advertencia.
+  const pendingDayCash = cardDay > 0 && cashDay === 0;
   // Ambos orígenes activos el mismo día: puede ser legítimo, pero se avisa
   // para revisar que no sea el mismo dinero (nunca se bloquea ni se fusiona).
   const bothCashOrigins = sumUpCashDay > 0 && !!existingCash;
@@ -269,10 +272,10 @@ export function AreaCard({
         </div>
         <div className="offering-area-line">
           <span><Banknote size={14} aria-hidden="true" />Efectivo</span>
-          {missingDayCash ? (
-            <strong className="tabular-nums text-warning offering-area-warning">
-              <TriangleAlert size={14} aria-hidden="true" />
-              Falta efectivo
+          {pendingDayCash ? (
+            <strong className="tabular-nums text-muted offering-area-pending">
+              <Clock3 size={14} aria-hidden="true" />
+              Efectivo pendiente
             </strong>
           ) : (
             <strong className="tabular-nums">{clp(cashDay)}</strong>
@@ -608,12 +611,12 @@ export function OfferingsPage() {
                     <td className="tabular-nums">{cafeCard ? clp(cafeCard) : "—"}</td>
                     <td className="tabular-nums">{cafeCash ? clp(cafeCash) : "—"}</td>
                     <td>
-                      {day.missingCashAreas.length ? (
-                        <span className="status-inline text-warning">
-                          <TriangleAlert size={13} aria-hidden="true" />
-                          {day.missingCashAreas.length === 2
-                            ? "Falta efectivo · 2 áreas"
-                            : `Falta efectivo · ${day.missingCashAreas[0]}`}
+                      {day.pendingCashAreas.length ? (
+                        <span className="status-inline text-muted">
+                          <Clock3 size={13} aria-hidden="true" />
+                          {day.pendingCashAreas.length === 2
+                            ? "Pendiente · 2 áreas"
+                            : `Pendiente · ${day.pendingCashAreas[0]}`}
                         </span>
                       ) : day.noRecords ? (
                         <span className="status-inline text-muted">

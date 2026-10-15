@@ -1,0 +1,62 @@
+# CI de CDS Suite: solo verificación. No despliega nada ni usa secretos.
+# Los deploys a Firebase se hacen a mano, por fase y con GO explícito (doc 20 / runbooks).
+name: CI
+
+on:
+  pull_request:
+    branches: [feature/preproduccion-mobile-v1]
+  push:
+    branches: [feature/preproduccion-mobile-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix functions
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: node scripts/build-shared.mjs --check
+      - run: npm test
+      - run: npm run build
+
+  emulators:
+    name: Rules (budget) and emulator tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm ci --prefix functions
+      # Proyecto demo-cds-suite: emuladores locales, sin credenciales ni acceso a producción.
+      - run: npm run test:rules
+      - run: npm run test:emulator

@@ -219,8 +219,8 @@ function MyActivitiesInner({ onRetry }: { onRetry: () => void }) {
                 title="Tus áreas no tienen actividades próximas"
                 action={
                   canCreate && !offline ? (
-                    <button type="button" className="button-primary" onClick={sheets.openCreate}>
-                      Crear actividad
+                    <button type="button" className="button-primary" onClick={() => sheets.openCreate()}>
+                      Nueva actividad
                     </button>
                   ) : undefined
                 }
@@ -249,7 +249,7 @@ function MyActivitiesInner({ onRetry }: { onRetry: () => void }) {
           </div>
         )}
       </div>
-      {showFab && <CreateFab onCreate={sheets.openCreate} disabledReason={offline ? CALENDAR_ERROR_MESSAGES.offline : undefined} />}
+      {showFab && <CreateFab onCreate={() => sheets.openCreate()} disabledReason={offline ? CALENDAR_ERROR_MESSAGES.offline : undefined} />}
       {sheets.sheets}
     </div>
   );

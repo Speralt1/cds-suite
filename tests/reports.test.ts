@@ -285,10 +285,10 @@ it("septiembre 2026: alertas A1/A2/A3/A4/A5 con textos exactos y orden correcto"
   const revisarTexts = r.alerts.revisar.map((a) => a.text);
   expect(revisarTexts).toContain("Sin registros — 9 sep (día de culto).");
   expect(revisarTexts).toContain(
-    "Falta efectivo · Ofrendas — 16 sep: SumUp $45.000 en bruto, sin efectivo registrado.",
+    "Efectivo pendiente · Ofrendas — 16 sep: SumUp $45.000 en bruto, aún sin efectivo registrado.",
   );
   expect(revisarTexts).toContain(
-    "Falta efectivo · Cafetería — 16 sep: SumUp $210.000 en bruto, sin efectivo registrado.",
+    "Efectivo pendiente · Cafetería — 16 sep: SumUp $210.000 en bruto, aún sin efectivo registrado.",
   );
   expect(revisarTexts[revisarTexts.length - 1]).toBe(
     "No se registraron gastos en el mes — verificar si faltan egresos.",
@@ -296,7 +296,7 @@ it("septiembre 2026: alertas A1/A2/A3/A4/A5 con textos exactos y orden correcto"
   // Chronological before the period-level A3.
   expect(revisarTexts.indexOf("Sin registros — 9 sep (día de culto).")).toBeLessThan(
     revisarTexts.indexOf(
-      "Falta efectivo · Ofrendas — 16 sep: SumUp $45.000 en bruto, sin efectivo registrado.",
+      "Efectivo pendiente · Ofrendas — 16 sep: SumUp $45.000 en bruto, aún sin efectivo registrado.",
     ),
   );
 
@@ -441,9 +441,13 @@ it("días de culto: estado 'Con ingresos'/'—' (sin lenguaje de cuadre) y solo 
   );
   const statusLabels = r.worshipDays.map((d) => d.statusLabel);
   expect(statusLabels).not.toContain("OK");
-  // Day 20 (sunday, >= split) has cash income and no missing-cash issue.
+  // Day 20 (sunday, >= split) has cash income and no cash-pending issue.
   const day20 = r.worshipDays.find((d) => d.date === "2026-09-20");
   expect(day20?.statusLabel).toBe("Con ingresos");
+  // Day 16: SumUp in both areas and no cash yet → neutral "Efectivo pendiente".
+  const day16 = r.worshipDays.find((d) => d.date === "2026-09-16");
+  expect(day16?.statusLabel).toBe("Efectivo pendiente · 2 áreas");
+  expect(statusLabels.some((label) => /Falta/.test(label))).toBe(false);
   // Every worship day up to today must be present even without income.
   expect(r.worshipDays.some((d) => d.date === "2026-09-09")).toBe(true);
   // Day 5 (friday, not a worship day) only appears because of the tithe,

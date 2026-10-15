@@ -4,7 +4,8 @@
 // un botón por día (abre el diálogo del día) y chips <button> con aria-label
 // completo. Hoy lleva aria-current="date".
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Plus } from "lucide-react";
 import { monthGrid, occurrencesOnDay } from "@/lib/calendar/calendar";
 import { compareDayOrder, occurrenceOrderKey } from "@/lib/shared/calendar-core";
 import { compareLocal, dayLabel, parseYmd, WEEKDAY_HEADERS_MON_FIRST } from "@/lib/shared/dates";
@@ -120,6 +121,43 @@ export function MonthGrid({
   );
 }
 
+/**
+ * "Nueva actividad este día": abre el formulario con esa fecha prellenada (o la
+ * guía de áreas si aún no hay). Sin conexión queda aria-disabled con la razón.
+ */
+export function DayCreateButton({
+  date,
+  onCreate,
+  disabledReason,
+  className = "",
+}: {
+  date: Ymd;
+  onCreate: (date: Ymd) => void;
+  disabledReason?: string;
+  className?: string;
+}) {
+  const helpId = useId();
+  return (
+    <>
+      <button
+        type="button"
+        className={`button-secondary cal-day-create ${className}`.trim()}
+        aria-label={`Nueva actividad el ${dayLabel(date)}`}
+        aria-disabled={disabledReason ? true : undefined}
+        aria-describedby={disabledReason ? helpId : undefined}
+        onClick={() => !disabledReason && onCreate(date)}
+      >
+        <Plus size={16} aria-hidden="true" /> Nueva actividad este día
+      </button>
+      {disabledReason && (
+        <span className="cal-sr" id={helpId}>
+          {disabledReason}
+        </span>
+      )}
+    </>
+  );
+}
+
 /** Mes compacto (móvil): puntos de color + lista del día elegido debajo. */
 export function MonthGridCompact({
   year,
@@ -129,6 +167,8 @@ export function MonthGridCompact({
   areas,
   today,
   onOpen,
+  onCreate,
+  createDisabledReason,
 }: {
   year: number;
   month: number;
@@ -137,6 +177,9 @@ export function MonthGridCompact({
   areas: readonly Area[];
   today: Ymd;
   onOpen: (o: Occurrence) => void;
+  /** Solo para quien puede crear (o debe ver la guía de áreas). */
+  onCreate?: (date: Ymd) => void;
+  createDisabledReason?: string;
 }) {
   const weeks = monthGrid(year, month);
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
@@ -193,6 +236,7 @@ export function MonthGridCompact({
           {selected === today ? "Hoy · " : ""}
           {dayLabel(selected)}
         </h3>
+        {onCreate && <DayCreateButton date={selected} onCreate={onCreate} disabledReason={createDisabledReason} className="is-block" />}
         {dayList.length ? (
           <ul className="cal-agenda-list">
             {dayList.map((o) => (
@@ -215,6 +259,8 @@ export function DayDialog({
   today,
   onClose,
   onOpen,
+  onCreate,
+  createDisabledReason,
 }: {
   date: Ymd;
   occurrences: Occurrence[];
@@ -222,10 +268,18 @@ export function DayDialog({
   today: Ymd;
   onClose: () => void;
   onOpen: (o: Occurrence) => void;
+  /** Solo para quien puede crear (o debe ver la guía de áreas). */
+  onCreate?: (date: Ymd) => void;
+  createDisabledReason?: string;
 }) {
   const list = sortDay(occurrencesOnDay(occurrences, date), areas, date);
   return (
-    <CalDialog variant="center" onClose={onClose} title={`${date === today ? "Hoy · " : ""}${dayLabel(date)}`}>
+    <CalDialog
+      variant="center"
+      onClose={onClose}
+      title={`${date === today ? "Hoy · " : ""}${dayLabel(date)}`}
+      footer={onCreate ? <DayCreateButton date={date} onCreate={onCreate} disabledReason={createDisabledReason} /> : undefined}
+    >
       {list.length ? (
         <ul className="cal-agenda-list cal-day-dialog-list">
           {list.map((o) => (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
@@ -41,7 +41,7 @@ import { TransactionForm } from "../forms/transaction-form";
 import { TransactionList } from "../transactions/transaction-list";
 import { TitheRegister } from "../tithes/tithe-register";
 import { CashModal } from "../offerings/cash-modal";
-import { BALANCE_TITLE_ID, BalanceBand, BalanceBandSkeleton } from "./balance-band";
+import { BalanceBand, BalanceBandSkeleton } from "./balance-band";
 import { FundsPosition } from "./funds-position";
 import { BankBalanceCard } from "../bank/bank-balance-card";
 import { CashCalendarSection, CashCalendarSkeleton } from "./cash-calendar";
@@ -367,8 +367,8 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
 
   function defaultCashArea(): CashArea {
     const status = dayStatus(today(), dailyTransactions.data, today(), WORSHIP_WEEKDAYS);
-    return status.missingCashAreas.length
-      ? AREA_TO_KEY[status.missingCashAreas[0]]
+    return status.pendingCashAreas.length
+      ? AREA_TO_KEY[status.pendingCashAreas[0]]
       : "offerings";
   }
 
@@ -384,28 +384,6 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
   // Diario: the day panel and the count only render once the day's month has
   // loaded without error (same ready rule as the month view, M2).
   const dailyReady = details && !dailyTransactions.loading && !dailyTransactions.error;
-  const dailyBandReady =
-    !dailySummaries.loading && !(details && dailyTransactions.loading) && !dailySummaries.error;
-
-  // "Revisar movimientos" switches to Diario and unmounts the calendar: the
-  // focus moves to the Diario band title once it is rendered (not the skeleton).
-  // If the Diario band fails to load, the focus falls back to the pressed
-  // "Diario" toggle (the error Notice itself is not focusable).
-  const focusBandTitle = useRef(false);
-  const viewToggleRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!focusBandTitle.current || summaryView !== "day") return;
-    if (dailySummaries.loading || (details && dailyTransactions.loading)) return;
-    focusBandTitle.current = false;
-    const title = dailyBandReady ? document.getElementById(BALANCE_TITLE_ID) : null;
-    (title || viewToggleRef.current?.querySelector<HTMLElement>('[aria-pressed="true"]'))?.focus();
-  }, [summaryView, dailyBandReady, dailySummaries.loading, dailyTransactions.loading, details]);
-
-  function viewDay(date: string) {
-    focusBandTitle.current = true;
-    setDailyDate(date);
-    setSummaryView("day");
-  }
 
   const movementCount =
     summaryView === "day"
@@ -426,7 +404,6 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
       <div className="summary-period-controls">
         <div className="summary-period-left">
           <div
-            ref={viewToggleRef}
             className="period-view-toggle"
             role="group"
             aria-label="Vista del período"
@@ -614,7 +591,6 @@ export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboard
                     selected={effectiveSelectedDay}
                     onSelect={setSelectedDay}
                     onRegisterCash={manage ? openCashModal : undefined}
-                    onViewDay={viewDay}
                   />
                 )}
                 {income && (income.count > 0 || total.transactionCount > 0) && (

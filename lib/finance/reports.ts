@@ -233,10 +233,10 @@ function buildWorshipDays(
         cafeCash,
         tithe,
         total: d.totalIncome,
-        statusLabel: d.missingCashAreas.length
-          ? d.missingCashAreas.length === 2
-            ? "Falta efectivo · 2 áreas"
-            : `Falta efectivo · ${d.missingCashAreas[0]}`
+        statusLabel: d.pendingCashAreas.length
+          ? d.pendingCashAreas.length === 2
+            ? "Efectivo pendiente · 2 áreas"
+            : `Efectivo pendiente · ${d.pendingCashAreas[0]}`
           : d.noRecords
             ? "Sin registros de caja"
             : d.date < SPLIT
@@ -277,7 +277,7 @@ function buildAlerts(
 ): { revisar: AlertItem[]; info: AlertItem[] } {
   const review = reviewDays(transactions, year, month, todayStr);
   const revisar: AlertItem[] = review.map((item) => {
-    if (item.kind === "missing-cash") {
+    if (item.kind === "cash-pending") {
       const period = item.date.slice(0, 7);
       const day = String(Number(item.date.slice(8, 10)));
       const sumUpAmountForDay = transactions
@@ -292,7 +292,7 @@ function buildAlerts(
             isSumUpTransaction(t.id, t.createdBy),
         )
         .reduce((s, t) => s + t.amount, 0);
-      const text = `Falta efectivo · ${item.area} — ${shortDate(item.date)}: SumUp ${clp(sumUpAmountForDay)} en bruto, sin efectivo registrado.`;
+      const text = `Efectivo pendiente · ${item.area} — ${shortDate(item.date)}: SumUp ${clp(sumUpAmountForDay)} en bruto, aún sin efectivo registrado.`;
       return { code: "A1", tone: "revisar", text, pdfText: `[Revisar] ${text}` };
     }
     const text = `Sin registros — ${shortDate(item.date)} (día de culto).`;
