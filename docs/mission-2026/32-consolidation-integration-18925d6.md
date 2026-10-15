@@ -123,6 +123,8 @@ El fix (PR #12) no tocó código de app, Functions ni `lib/`. Los archivos de Co
 
 ## 7. Prerrequisitos de deploy (ninguno ejecutado)
 
+> **Actualizado el 15/10/2026:** C-A1 ya está hecho y producción es R2.5 (`35a234c`). Los valores y el estado vigentes están en el doc 25 §0; lo de abajo es histórico.
+
 1. **Primero, C-A1 completo** (doc 25 C-A1 = doc 20 §13 Fases 0–5): Rules de `18925d6` (fase "C-A1.2" del registro operativo de Salvador: el reintento con el fix del doc 26, detenido el 08/10 por la reconciliación financiera A10), Functions de Calendario por nombre (`calendarPublicFeed`, `calendarShareLinkManage`) y Hosting RC1; después **C-A2** (smoke PASS) y **C-A2.5** (merge del PR de Consolidación). Mientras producción siga en el ruleset `2d9939ab…` y el Hosting `3d1dc8bc8d1bcc29`, **no** se despliega nada de Consolidación. Anotar el ruleset y la versión de Hosting resultantes de C-A1 como objetivos de rollback.
 2. **Después, las Rules de Consolidación (C-A4 del doc 25):**
    - desde `~/cds-deploy`, en el **commit de merge de C-A2.5** (PR de Consolidación mergeado en `feature/preproduccion-mobile-v1`), nunca en la rama de integración; antes: `git merge-base --is-ancestor 18925d67f17de2e42f5061024486d579ed29ce66 HEAD` y `git merge-base --is-ancestor <head revisado de esta rama> HEAD` deben dar 0, y el diff del merge debe mostrar solo Consolidación;
@@ -140,3 +142,11 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
 - Hoy Consolidación detecta duplicados solo por teléfono (E.164) y correo normalizados. No compara nombres.
 - **Recomendación:** si más adelante Consolidación suma similitud de nombres (p. ej. advertir "posible duplicado por nombre"), debe **adoptar `lib/shared/names.ts`** (y su copia generada en `functions/shared/`) en vez de crear un segundo normalizador.
 - **No se implementa ahora.**
+
+## 9. Actualización sobre producción R2.5 (`35a234c`, 15/10/2026)
+
+- Merge de `feature/preproduccion-mobile-v1` @ `35a234cb33d5311e8d2f957db203aa4eed2f567f` en esta rama: **sin conflictos** (solo auto-merge de `app/globals.css`). Se conservan R2 (Finanzas, banco, conciliación SumUp, caché de Hosting, CI) y R2.5 (resumen diario agregado, efectivo pendiente, Depósitos, creación de actividades).
+- Diff respecto de producción: solo Consolidación (84 archivos; `firestore.rules`, `firestore.indexes.json`, `functions/members/*`, `functions/shared/{members,access,types}.js`, `functions/index.js`, rutas `/integrantes/*`, tests y docs). Sin cambios en `storage.rules` ni `firebase.json`.
+- Gates en checkout limpio (`npm ci` raíz + functions): lint, typecheck, unit **1651/1651**, `build-shared --check`, Rules **288/288**, emulador **33/33**, build y `check:no-preview` OK.
+- Presupuesto de Rules (arnés `tests/rules-budget/measure.budget.ts`, relleno en el resumen): mínimo **118** (perfiles legacy y v1-admin) / **125** (v1-records), **igual** que las Rules de producción `cbe11685`. Margen requerido 100: OK.
+- Prerrequisitos de deploy actualizados en el doc 25 §0 (valores vigentes, rollback, Functions a vigilar y smoke pendiente de Pastor, Pastora y Líder).

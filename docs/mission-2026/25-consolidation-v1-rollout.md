@@ -2,7 +2,41 @@
 
 > **NO EJECUTADO.** Este documento solo prepara el rollout. Cada fase exige un **GO explícito de Salvador** y termina en **HARD STOP**.
 > **Actualización R1/R4 (2026-10-08).** El baseline productivo cambió: SumUp CASH (05/10), la recuperación del Hosting del 05/10 (R0B–R0D) y la seguridad del modal de efectivo (PR #11, R0E–R0G) ya están en producción. Rama productiva `feature/preproduccion-mobile-v1` @ **`a312c96`**; Hosting **`3d1dc8bc8d1bcc29`**; Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Functions `campaignshare-00002-dij`, `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`; baseline financiero **A9 post-CASH**. La pila quedó `a312c96` → PR #5 `a8d782d` → PR #7 (este PR). Los valores de la Etapa A (`edb77ffc04532a95`, `-00006/-00007`, montos A0) quedan **solo como evidencia histórica pre-CASH**. El C-A0 del 08/10 terminó en STOP (doc 21) por ese cambio de baseline; el próximo C-A0 parte de estos valores.
+> **Actualización R2.5 (2026-10-15) · VALORES VIGENTES: reemplazan a los de abajo.** Ver §0.
 > Spec: [doc 23](23-consolidation-v1-production-spec.md) · Seguridad: [doc 24](24-consolidation-v1-security-review.md) · Etapa B (Platform + Calendar): [doc 20](20-platform-calendar-rc1-readiness.md) §13–14 · Bitácora: [doc 21](21-controlled-rollout-log.md).
+
+## 0. Valores vigentes (R2.5, 15/10/2026)
+
+Entre el 14 y el 15/10 se desplegaron C-A1 completo (C-A1.2–C-A1.6), R2 (R2.1–R2.4) y R2.5. Esta PR quedó integrada sobre ese HEAD (doc 32 §9). **Todo valor de producción citado más abajo (`a312c96`, `18925d6`, `2d9939ab…`, `3d1dc8bc8d1bcc29`, `9e449d0e…`, "baseline A9") es histórico**; se usan estos:
+
+| Pieza | Valor vigente |
+|---|---|
+| Rama productiva (GitHub) | `feature/preproduccion-mobile-v1` @ **`35a234cb33d5311e8d2f957db203aa4eed2f567f`** (merge de PR #29, R2.5) |
+| Ancestro obligatorio en cada fase | `git merge-base --is-ancestor 35a234cb33d5311e8d2f957db203aa4eed2f567f HEAD` → 0 (contiene `18925d6` y el fix del doc 26) |
+| Firestore Rules | **`cbe11685-61ce-41d1-a8af-3b26a907f1bc`** → objetivo de rollback de C-A4 (R4) |
+| Storage Rules | `f700d246` (no se tocan) |
+| Hosting | **`72e014e5861a25ac`** → objetivo de rollback de C-A6 (R1) |
+| Índices | 7 READY → 10 tras C-A3 (3 `members*`) |
+| Functions que NO deben cambiar de revisión | `calendarpublicfeed-00001-huh`, `calendarsharelinkmanage-00001-jek`, `campaignshare-00002-dij`, `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek` (southamerica-east1), `sumuppayoutsreconciliation-00001-bog` |
+| Baseline financiero | **A10 r2 aprobado** (`~/cds-ops/baseline-a10-20261014-r2.json`) + deltas explicados por A6 (no A9) |
+| Monitores | A5 (`~/cds-ops/a5-check.mjs`, EXPECT por fase, D2) y A6 (`a6-snap.mjs` + `scripts/ops/finance-monitor/run.mjs`): 0 STOP |
+| Checkout de deploy | `~/cds-deploy-r2` (o uno nuevo), detached en el **commit de merge de C-A2.5**, limpio |
+
+**Estado de las fases previas**
+
+| Fase | Estado |
+|---|---|
+| C-A1 (Etapa B: Rules, Functions de calendario, Hosting) | **Hecho** (C-A1.2–C-A1.6, 14/10), y además R2 y R2.5 |
+| C-A2 · smoke Admin | **PASS** (post-deploy de R2.4 y R2.5, sesión propia del administrador) |
+| C-A2 · smoke Pastor, Pastora y Líder con sesión real propia | **PENDIENTE.** Requiere que cada persona entre con su propia cuenta; nunca con credenciales ajenas. Bloquea C-A2.5 |
+| C-A2.5 · merge de esta PR | Pendiente de GO (después de C-A2 completo) |
+| C-A3 … C-A12 | Sin ejecutar; un GO por fase |
+
+**Cambios al procedimiento por R2/R2.5**
+- En C-A0, C-A4, C-A5 y C-A6 la comparación de montos es contra A10 r2 + A6 (0 STOP), no contra A9. Las escrituras `system:sumup` POS nuevas (rev 1) son normales y A5 las marca como "escritura sobre POS": se aceptan si A6 las informa como `SUMUP_CREATIONS` legítimas.
+- En C-A5, `functions:list` debe mostrar las **6** Functions de la tabla con la misma revisión (antes eran 3).
+- En C-A6, además de los `grep` de R0G y SumUp CASH, verificar en `out/` que sigan los textos de R2.5: "Resumen del día", "Efectivo pendiente de confirmar", "Depósitos", "Nueva actividad", "Antes de crear actividades"; y que **no** esté "Ver movimientos del día".
+- Navegación: con Integrantes, el admin ve 5 módulos; en móvil la barra usa la etiqueta corta "Ajustes".
 
 ## 1. Decisiones humanas (RESUELTAS por Salvador el 2026-10-05)
 
@@ -109,9 +143,9 @@ Orden **R3 → R1 → R2 → R4** (Atlas A-01): los grants se revocan mientras l
 | Paso | Acción | Efecto |
 |---|---|---|
 | R3 · Revocar grants (higiene, primero) | Con el Hosting de Consolidación aún publicado: Configuración › Usuarios → quitar "Ver/Gestionar Consolidación" a quien lo tenga, incluidos los inactivos. Verificar con `node scripts/migrate-access-v1.mjs --project cds-administracion --summary` **desde un checkout del commit de Consolidación** (es el único `--summary` con ese bloque): `explicitRead + explicitManage + inactiveWithGrant == 0` | Deja los perfiles limpios para RC1. **No** es el cierre de acceso (eso es R2/R4): con las reglas RC1 esos permisos guardados no dan acceso a nada, y la UI de C-A1 los descartaría al guardar |
-| R1 · Ocultar | Consola › Hosting › historial → **revertir a la versión de C-A1** | Integrantes desaparece del menú y de las rutas. Finanzas y Calendario quedan como en C-A1 |
+| R1 · Ocultar | Consola › Hosting › historial → **revertir a `72e014e5861a25ac`** (R2.5; §0) | Integrantes desaparece del menú y de las rutas. Finanzas y Calendario quedan como en C-A1 |
 | R2 · Detener escrituras | `./node_modules/.bin/firebase functions:delete membersPersonCreate membersPersonUpdate membersStatusChange membersVisitCreate membersFollowUpCreate membersOwnerOptions --region southamerica-west1 --project cds-administracion` | Nadie puede escribir (ni con la consola del navegador). No toca SumUp ni calendario. Los datos no se borran |
-| R4 · Cerrar lectura | Consola › Reglas › historial → **restaurar el ruleset de C-A1** | Las 4 colecciones caen en el catch-all: nadie las lee desde el cliente. Datos intactos |
+| R4 · Cerrar lectura | Consola › Reglas › historial → **restaurar `cbe11685-61ce-41d1-a8af-3b26a907f1bc`** (R2; §0) | Las 4 colecciones caen en el catch-all: nadie las lee desde el cliente. Datos intactos |
 | R5 · Índices | No se tocan | Aditivos e inofensivos |
 
 Si hay urgencia (exposición de datos), R1 + R2 + R4 pueden ir primero y R3 después: el acceso lo cierran las reglas, no los perfiles.
@@ -119,7 +153,7 @@ Si hay urgencia (exposición de datos), R1 + R2 + R4 pueden ir primero y R3 desp
 - Cada paso es independiente: ante un problema de UI basta R1; ante un problema de escrituras, R1 + R2.
 - **Nunca** se revierte Financial Core ni se toca SumUp CASH en un rollback de Consolidación.
 - **Nunca** `firebase deploy --only functions` sin nombres ni redeploy de Functions desde un checkout anterior: el árbol de PR #5/#7 contiene un `sumupSyncNow` con `requireFinanceUser` refactorizado (doc 20 §19) que **no** está desplegado (`-00007-wut`), y un checkout anterior a `ee33aa9` quitaría SumUp CASH.
-- Los únicos objetivos de rollback de Hosting y Rules de Consolidación son los que deja **C-A1** (Rules de `18925d6` y Hosting RC1). **`2d9939ab…` NO es objetivo de rollback de Consolidación** (es pre-Platform; ver §5.1); solo lo es de C-A1 mismo (doc 20 §14). Los anteriores a C-A1 en producción eran `3d1dc8bc8d1bcc29` y `2d9939ab…`; `edb77ffc04532a95`, `9e616f79835a96c2`, `f4591416f0474b0f` y `8d0087d6…` son **históricos, NO USAR** (no tienen R0G y/o CASH).
+- **Vigente (§0):** los objetivos de rollback de Consolidación son Rules `cbe11685-61ce-41d1-a8af-3b26a907f1bc` y Hosting `72e014e5861a25ac` (producción R2.5). *Histórico:* los únicos objetivos de rollback de Hosting y Rules de Consolidación eran los que dejaba **C-A1** (Rules de `18925d6` y Hosting RC1). **`2d9939ab…` NO es objetivo de rollback de Consolidación** (es pre-Platform; ver §5.1); solo lo es de C-A1 mismo (doc 20 §14). Los anteriores a C-A1 en producción eran `3d1dc8bc8d1bcc29` y `2d9939ab…`; `edb77ffc04532a95`, `9e616f79835a96c2`, `f4591416f0474b0f` y `8d0087d6…` son **históricos, NO USAR** (no tienen R0G y/o CASH).
 - Re-habilitar: C-A4 → C-A5 → C-A6 desde el mismo commit.
 
 ### 5.1 Caveat legacy ampliado (Atlas A-02, doc 20 §14)
@@ -136,7 +170,7 @@ Diario durante 7 días (además de A5/Etapa B):
 - logs `severity>=ERROR` de las `members*` (sin PII: el código solo registra método, nombre y código del error);
 - evaluaciones de reglas DENY (esperadas: 0 en Finanzas);
 - `node scripts/migrate-access-v1.mjs --project cds-administracion --summary` (bloque Integrantes: solo los grants decididos);
-- montos financieros = baseline A9 post-CASH (A5) y `r0g-fin-snap.mjs compare` sin escrituras que no sean creaciones legítimas de SumUp.
+- montos financieros = baseline A10 r2 + deltas explicados (A5 y A6 sin STOP; antes: baseline A9 post-CASH) y `r0g-fin-snap.mjs compare` sin escrituras que no sean creaciones legítimas de SumUp.
 
 ## 7. Qué NO se hace el miércoles
 
