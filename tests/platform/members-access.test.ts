@@ -116,8 +116,10 @@ describe("regresión financiera: el acceso financiero de cada rol no cambia (#47
   it("#49 finance: resumen, detalle y registros (sin pastoral)", () => {
     expect(finance({ role: "finance", active: true })).toEqual(["finance.details.read", "finance.records.manage", "finance.summary.read"]);
   });
-  it("#50 leader: solo resumen", () => {
-    expect(finance({ role: "leader", active: true })).toEqual(["finance.summary.read"]);
+  it("#50 leader (política R2.7, 16/10/2026): sin Finanzas por defecto; con resumen otorgado, solo resumen", () => {
+    expect(finance({ role: "leader", active: true })).toEqual([]);
+    expect(finance(v1([...LEGACY_ROLE_ACCESS.leader.permissions]))).toEqual([]);
+    expect(finance(v1([...LEGACY_ROLE_ACCESS.leader.permissions, "finance.summary.read"]))).toEqual(["finance.summary.read"]);
   });
   it("otorgar Integrantes no agrega ni quita nada de finanzas", () => {
     for (const perms of [[], ["finance.summary.read"], [...LEGACY_ROLE_ACCESS.finance.permissions]]) {
