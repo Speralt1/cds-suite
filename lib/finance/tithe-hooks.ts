@@ -19,7 +19,6 @@ import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "./constants";
 import { errorMessage, parseDate, periodId } from "./formatters";
 import { safeLimit } from "./query-limit";
 import { normalizeName } from "../shared/names";
-import { isValidProfileId } from "./profile-route";
 import { titheDonorReport, type TitheDonorReport } from "./tithe-donors";
 import type { FinanceTransaction, TitheProfile, TitheAttribution } from "./types";
 export function useProfiles(search: string, cursor = "", enabled = true) {
@@ -82,7 +81,10 @@ export function useMonthlyAttributions(year: number, month: number) {
 }
 
 async function fetchLinkedDocuments<T>(name: string, ids: string[]): Promise<T[]> {
-  const unique = [...new Set(ids.filter(isValidProfileId))];
+  const validDocumentId = (id: string) =>
+    !!id && id !== "." && id !== ".." && !id.includes("/") &&
+    new TextEncoder().encode(id).length <= 1500;
+  const unique = [...new Set(ids.filter(validDocumentId))];
   const results: T[] = [];
   for (let i = 0; i < unique.length; i += 30) {
     const snapshot = await getDocsFromServer(
@@ -91,7 +93,7 @@ async function fetchLinkedDocuments<T>(name: string, ids: string[]): Promise<T[]
         where(documentId(), "in", unique.slice(i, i + 30)),
       ),
     );
-    results.push(...snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as T));
+    results.push(...snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as T));
   }
   return results;
 }

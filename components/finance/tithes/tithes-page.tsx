@@ -13,7 +13,7 @@ import {
 } from "@/lib/finance/tithe-hooks";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
-import { clp, dateLabel, periodLabel, previousPeriod } from "@/lib/finance/formatters";
+import { clp, dateLabel, periodId, periodLabel, previousPeriod, santiagoDateLabel, santiagoToday } from "@/lib/finance/formatters";
 import { combineSummaries, variation } from "@/lib/finance/calculations";
 import { PAGE_SIZE } from "@/lib/finance/constants";
 import type { TitheProfile } from "@/lib/finance/types";
@@ -114,6 +114,7 @@ function Tithes() {
   const priorLoading = priorAttributions.loading || priorDonors.loading;
   const donorsError = attributions.error || currentDonors.error;
   const priorError = priorAttributions.error || priorDonors.error;
+  const ongoingMonth = periodId(period.year, period.month) === santiagoToday().slice(0, 7);
   const donorChange = variation(
     currentDonors.report.donors.length,
     priorDonors.report.donors.length,
@@ -247,21 +248,24 @@ function Tithes() {
             className="tithe-kpi-action"
             onClick={() => setShowDonors(true)}
             disabled={donorsLoading || !!donorsError}
-            aria-label="Ver detalle de diezmantes del mes"
+            aria-label={`Ver detalle de ${currentDonors.report.donors.length} diezmantes del mes`}
           >
-            <strong>{donorsLoading ? "…" : donorsError ? "—" : currentDonors.report.donors.length}</strong>
+            <strong>{donorsError ? "—" : donorsLoading ? "…" : currentDonors.report.donors.length}</strong>
             <span>Ver detalle</span>
           </button>
+          <span>Fichas distintas con diezmos válidos</span>
         </article>
         <article className="kpi">
           <h3>Diezmantes del mes anterior</h3>
-          <p>{priorLoading ? "…" : priorError ? "—" : priorDonors.report.donors.length}</p>
+          <p>{priorError ? "—" : priorLoading ? "…" : priorDonors.report.donors.length}</p>
           <span>
-            {priorLoading || donorsLoading || priorError || donorsError
-              ? "Comparación pendiente"
+            {priorError || donorsError
+              ? "Comparación no disponible"
+              : priorLoading || donorsLoading
+                ? "Comparación pendiente"
               : donorChange === null
-                ? `${periodLabel(priorPeriod)} · Sin base: mes anterior en cero`
-                : `${periodLabel(priorPeriod)} · ${donorChange < 0 ? "−" : donorChange > 0 ? "+" : ""}${Math.abs(donorChange).toLocaleString("es-CL", { maximumFractionDigits: 1 })}% este mes`}
+                ? `${periodLabel(priorPeriod)} · Sin base: mes anterior en cero${ongoingMonth ? " (mes en curso)" : ""}`
+                : `${periodLabel(priorPeriod)} · ${donorChange < 0 ? "−" : donorChange > 0 ? "+" : ""}${Math.abs(donorChange).toLocaleString("es-CL", { maximumFractionDigits: 1 })}% este mes${ongoingMonth ? " (en curso)" : ""}`}
           </span>
         </article>
         <article className="kpi">
@@ -288,7 +292,7 @@ function Tithes() {
                   <dl>
                     <div><dt>Aportes</dt><dd>{row.contributions}</dd></div>
                     <div><dt>Total del período</dt><dd>{clp(row.total)}</dd></div>
-                    <div><dt>Último diezmo</dt><dd>{dateLabel(row.latestDate)}</dd></div>
+                    <div><dt>Último diezmo</dt><dd>{santiagoDateLabel(row.latestDate)}</dd></div>
                   </dl>
                 </div>
               ))

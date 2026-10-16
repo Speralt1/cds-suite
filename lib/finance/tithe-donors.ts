@@ -1,4 +1,3 @@
-import { isoDate } from "./formatters";
 import type { FinanceTransaction, TitheAttribution, TitheProfile } from "./types";
 
 export interface TitheDonorRow {
@@ -30,12 +29,10 @@ export function titheDonorReport(
     if (attribution.status !== "active") continue;
     const transaction = transactionById.get(attribution.id);
     const profile = profileById.get(attribution.profileId);
-    const date = isoDate(attribution.date);
     const matches =
       !seenTransactions.has(attribution.transactionId) &&
       attribution.transactionId === attribution.id &&
       attribution.period === period &&
-      date.startsWith(`${period}-`) &&
       Number.isSafeInteger(attribution.amount) &&
       attribution.amount > 0 &&
       transaction?.source === "tithe" &&

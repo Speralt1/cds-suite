@@ -1390,14 +1390,19 @@ button:disabled {
 }
 .tithe-kpi-action {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
   width: 100%;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
   text-align: left;
   color: var(--color-primary);
   cursor: pointer;
 }
+.tithe-kpi-action:focus-visible { outline-offset: 3px; }
 .tithe-kpi-action strong {
   font-size: 1.375rem;
   font-weight: 600;
@@ -1411,6 +1416,7 @@ button:disabled {
   color: var(--color-muted);
   cursor: default;
 }
+.tithe-kpi-action:disabled span { text-decoration: none; }
 .tithe-donor-detail {
   padding: 0.5rem 1.5rem 1.5rem;
 }
@@ -1442,11 +1448,13 @@ button:disabled {
 }
 .tithe-donor-row dd {
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 @media (max-width: 640px) {
   .tithe-donor-detail { padding-inline: 1rem; }
   .tithe-donor-row { grid-template-columns: 1fr; gap: 0.5rem; }
+  .tithe-donor-row dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tithe-donor-row dl > div:last-child { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
   .user-settings-list {

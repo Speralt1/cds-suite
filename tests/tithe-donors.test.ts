@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { parseDate } from "@/lib/finance/formatters";
+import { describe, expect, it, vi } from "vitest";
+import { parseDate, santiagoDateLabel, santiagoToday } from "@/lib/finance/formatters";
 import { titheDonorReport } from "@/lib/finance/tithe-donors";
 import { variation } from "@/lib/finance/calculations";
 import type { FinanceTransaction, TitheAttribution, TitheProfile } from "@/lib/finance/types";
@@ -65,5 +65,20 @@ describe("monthly tithe donors", () => {
   it("leaves percentage undefined when the previous month has no donors", () => {
     expect(variation(3, 0)).toBeNull();
     expect(variation(26, 32)).toBe(-18.75);
+  });
+
+  it("uses the civil day in Santiago at a UTC month boundary", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-01T02:30:00Z"));
+      expect(santiagoToday()).toBe("2026-10-31");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("labels a late Chilean donation on its local day", () => {
+    expect(santiagoDateLabel({ toDate: () => new Date("2026-11-01T02:30:00Z") } as never))
+      .toBe("31-10-2026");
   });
 });
