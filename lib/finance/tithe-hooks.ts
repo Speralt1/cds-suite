@@ -5,6 +5,7 @@ import {
   documentId,
   getCountFromServer,
   getDocs,
+  getDocsFromServer,
   orderBy,
   query,
   startAfter,
@@ -18,7 +19,9 @@ import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "./constants";
 import { errorMessage, parseDate, periodId } from "./formatters";
 import { safeLimit } from "./query-limit";
 import { normalizeName } from "../shared/names";
-import type { TitheProfile, TitheAttribution } from "./types";
+import { isValidProfileId } from "./profile-route";
+import { titheDonorReport, type TitheDonorReport } from "./tithe-donors";
+import type { FinanceTransaction, TitheProfile, TitheAttribution } from "./types";
 export function useProfiles(search: string, cursor = "", enabled = true) {
   const constraints = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -76,6 +79,111 @@ export function useMonthlyAttributions(year: number, month: number) {
     true,
     `monthly:${periodId(year, month)}`,
   );
+}
+
+async function fetchLinkedDocuments<T>(name: string, ids: string[]): Promise<T[]> {
+  const unique = [...new Set(ids.filter(isValidProfileId))];
+  const results: T[] = [];
+  for (let i = 0; i < unique.length; i += 30) {
+    const snapshot = await getDocsFromServer(
+      query(
+        collection(getFirebaseServices().db, name),
+        where(documentId(), "in", unique.slice(i, i + 30)),
+      ),
+    );
+    results.push(...snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as T));
+  }
+  return results;
+}
+
+/** Validate each attribution against its ledger movement and profile before counting. */
+export function useValidatedMonthlyDonors(
+  year: number,
+  month: number,
+  attributions: TitheAttribution[],
+  ready: boolean,
+) {
+  const period = periodId(year, month);
+  const [state, setState] = useState<{
+    period: string;
+    source: TitheAttribution[];
+    report: TitheDonorReport;
+    error: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    if (attributions.length >= MAX_PERIOD_RECORDS) {
+      return;
+    }
+    const candidates = attributions.filter((a) => a.status === "active");
+    Promise.all([
+      fetchLinkedDocuments<FinanceTransaction>(
+        "financeTransactions",
+        candidates.map((a) => a.id),
+      ),
+      fetchLinkedDocuments<TitheProfile>(
+        "titheProfiles",
+        candidates.map((a) => a.profileId),
+      ),
+    ])
+      .then(([transactions, profiles]) => {
+        if (active)
+          setState({
+            period,
+            source: attributions,
+            report: titheDonorReport(period, attributions, transactions, profiles),
+            error: "",
+          });
+      })
+      .catch((e) => {
+        if (active)
+          setState({
+            period,
+            source: attributions,
+            report: { donors: [], excluded: 0 },
+            error: errorMessage(e),
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [period, attributions, ready]);
+  if (ready && attributions.length >= MAX_PERIOD_RECORDS)
+    return {
+      report: { donors: [], excluded: 0 },
+      loading: false,
+      error: "Hay demasiados aportes en este mes para mostrar un conteo completo.",
+    };
+  return ready && state?.period === period && state.source === attributions
+    ? { report: state.report, loading: false, error: state.error }
+    : { report: { donors: [], excluded: 0 }, loading: true, error: "" };
+}
+
+/** Total de fichas, activas y archivadas, independiente del mes seleccionado. */
+export function useTotalProfileCount(refresh: number) {
+  const [state, setState] = useState<{
+    refresh: number;
+    count: number;
+    error: string;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    getCountFromServer(collection(getFirebaseServices().db, "titheProfiles"))
+      .then((s) => {
+        if (active) setState({ refresh, count: s.data().count, error: "" });
+      })
+      .catch((e) => {
+        if (active)
+          setState({ refresh, count: 0, error: errorMessage(e) });
+      });
+    return () => {
+      active = false;
+    };
+  }, [refresh]);
+  return state?.refresh === refresh
+    ? { count: state.count, error: state.error, loading: false }
+    : { count: 0, error: "", loading: true };
 }
 export function useNewProfileCount(year: number, refresh: number) {
   const [state, setState] = useState<{

@@ -7,13 +7,19 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   doc,
+  collection,
+  documentId,
   getDoc,
+  getDocs,
+  getCountFromServer,
+  query,
   setDoc,
   updateDoc,
   deleteDoc,
   serverTimestamp,
   Timestamp,
   writeBatch,
+  where,
   type Firestore,
 } from "firebase/firestore";
 import { beforeAll, beforeEach, afterAll, describe, it, expect } from "vitest";
@@ -96,6 +102,26 @@ beforeEach(async () => {
 });
 afterAll(async () => await env?.cleanup());
 describe("Reglas y operaciones reales, exclusivamente emulador", () => {
+  it("permite consultar los vínculos del detalle solo a quien lee finanzas", async () => {
+    await saveProfile(db, "finance", profile, undefined, "person");
+    await saveTransaction(
+      db, "finance", "tithe",
+      { ...input, category: "Diezmos", description: "Diezmo" },
+      { profileId: "person" },
+    );
+    for (const [name, id] of [
+      ["financeTransactions", "tithe"],
+      ["titheAttributions", "tithe"],
+      ["titheProfiles", "person"],
+    ]) {
+      expect((await getDocs(query(collection(db, name), where(documentId(), "in", [id])))).size).toBe(1);
+      const leader = env.authenticatedContext("leader").firestore() as unknown as Firestore;
+      await assertFails(getDocs(query(collection(leader, name), where(documentId(), "in", [id]))));
+    }
+    expect((await getCountFromServer(collection(db, "titheProfiles"))).data().count).toBe(1);
+    const leader = env.authenticatedContext("leader").firestore() as unknown as Firestore;
+    await assertFails(getCountFromServer(collection(leader, "titheProfiles")));
+  });
   it("crea entrada y salida, edita de mes y anula sin perder auditoría", async () => {
     await saveTransaction(db, "finance", "one", input);
     await saveTransaction(db, "finance", "two", {

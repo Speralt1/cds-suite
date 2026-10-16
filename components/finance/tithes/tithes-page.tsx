@@ -7,20 +7,22 @@ import {
   useProfiles,
   useLatestAttribution,
   useMonthlyAttributions,
-  useNewProfileCount,
+  useTotalProfileCount,
+  useValidatedMonthlyDonors,
   useProfileCount,
 } from "@/lib/finance/tithe-hooks";
 import { useAccess } from "@/lib/auth/access-provider";
 import { can } from "@/lib/shared/access";
-import { clp, dateLabel, previousPeriod } from "@/lib/finance/formatters";
+import { clp, dateLabel, periodLabel, previousPeriod } from "@/lib/finance/formatters";
 import { combineSummaries, variation } from "@/lib/finance/calculations";
-import { PAGE_SIZE, MAX_PERIOD_RECORDS } from "@/lib/finance/constants";
+import { PAGE_SIZE } from "@/lib/finance/constants";
 import type { TitheProfile } from "@/lib/finance/types";
 import {
   DetailGuard,
   Empty,
   FinancePageHeader,
   Loading,
+  Modal,
   Notice,
   PeriodPicker,
 } from "../shared";
@@ -87,6 +89,7 @@ function Tithes() {
   const [refresh, setRefresh] = useState(0);
   const [warning, setWarning] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showDonors, setShowDonors] = useState(false);
   const access = useAccess();
   const profiles = useProfiles(search, cursor);
   // Conteo por agregación (sin leer las fichas archivadas).
@@ -97,12 +100,23 @@ function Tithes() {
   const hiddenOnPage =
     profiles.data.slice(0, PAGE_SIZE).length - visibleProfiles.length;
   const current = useSummaries(period);
-  const previous = useSummaries(previousPeriod(period));
+  const priorPeriod = previousPeriod(period);
   const attributions = useMonthlyAttributions(period.year, period.month);
-  const count = useNewProfileCount(period.year, refresh);
-  const change = variation(
-    combineSummaries(current.data).titheTotal,
-    combineSummaries(previous.data).titheTotal,
+  const priorAttributions = useMonthlyAttributions(priorPeriod.year, priorPeriod.month);
+  const currentDonors = useValidatedMonthlyDonors(
+    period.year, period.month, attributions.data, attributions.synced,
+  );
+  const priorDonors = useValidatedMonthlyDonors(
+    priorPeriod.year, priorPeriod.month, priorAttributions.data, priorAttributions.synced,
+  );
+  const count = useTotalProfileCount(refresh);
+  const donorsLoading = attributions.loading || currentDonors.loading;
+  const priorLoading = priorAttributions.loading || priorDonors.loading;
+  const donorsError = attributions.error || currentDonors.error;
+  const priorError = priorAttributions.error || priorDonors.error;
+  const donorChange = variation(
+    currentDonors.report.donors.length,
+    priorDonors.report.donors.length,
   );
   function saved(s: string, w = "") {
     setSuccess(s);
@@ -124,8 +138,8 @@ function Tithes() {
         success={success}
         error={
           current.error ||
-          previous.error ||
-          attributions.error ||
+          donorsError ||
+          priorError ||
           count.error ||
           profiles.error
         }
@@ -227,39 +241,63 @@ function Tithes() {
           </p>
         </article>
         <article className="kpi">
-          <h3>Personas/familias con registro</h3>
-          <p>
-            {attributions.loading
-              ? "…"
-              : attributions.error
-                ? "—"
-                : attributions.data.length >= MAX_PERIOD_RECORDS
-                  ? "No disponible"
-                  : new Set(
-                      attributions.data
-                        .filter((a) => a.status === "active")
-                        .map((a) => a.profileId),
-                    ).size}
-          </p>
+          <h3>Diezmantes del mes</h3>
+          <button
+            type="button"
+            className="tithe-kpi-action"
+            onClick={() => setShowDonors(true)}
+            disabled={donorsLoading || !!donorsError}
+            aria-label="Ver detalle de diezmantes del mes"
+          >
+            <strong>{donorsLoading ? "…" : donorsError ? "—" : currentDonors.report.donors.length}</strong>
+            <span>Ver detalle</span>
+          </button>
         </article>
         <article className="kpi">
-          <h3>Nuevas fichas del año</h3>
-          <p>{count.loading ? "…" : count.error ? "—" : count.count}</p>
-        </article>
-        <article className="kpi">
-          <h3>Variación mensual</h3>
-          <p>
-            {change === null
-              ? "—"
-              : `${change.toLocaleString("es-CL", { maximumFractionDigits: 1 })}%`}
-          </p>
+          <h3>Diezmantes del mes anterior</h3>
+          <p>{priorLoading ? "…" : priorError ? "—" : priorDonors.report.donors.length}</p>
           <span>
-            {change === null
-              ? "Sin base de comparación"
-              : "Respecto al mes anterior"}
+            {priorLoading || donorsLoading || priorError || donorsError
+              ? "Comparación pendiente"
+              : donorChange === null
+                ? `${periodLabel(priorPeriod)} · Sin base: mes anterior en cero`
+                : `${periodLabel(priorPeriod)} · ${donorChange < 0 ? "−" : donorChange > 0 ? "+" : ""}${Math.abs(donorChange).toLocaleString("es-CL", { maximumFractionDigits: 1 })}% este mes`}
           </span>
         </article>
+        <article className="kpi">
+          <h3>Personas/familias registradas</h3>
+          <p>{count.loading ? "…" : count.error ? "—" : count.count}</p>
+          <span>Fichas existentes, incluidas archivadas</span>
+        </article>
       </div>
+      {!donorsLoading && !donorsError && currentDonors.report.excluded > 0 && (
+        <p role="status" className="notice-warning">
+          {currentDonors.report.excluded} aporte(s) sin ficha o con datos incongruentes no se incluyeron en el conteo de diezmantes.
+        </p>
+      )}
+      {showDonors && (
+        <Modal title={`Diezmantes · ${periodLabel(period)}`} size="wide" onClose={() => setShowDonors(false)}>
+          <div className="tithe-donor-detail">
+            {currentDonors.report.donors.length ? (
+              currentDonors.report.donors.map((row) => (
+                <div className="tithe-donor-row" key={row.profile.id}>
+                  <div>
+                    <Link href={profileHref(row.profile.id)}>{row.profile.displayName}</Link>
+                    <small>{row.profile.type === "family" ? "Familia" : "Persona"}</small>
+                  </div>
+                  <dl>
+                    <div><dt>Aportes</dt><dd>{row.contributions}</dd></div>
+                    <div><dt>Total del período</dt><dd>{clp(row.total)}</dd></div>
+                    <div><dt>Último diezmo</dt><dd>{dateLabel(row.latestDate)}</dd></div>
+                  </dl>
+                </div>
+              ))
+            ) : (
+              <p>Sin diezmos válidos en este mes.</p>
+            )}
+          </div>
+        </Modal>
+      )}
       {can(access, "finance.records.manage") && <DuplicateProfilesPanel />}
       {create && (
         <ProfileForm
