@@ -10,12 +10,18 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
+  getCountFromServer,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
   type DocumentData,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -230,6 +236,29 @@ describe("Política de acceso financiero (16/10/2026): líderes sin Finanzas por
     for (const op of FIN_DETAIL_OPS)
       expect({ op, ok: await allowed(() => READ_OPS[op]("v1-leader-summary")) }).toEqual({ op, ok: false });
     expect(await allowed(() => saveTransaction(dbOf(env, "v1-leader-summary"), "v1-leader-summary", "tx-ls", input))).toBe(false);
+  });
+
+  it("panel de diezmantes (PR #32): sus consultas exigen detalle; resumen o Integrantes solos no bastan", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "titheAttributions", "seed-tx"), { profileId: "seed-profile", period: "2026-07", date: Timestamp.now(), status: "active" });
+    });
+    const ops = (u: string): Record<string, () => Promise<unknown>> => {
+      const db = dbOf(env, u);
+      const byId = (c: string, id: string) => getDocs(query(collection(db, c), where(documentId(), "in", [id])));
+      return {
+        "aportes del mes": () => getDocs(query(collection(db, "titheAttributions"), where("period", "==", "2026-07"), orderBy("date", "desc"), limit(500))),
+        "movimientos por ID": () => byId("financeTransactions", "seed-tx"),
+        "aportes por ID": () => byId("titheAttributions", "seed-tx"),
+        "fichas por ID": () => byId("titheProfiles", "seed-profile"),
+        "conteo de fichas": () => getCountFromServer(collection(db, "titheProfiles")),
+      };
+    };
+    for (const u of ["v1-finance", "pastor", "v1-admin"])
+      for (const [op, run] of Object.entries(ops(u)))
+        expect({ u, op, ok: await allowed(run) }).toEqual({ u, op, ok: true });
+    for (const u of ["leader", "v1-leader", "v1-leader-summary", "v1-members-read", "v1-members-manage", "v1-inactive"])
+      for (const [op, run] of Object.entries(ops(u)))
+        expect({ u, op, ok: await allowed(run) }).toEqual({ u, op, ok: false });
   });
 
   it("admin, pastor y finance (legacy y v1) conservan el resumen; inactivo sigue bloqueado", async () => {
