@@ -89,7 +89,7 @@ describe("diff y salida", () => {
     const active = { ...leader, active: true };
     const activeRow = planAccessMigration("u-lider", active, { pastorHome: "finance" });
     expect(formatRow(activeRow, fieldDiff(activeRow, active))).toMatch(
-      /efectivos\s+finance.summary.read, calendar.read, calendar.events.manage_assigned/,
+      /efectivos\s+calendar.read, calendar.events.manage_assigned/,
     );
     expect(text).toMatch(/áreas\s+\[\]/);
     expect(text).toContain("Líder sin áreas");

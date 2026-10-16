@@ -65,12 +65,27 @@ export const LEGACY_ROLE_ACCESS: Readonly<Record<LegacyRole, Readonly<LegacyRole
     homeModule: "finance",
     permissions: ["finance.summary.read", "finance.details.read", "finance.records.manage", "calendar.read"],
   },
+  // Política 16/10/2026: líderes y diáconos SIN Finanzas por defecto. "Ver resumen financiero"
+  // (finance.summary.read) sigue en el catálogo y el administrador lo otorga a mano.
   leader: {
     baseRole: "standard",
     position: "Líder",
     homeModule: "calendar",
-    permissions: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
+    permissions: ["calendar.read", "calendar.events.manage_assigned"],
   },
+};
+
+/**
+ * Permisos financieros que las reglas YA PUBLICADAS (hasta el ruleset 80a69cd5, y las legacy de la
+ * Etapa A) dan a cada rol legacy. Solo para el detector de riesgo de rollback de
+ * `migrate-access-v1 --summary` (doc 25 §5.1): si se volviera a esas reglas, un v1 guardado como
+ * `leader` leería el resumen financiero. No usar para autorizar.
+ */
+export const PREVIOUS_RULES_LEGACY_FINANCE: Readonly<Record<LegacyRole, readonly Permission[]>> = {
+  admin: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
+  pastor: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
+  finance: ["finance.summary.read", "finance.details.read", "finance.records.manage"],
+  leader: ["finance.summary.read"],
 };
 
 const ALL: ReadonlySet<Permission> = new Set<Permission>(PERMISSIONS);

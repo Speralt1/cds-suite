@@ -15,7 +15,7 @@ service cloud.firestore {
     function legacyPermissions(r) {
       return r == 'pastor' ? ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_all']
         : r == 'finance' ? ['finance.summary.read','finance.details.read','finance.records.manage','calendar.read']
-        : r == 'leader' ? ['finance.summary.read','calendar.read','calendar.events.manage_assigned']
+        : r == 'leader' ? ['calendar.read','calendar.events.manage_assigned']
         : [];
     }
     function permissions() { return isAccessV1() ? userDoc().get('permissions', []) : legacyPermissions(legacyRole()); }
@@ -92,7 +92,7 @@ service cloud.firestore {
     function financeSummaryOf(u) {
       return u.active == true && (u.get('accessSchemaVersion', 0) == 1
         ? (u.get('permissions', []).hasAny(['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage']) || u.get('baseRole', '') == 'admin')
-        : u.get('role', '') in ['admin','pastor','finance','leader']);
+        : u.get('role', '') in ['admin','pastor','finance']);
     }
     function financeDetailsOf(u) {
       return u.active == true && (u.get('accessSchemaVersion', 0) == 1
