@@ -77,10 +77,11 @@ export const LEGACY_ROLE_ACCESS: Readonly<Record<LegacyRole, Readonly<LegacyRole
 };
 
 /**
- * Permisos financieros que las reglas YA PUBLICADAS (hasta el ruleset 80a69cd5, y las legacy de la
- * Etapa A) dan a cada rol legacy. Solo para el detector de riesgo de rollback de
- * `migrate-access-v1 --summary` (doc 25 §5.1): si se volviera a esas reglas, un v1 guardado como
- * `leader` leería el resumen financiero. No usar para autorizar.
+ * Permisos financieros que las reglas YA PUBLICADAS dan a cada rol legacy (unión, conservadora):
+ * hasta el ruleset 80a69cd5 eso afecta solo a documentos de esquema legacy con role leader; con las
+ * reglas solo-por-rol de la Etapa A (`e6b2084`) afectaría también a un v1 guardado como `leader`.
+ * Solo para el detector de riesgo de rollback de `migrate-access-v1 --summary` (doc 25 §5.1), que
+ * por eso puede sobrecontar en la dirección segura. No usar para autorizar.
  */
 export const PREVIOUS_RULES_LEGACY_FINANCE: Readonly<Record<LegacyRole, readonly Permission[]>> = {
   admin: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
