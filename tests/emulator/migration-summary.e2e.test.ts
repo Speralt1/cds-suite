@@ -53,8 +53,8 @@ describe("migración --summary contra el emulador", () => {
     expect(code).toBe(0);
     expect(out).toContain("simulación (no escribe)");
     expect(out).toContain("Resumen agregado (sin datos personales)");
-    expect(out).toMatch(/total\s+8/);
-    expect(out).toContain("migrar 3 · ya v1 5 · rol inválido 0");
+    expect(out).toMatch(/total\s+10/);
+    expect(out).toContain("migrar 3 · ya v1 7 · rol inválido 0");
     expect(out).toMatch(/activos sin ningún módulo\s+1/); // sinmodulos@cds.test
     expect(out).toMatch(/activos que requieren áreas\s+[1-9]/); // al menos el líder sin áreas
     expect(out).toMatch(/v1 con riesgo de rollback\s+[1-9]/); // al menos el v1 sin finanzas

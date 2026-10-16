@@ -336,3 +336,95 @@ Solo lectura, igual que con Pastor.
 | Octubre | Sin resumen todavía (sin movimientos de octubre). Se espera el primero en el culto de hoy, domingo 04-10 |
 
 **Resultado del control inicial:** OK. No se detectó ninguna condición STOP. *(La primera versión del script dio un falso positivo de "más de 2 h sin scheduler", porque el código viejo no escribía `sumupSyncRuns`. Se corrigió para medir con los logs de invocación.)*
+
+## Etapa B + Consolidación V1 · C-A0 (2026-10-08, 00:22–00:45 hora de Santiago)
+
+**GO recibido:** "GO C-A0 ONLY" (backup + snapshot + A5 fresco). Sin merge ni deploy. Runbook: doc 25 §1.1. Toda la evidencia es de **solo lectura** y con cifras agregadas (sin PII ni ids financieros).
+
+### Resultado: **STOP** (no se avanza a C-A1)
+
+| Control | Resultado |
+|---|---|
+| A5 fresco (`~/cds-ops/a5-check.mjs`, 2026-10-08T03:23Z, ventana 24 h) | **REVISAR, 2 hallazgos:** (1) **Hosting cambió**; (2) 39 escrituras `system:sumup` |
+| Hallazgo (2): 39 escrituras | **Explicado, no es STOP:** 7 Ofrendas + 32 Cafetería, todas **ventas con tarjeta creadas el 07-10** (rev1); `updated/voided/reactivated = 0`, `errorClass` vacío, resumen 2026-10 = ledger **9/9** |
+| Hallazgo (1): Hosting | **NO explicado → STOP.** En vivo `9e616f79835a96c2` (05-10 23:56Z). Después del Hosting del rollout CASH (`7fb393576208f8c0`, 05-10 13:14Z) hubo **4 deploys más** el 05-10 entre 23:21Z y 23:56Z (`bce1d3fb…`, `8bcb236a…`, `1a3dfc02…`, `9e616f79…`) desde la cuenta de Salvador, 133 archivos (CASH: 132), build distinto (otros chunks y build id; mismas rutas). **Ningún doc del repo ni `~/cds-ops` los registra** |
+| Rules | `2d9939ab-2a9e-491e-b176-1cafd939e568` (2026-10-03 22:14Z) = Etapa A. **PASS** |
+| Functions | `campaignShare` `-00002-dij` (04-10) · `sumupSyncNow` `-00007-wut` · `sumupSyncScheduled` `-00008-nek` (05-10 13:59Z, **rollout SumUp CASH, PR #6**). Sin cambios desde CASH. **PASS** (cambio documentado) |
+| Scheduler | ENABLED, cada 60 min; 24 invocaciones/24 h, 0 no-2xx, intervalo máx. 60 min; último 03:21Z. **PASS** |
+| SumUp | Ofrendas y Cafetería `ok`, lease libre, `errorClass` null; sweeps completos. CASH en ledger: 1 activo ($163.500), invariantes OK. **PASS** |
+| Errores / 5xx / permission-denied | 0 / 0 (7 días) / 0 · reglas 191 ALLOW · 0 DENY |
+| Monitoring | Política `13747596744746850802` habilitada; sin no-2xx. **PASS** |
+| Índices | 5, todos READY (sin cambios) |
+| Backup | **NO ejecutado**: el STOP se detectó antes. Un export "pre-etapa-b" no tiene sentido hasta resolver los bloqueos (se toma en el próximo C-A0) |
+
+### Snapshot financiero (solo lectura)
+
+| Período | Ingresos | Egresos | Resultado | Diezmos | Movimientos |
+|---|---:|---:|---:|---:|---:|
+| 2026-09 (resumen) | 7.824.647 | 6.860.000 | 964.647 | 2.926.397 | 790 |
+| Ene–sep 2026 | 34.752.315 | 6.910.000 | 27.842.315 | 3.126.397 | 6.387 |
+| 2026-10 (resumen, `updatedAt` 2026-10-08T02:21Z) | 1.339.360 | 486.000 | 853.360 | 0 | 145 |
+
+- **Contra el baseline de A0 (doc 21 arriba):** septiembre y ene–sep tienen **+163.000 y +1 movimiento**. Coincide exactamente con la línea base **CASH-A9** de `~/cds-ops/baseline-a9.json` (2026-10-06T03:51Z, "incluye movimientos manuales de Tesorería del 05/10"): efectivo manual de Ofrendas 27-09 (+155.000) y de Cafetería 27-09 (+90.000), y una anulación de Ofrendas 22-09 (−82.000). El A5 del 06-10 los clasificó como escrituras humanas. **Explicado, pero el registro del rollout CASH (CASH-A1…A9) no está en el repo.**
+- **Octubre por origen (ledger activo):** SumUp POS 142 · $1.015.860 · SumUp CASH 1 · $163.500 · efectivo manual 1 · $160.000 · egreso manual por transferencia 1 · $486.000. Suma de ingresos = 1.339.360 = resumen. Sin movimientos en revisión.
+
+### GitHub y checkout de release
+
+- PR #5: head `73b90401708d…`, Draft, MERGEABLE/CLEAN, base `mission/slice6-usability`. PR #7: head `10b32147…`, Draft, MERGEABLE/CLEAN, base PR #5. Desde el QA visual (`a2579ba`) PR #7 solo cambió docs.
+- `~/cds-deploy`: limpio, detached en `ee33aa9` (línea de producción), refs actualizadas.
+
+### Bloqueos para C-A1
+
+1. **Hosting en vivo no documentado** (`9e616f79835a96c2`): identificar qué commit/rama se desplegó el 05-10 entre 23:21Z y 23:56Z, registrarlo y decidir si es la línea base válida.
+2. **PR #5 y PR #7 no contienen SumUp CASH** (`ee33aa9`, PR #6 mergeado en `feature/preproduccion-mobile-v1` y desplegado). Desplegar la Etapa B tal como está **revertiría** el motor CASH (`functions/sumup/*`) y su UI. Antes de C-A1: integrar `feature/preproduccion-mobile-v1` en PR #5 y PR #7 (conflictos en `.gitignore` y `firebase.json`), re-ejecutar todos los gates (incluida la suite CASH), y cambiar la Fase 3 del doc 20 a un deploy de Functions **por nombre** que no toque `sumupSync*` salvo con el código ya integrado.
+3. Actualizar los baselines esperados de la Etapa B (doc 25 §1.1) a la línea A9 y al Hosting que se valide en (1).
+
+**Producción sin cambios.** Ningún merge, deploy, migración ni escritura.
+
+## Resolución de los bloqueos de C-A0 · R0 → R1/R4 (2026-10-08)
+
+Evidencia completa fuera del repo, sin PII: `~/cds-ops/r0*`, `r0e-*`, `r0g-*`, `r1-*`.
+
+| Paso | Qué se hizo | Resultado |
+|---|---|---|
+| R0 / R0B | Forense del Hosting `9e616f79835a96c2` | Se recuperó la fuente: una sesión local la desplegó el 05/10 desde una rama nunca publicada. Quedó preservada como `recovery/hosting-9e616f-20261005` @ `06301ae` (2 commits de UI de Finanzas sobre `ee33aa9`); su `out/` coincide 131/131 con la versión viva. **Bloqueo 1 resuelto** |
+| R0C / R0D | Auditoría Atlas y merge de PR #10 | `feature/preproduccion-mobile-v1` @ `ea18d62` (árbol = `06301ae`). Production unchanged |
+| R0E / R0F | PR #11, seguridad del modal de efectivo (MINOR-1/2/3) | Merge `a312c96`. Atlas: 0 BLOCKER / 0 MAJOR |
+| R0G | Deploy **solo Hosting** de `a312c96` (12:49Z) | Hosting `9e616f79835a96c2` → **`3d1dc8bc8d1bcc29`**; Rules y Functions sin cambio; smoke de lectura e integridad financiera PASS; el checker A5 espera el nuevo Hosting (lo único que se cambió en el checker) |
+| R1/R4 · PR #5 | Merge no destructivo de `a312c96` (`be5ebb1`). Conflictos `.gitignore` y `firebase.json` resueltos por semántica (`ignore` de CASH **y** `predeploy`). Fix de Atlas: las acciones de escritura de Resumen y Ofrendas exigen `finance.records.manage`. Runbook del doc 20: Functions por nombre; los objetivos pre-CASH quedan como HISTÓRICO | Head `a8d782d`, base `feature/preproduccion-mobile-v1`, Draft. Gates verdes: unit 879, rules 115, emulador 18; build, `build-shared` y paquete de Functions OK. Atlas: 0 BLOCKER / 0 MAJOR. **Bloqueo 2 resuelto para PR #5** |
+| R1/R4 · PR #7 | Merge de PR #5 `a8d782d` (`f208f30`, sin conflictos). Doc 25 al baseline post-R0G | Ver "STACK RECONCILIATION" abajo. **Bloqueos 2 y 3 resueltos** |
+
+**Desfase conocido (MINOR-3 de Atlas R1):** en el árbol de PR #5/#7, `sumupSyncNow` usa el `requireFinanceUser` del modelo de acceso compartido. La revisión viva `sumupsyncnow-00007-wut` mantiene la verificación legacy por rol, que es equivalente para los usuarios actuales (migración diferida, D4). Ni la Etapa B ni Consolidación la despliegan: **todo deploy de Functions es por nombre**. Desplegarla requiere un GO separado. `prod-snap.sh` y A5 verifican antes y después las revisiones `-00007-wut`, `-00008-nek` y `-00002-dij`.
+
+**Baselines vigentes para el próximo C-A0:** producción `a312c96`; Hosting `3d1dc8bc8d1bcc29`; Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Functions `campaignshare-00002-dij`, `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`; financiero **A9 post-CASH**. Los valores de A0 y de la Etapa A quedan solo como evidencia pre-CASH.
+
+**Producción sin cambios en R1/R4:** sin deploy, merge a producción, migración ni escrituras.
+
+### STACK RECONCILIATION (R1/R4, 2026-10-08)
+
+| Pieza | Valor |
+|---|---|
+| Producción | `feature/preproduccion-mobile-v1` @ `a312c96c95d6b6ad2c336a72729bfb480791e1ff` · Hosting `3d1dc8bc8d1bcc29` · Rules `2d9939ab…` · Functions `-00002-dij` / `-00007-wut` / `-00008-nek` |
+| PR #5 | `73b9040` → **`a8d782de1277ca8c387eccbb216f5c9e0b2cb405`** (merge `be5ebb1` + 4 commits), base `feature/preproduccion-mobile-v1`, Draft |
+| PR #7 | `92ee592` → merge `f208f30` (parents `92ee592` + `a8d782d`) + commits de docs; el head final queda registrado en el PR (solo cambia `docs/` y `PROJECT_CONTEXT.md` respecto de `b413bfb`) |
+| Idénticos byte a byte | `cash-modal.tsx`, `lib/finance/hooks.ts`, `lib/offerings/cash.ts`, `functions/sumup/**` = `a312c96`; `summary-page.tsx`, `offerings-page.tsx`, `firebase.json` = `a8d782d` |
+
+**Gates** (worktree aislado, `npm ci` + `functions ci`, sin `.env.local`):
+
+| | PR #5 @ `d28a221`¹ | PR #7 @ `b413bfb` |
+|---|---|---|
+| lint · typecheck | OK · OK | OK · OK |
+| unit (vitest) | 56 archivos · **879/879** | 66 archivos · **1136/1136** |
+| Rules (emulador) | 5 · **115/115** | 6 · **150/150** |
+| Emulador (auth+firestore+functions) | 4 · **18/18** | 5 · **27/27** |
+| `build-shared --check` · paquete de Functions | OK · PASS | OK · PASS |
+| build · preview | OK · exclusiones OK² | OK · `check:no-preview` OK (6 rutas de Integrantes) |
+| Por área (PR #7) | — | R0G 40 · CASH 63 · Financial Core 95 · SumUp POS 50 · Calendario 223 · Consolidación 239 |
+
+¹ `a8d782d` solo agrega docs sobre `d28a221`. ² PR #5 no tiene `check:no-preview` (lo agrega PR #7); se corrieron las exclusiones equivalentes.
+
+**Atlas:** PR #5 PASS WITH FINDINGS (0 BLOCKER · 0 MAJOR, tras corregir MAJOR-1 del runbook y MINOR-2 del gate de escritura). PR #7 PASS WITH FINDINGS (0 BLOCKER · 0 MAJOR; MINOR/NIT de documentación corregidos en este commit). Informes en `~/cds-ops/r1-atlas-pr5-integration.md` y `r1-atlas-pr7-integration.md`.
+
+**QA visual de integración** (emuladores `demo-cds-suite`, datos ficticios; 1440 / 1024 / 390 / 375): navegación de Platform (5 módulos; barra móvil con "Ajustes"; sin overflow horizontal), Calendario, Integrantes (Inicio, Atención, Personas, ficha, Registrar persona), Configuración, Finanzas (Resumen, Ofrendas). Modal R0G en la pila: carga → formulario; fecha vacía validada; registro existente prellenado; aviso SumUp CASH; registro modificado en otro equipo → aviso con el monto vigente, guardar bloqueado y "Cargar valores vigentes". Admin con acceso implícito a Integrantes. Pastor sin Integrantes en el menú; el deep link redirige con "No tienes acceso a Integrantes". **PASS.** Nada se guardó desde la UI; solo hubo escrituras de prueba en el emulador local.
+
+**Listo para un C-A0 fresco** (doc 25 §1.1). Nada se desplegó ni se escribió en producción.

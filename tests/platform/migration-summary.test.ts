@@ -91,6 +91,33 @@ describe("aggregateReport", () => {
 });
 
 describe("formatAggregate", () => {
+  it("Integrantes: hoy solo admin implícito; la migración no otorga members.* a ningún legacy", () => {
+    // DOCS no tiene grants explícitos: 2 admins activos (legacy + v1), 0 read, 0 manage.
+    expect(aggregateReport(entries).consolidation).toEqual({
+      adminImplicit: 2,
+      explicitRead: 0,
+      explicitManage: 0,
+      inactiveWithGrant: 0,
+      legacyWithout: 4,
+    });
+    for (const { row } of entries.filter((e) => e.row.status === "migrate")) {
+      expect(row.effective?.some((p) => p.startsWith("members.")), row.uid).toBe(row.oldRole === "admin");
+    }
+  });
+
+  it("Integrantes: cuenta grants explícitos v1 (read, manage, inactivos)", () => {
+    const docs: [string, Doc][] = [
+      ["r", v1("leader", ["members.consolidation.read"])],
+      ["m", v1("leader", ["members.consolidation.manage", "calendar.read"])],
+      ["off", v1("leader", ["members.consolidation.manage"], { active: false })],
+    ];
+    const r = aggregateReport(docs.map(([uid, doc]) => ({ row: planAccessMigration(uid, doc, { pastorHome: "finance" }), doc })));
+    expect(r.consolidation).toEqual({ adminImplicit: 0, explicitRead: 1, explicitManage: 1, inactiveWithGrant: 1, legacyWithout: 0 });
+    const text = formatAggregate(r);
+    expect(text).toContain("consolidation.read explícito  1");
+    expect(text).toContain("legacy que NO obtienen acceso 0");
+  });
+
   it("no contiene uid, nombre ni correo (ni enmascarado)", () => {
     const text = formatAggregate(aggregateReport(entries));
     for (const [uid, doc] of DOCS) {

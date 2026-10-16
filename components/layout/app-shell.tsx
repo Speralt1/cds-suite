@@ -7,7 +7,8 @@
 //   hamburguesa abre el cajón modal con los nombres completos.
 // - 768–1023: sin rail; barra superior oscura sticky con hamburguesa → cajón.
 // - <768: barra superior oscura + barra inferior con los módulos permitidos
-//   (≤4, sin "Más"); la hamburguesa abre el cajón.
+//   (≤5, sin "Más"; con 5 la etiqueta se acota al ancho de la columna); la
+//   hamburguesa abre el cajón.
 // - Barra superior: <1024 oscura y sticky (hamburguesa · CS · módulo · Aa ·
 //   avatar "Cuenta"); ≥1024 fila sobre canvas en la columna de contenido, no
 //   sticky, con la hamburguesa a la izquierda y "Aa" a la derecha.
@@ -15,7 +16,7 @@
 //   Por eso la <aside> (position: fixed) vive en el DOM dentro del <header>
 //   de la barra (landmarks anidados), entre la hamburguesa y "Aa".
 // - La navegación lista MÓDULOS; las secciones viven en la subnav de cada
-//   módulo dentro del contenido. Integrantes no existe.
+//   módulo dentro del contenido (FinanceNav sin cambios). Integrantes solo con permiso explícito o admin (doc 23).
 // - Funciona sin AccessProvider (solo "Finanzas", como antes) y conserva el
 //   skip link, <main id="main-content">, un único botón "Cerrar sesión" en el
 //   DOM (el cajón y la hoja "Cuenta" solo se montan abiertos) y un único
@@ -31,6 +32,7 @@ import {
   LogOut,
   Menu,
   Settings,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -60,6 +62,7 @@ import { TextSizeControl } from "./text-size-control";
 const ICONS: Readonly<Record<ModuleIconName, LucideIcon>> = {
   Wallet,
   CalendarDays,
+  Users,
   ChartColumn,
   Settings,
 };
@@ -305,6 +308,9 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
         {modules.map((m) => {
           const Icon = ICONS[m.icon];
           const current = m.id === activeModule;
+          // Con 5 módulos (admin con Integrantes) "Configuración" no cabe en ninguna
+          // columna de 375–390 px: se usa siempre la etiqueta corta.
+          const crowded = modules.length >= 5;
           const short = SHORT_LABEL[m.id];
           return (
             <Link
@@ -320,16 +326,24 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
               >
                 <Icon className="size-[1.375rem]" strokeWidth={1.75} />
               </span>
-              <span
-                className={`max-w-full truncate whitespace-nowrap ${short ? "bar-label-full max-[359px]:hidden" : ""}`}
-                aria-hidden="true"
-              >
-                {m.label}
-              </span>
-              {short && (
-                <span className="bar-label-short hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
+              {short && crowded ? (
+                <span className="bar-label-crowded max-w-full truncate whitespace-nowrap" aria-hidden="true">
                   {short}
                 </span>
+              ) : (
+                <>
+                  <span
+                    className={`max-w-full truncate whitespace-nowrap ${short ? "bar-label-full max-[359px]:hidden" : ""} ${crowded ? "bar-label-crowded" : ""}`}
+                    aria-hidden="true"
+                  >
+                    {m.label}
+                  </span>
+                  {short && (
+                    <span className="bar-label-short hidden max-w-full truncate whitespace-nowrap max-[359px]:block" aria-hidden="true">
+                      {short}
+                    </span>
+                  )}
+                </>
               )}
             </Link>
           );

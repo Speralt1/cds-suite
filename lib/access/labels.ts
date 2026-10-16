@@ -13,6 +13,8 @@ export const PERMISSION_LABEL: Readonly<Record<Permission, string>> = {
   "calendar.events.manage_assigned": "Gestionar actividades de sus áreas",
   "calendar.events.publish_assigned": "Publicar actividades de sus áreas",
   "calendar.events.manage_all": "Gestionar todas las actividades y el enlace público",
+  "members.consolidation.read": "Ver Consolidación",
+  "members.consolidation.manage": "Gestionar Consolidación",
   "settings.manage": "Administrar configuración",
 };
 
@@ -26,6 +28,10 @@ export const PERMISSION_DESCRIPTION: Readonly<Record<Permission, string>> = {
   "calendar.events.publish_assigned":
     "Marcar como Pública una actividad de sus áreas para que aparezca en el calendario compartido.",
   "calendar.events.manage_all": "Cualquier área, publicar y administrar el enlace compartido.",
+  "members.consolidation.read":
+    "Ver personas nuevas, sus visitas, seguimientos y alertas (nombres y teléfonos). Solo con autorización expresa.",
+  "members.consolidation.manage":
+    "Registrar personas, visitas y seguimientos, cambiar estados y responsables. Puede ser responsable de seguimiento.",
   "settings.manage": "Solo usuarios con rol Administrador.",
 };
 
@@ -36,7 +42,7 @@ export interface PermissionGroup {
   note?: string;
 }
 
-/** Grupos del editor de permisos (Integrantes no existe en este slice). */
+/** Grupos del editor de permisos. Integrantes nunca se otorga por rol legacy: solo aquí, explícito. */
 export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
   {
     label: "Finanzas",
@@ -51,6 +57,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
       "calendar.events.manage_all",
     ],
     note: "Los reportes se muestran según lo que la persona puede ver.",
+  },
+  {
+    label: "Integrantes",
+    permissions: ["members.consolidation.read", "members.consolidation.manage"],
+    note: "Datos personales: otórgalo solo a quienes acompañan a las personas nuevas.",
   },
   { label: "Sistema", permissions: ["settings.manage"] },
 ];

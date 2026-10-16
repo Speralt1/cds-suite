@@ -4388,3 +4388,11 @@ html[data-text-size="large"] .bar-label-short,
 html[data-text-size="xlarge"] .bar-label-short {
   display: block;
 }
+/* Barra inferior con 5 módulos (admin con Integrantes): la etiqueta nunca supera
+   el ancho de su columna. 3vw = 11,25 px a 375 px (igual que 0,6875rem al 100 %)
+   y 9,6 px a 320 px; al 110–125 % se queda en ese tope en vez de truncarse
+   ("Integrantes" medía 74 px en una columna de 70 px). El ícono y el nombre
+   accesible completo no cambian. */
+.bar-label-crowded {
+  font-size: min(0.6875rem, 3vw);
+}

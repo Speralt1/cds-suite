@@ -58,6 +58,13 @@ export interface AggregateReport {
   withoutModules: number;
   needsAreas: number;
   rollbackRisk: number;
+  consolidation: {
+    adminImplicit: number;
+    explicitRead: number;
+    explicitManage: number;
+    inactiveWithGrant: number;
+    legacyWithout: number;
+  };
   incoherent: number;
 }
 export declare function aggregateReport(entries: { row: MigrationRowLike; doc: Record<string, unknown> }[]): AggregateReport;

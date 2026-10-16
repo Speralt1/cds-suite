@@ -493,3 +493,40 @@ exports.calendarShareLinkManage = onCall(
 // ---------- Conciliación de abonos SumUp (solo lectura, doc 29) ----------
 
 exports.sumupPayoutsReconciliation = require("./sumup-payouts/read").buildSumupPayoutsReconciliation({ db, region: REGION, secrets: [sumupOfferings, sumupCafe] });
+
+// ---------- Integrantes › Consolidación V1 (doc 23 §5) ----------
+
+const { createMembersStore } = require("./members/firestore-store");
+const { createMembersService, createMembersCallableHandler } = require("./members/service");
+
+const membersService = createMembersService({ store: createMembersStore({ db, FieldValue }), clock });
+
+exports.membersPersonCreate = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createMembersCallableHandler(membersService, "personCreate"),
+);
+
+exports.membersPersonUpdate = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createMembersCallableHandler(membersService, "personUpdate"),
+);
+
+exports.membersStatusChange = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createMembersCallableHandler(membersService, "statusChange"),
+);
+
+exports.membersVisitCreate = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createMembersCallableHandler(membersService, "visitCreate"),
+);
+
+exports.membersFollowUpCreate = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createMembersCallableHandler(membersService, "followUpCreate"),
+);
+
+exports.membersOwnerOptions = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createMembersCallableHandler(membersService, "ownerOptions"),
+);

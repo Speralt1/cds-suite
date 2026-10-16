@@ -13,6 +13,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "build:shared": "node scripts/build-shared.mjs",
+    "check:no-preview": "node scripts/check-no-preview.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-cds-suite \"vitest run --config vitest.rules.config.mts\"",
     "test:emulator": "firebase emulators:exec --only auth,firestore,functions --project demo-cds-suite \"vitest run --config vitest.emulator.config.mts\"",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-cds-suite",
