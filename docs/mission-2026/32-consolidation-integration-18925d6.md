@@ -169,3 +169,21 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
   - presets Líder y Diácono sin Finanzas; `PREVIOUS_RULES_LEGACY_FINANCE` sigue alimentando el detector de rollback;
   - `members.consolidation.*` sigue solo explícito o admin.
 - Producción de referencia: Hosting `2efde71606a551ae`, Rules `5df51b09-b460-4515-8fb5-505983c8f1c8`, `calendarpublicfeed-00002-ver` (doc 25 §0).
+
+## 12. Actualización sobre PR #32 · diezmantes (`1951f2b`, 16/10/2026)
+
+- PR #32 fusionado en `feature/preproduccion-mobile-v1` @ `1951f2b071499c6278f30c0fc282f7054b006fcc`; CI posterior al merge (run 38851373833) SUCCESS.
+- Merge `5c248dc` de ese HEAD en esta rama: **sin conflictos textuales**, sin force push. Solo `app/globals.css` cambió en ambos lados y se combina por unión (estilos `.tithe-*` de PR #32 + `.bar-label-crowded` de Consolidación, sin selectores compartidos).
+- Los archivos de PR #32 (`components/finance/tithes/tithes-page.tsx`, `lib/finance/tithe-donors.ts`, `lib/finance/tithe-hooks.ts`, `lib/finance/formatters.ts`, `tests/rules/finance.test.ts`, `tests/tithe-*.test.ts*`, doc 37) quedan byte a byte iguales a `1951f2b`: Consolidación no elimina ni modifica el panel de diezmantes.
+- `firestore.rules`, `lib/shared/access.ts`, `functions/` y los índices quedan iguales a `07d6331` (ruleset productivo `5df51b09` + solo los bloques de Consolidación). Política R2.7 intacta.
+- Atlas MINOR-2: prueba de Rules nueva (`1e9a626`). Las consultas del panel (aportes del mes, lecturas por `documentId in` de movimientos, aportes y fichas, conteo de fichas) exigen `finance.details.read`. Líder, líder con solo resumen, Integrantes (lectura/gestión) e inactivo: denegado.
+- Producción real consultada el 16/10 (~12:00 UTC):
+
+| Pieza | Valor |
+|---|---|
+| HEAD de GitHub (rama productiva) | `1951f2b` |
+| Hosting real | `ec3d614eb95dc213`, publicado 04:36:06 UTC por CLI; contenido = `1951f2b`, verificado por marcadores en los chunks públicos |
+| Firestore Rules reales | `5df51b09-b460-4515-8fb5-505983c8f1c8` (sin cambios desde R2.7.1; el archivo es igual en `638ea1f` y `1951f2b`) |
+| Functions | sin cambios (`calendarpublicfeed-00002-ver` y demás, doc 25 §0) |
+
+- Objetivos de rollback: Rules `5df51b09` (sigue siendo el último publicado); Hosting `ec3d614eb95dc213` (último publicado), con `2efde71606a551ae` como segundo nivel (doc 25 §0).
