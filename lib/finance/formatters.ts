@@ -42,6 +42,18 @@ export function today() {
     String(d.getDate()).padStart(2, "0"),
   ].join("-");
 }
+/** Fecha civil en Chile continental, independiente de la zona del navegador. */
+export function santiagoToday() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Santiago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date()).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 export function parseDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
     throw new Error("Selecciona una fecha válida.");
@@ -63,6 +75,18 @@ export function dateLabel(value?: Timestamp) {
   return d && Number.isFinite(d.getTime())
     ? new Intl.DateTimeFormat("es-CL", {
         timeZone: "UTC",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(d)
+    : "Sin registro";
+}
+/** Fecha civil del diezmo en Chile, incluso si su instante cae en otro día UTC. */
+export function santiagoDateLabel(value?: Timestamp) {
+  const d = value?.toDate?.();
+  return d && Number.isFinite(d.getTime())
+    ? new Intl.DateTimeFormat("es-CL", {
+        timeZone: "America/Santiago",
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
