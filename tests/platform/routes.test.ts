@@ -100,8 +100,13 @@ describe("aterrizaje", () => {
     });
   });
 
-  it("Líder en /finanzas sin intención (deep link) ve su resumen", () => {
-    expect(guardRoute({ role: "leader", active: true }, "/finanzas", false)).toEqual({ type: "allow" });
+  it("Líder sin Finanzas (legacy o preset) en /finanzas: aviso y vuelve a Calendario", () => {
+    for (const doc of [{ role: "leader", active: true }, profile("v1 líder con áreas (preset, sin Finanzas)").doc])
+      expect(guardRoute(doc, "/finanzas", false)).toMatchObject({ type: "redirect", to: "/calendario", reason: "forbidden" });
+  });
+
+  it("Líder con resumen financiero autorizado: /finanzas (deep link) ve su resumen", () => {
+    expect(guardRoute(profile("v1 líder con áreas y resumen financiero autorizado").doc, "/finanzas", false)).toEqual({ type: "allow" });
   });
 
   it("los perfiles con inicio en Finanzas se quedan en /finanzas", () => {
@@ -139,8 +144,8 @@ describe("intención de aterrizaje en memoria", () => {
     expect(peekLandingIntent()).toBe(false);
   });
 
-  it("Líder: /finanzas con intención → /calendario y después ya no redirige", () => {
-    const leader = { role: "leader", active: true };
+  it("Líder con resumen autorizado: /finanzas con intención → /calendario y después ya no redirige", () => {
+    const leader = profile("v1 líder con áreas y resumen financiero autorizado").doc;
     markLandingIntent();
     const first = guardRoute(leader, "/finanzas", consumeLandingIntent());
     expect(first).toMatchObject({ type: "redirect", to: "/calendario" });
@@ -201,14 +206,20 @@ describe("deep links no permitidos (copy 18b §1.5)", () => {
     expect(matchRoute("/calendario/compartir/abc")?.path).toBe("/calendario");
   });
 
-  it("Líder conserva las subrutas de Finanzas (DetailGuard sigue siendo la barrera, sin redirect)", () => {
+  it("Líder con resumen autorizado conserva las subrutas de Finanzas (DetailGuard sigue siendo la barrera, sin redirect)", () => {
     for (const route of PRIVATE_ROUTES.filter((r) => r.startsWith("/finanzas"))) {
-      expect(guardRoute({ role: "leader", active: true }, route)).toEqual({ type: "allow" });
+      expect(guardRoute(profile("v1 líder con áreas y resumen financiero autorizado").doc, route)).toEqual({ type: "allow" });
     }
   });
 
+  it("Líder sin Finanzas (legacy o preset): toda subruta de Finanzas avisa y vuelve a Calendario", () => {
+    for (const doc of [{ role: "leader", active: true }, profile("v1 líder con áreas (preset, sin Finanzas)").doc])
+      for (const route of PRIVATE_ROUTES.filter((r) => r.startsWith("/finanzas")))
+        expect(guardRoute(doc, route)).toMatchObject({ type: "redirect", to: "/calendario", reason: "forbidden" });
+  });
+
   it("Mis actividades requiere ver el calendario", () => {
-    expect(guardRoute(profile("v1 líder con áreas").doc, "/calendario/mis-actividades")).toEqual({ type: "allow" });
+    expect(guardRoute(profile("v1 líder con áreas (preset, sin Finanzas)").doc, "/calendario/mis-actividades")).toEqual({ type: "allow" });
     expect(guardRoute(profile("v1 solo resumen financiero").doc, "/calendario/mis-actividades")).toMatchObject({
       to: "/finanzas",
     });

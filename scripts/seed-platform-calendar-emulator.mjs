@@ -87,7 +87,8 @@ export const ARCHIVED_TITLE = "Culto dominical (duplicado por error)";
 const PERMS = {
   pastor: [...LEGACY_ROLE_ACCESS.pastor.permissions],
   leader: [...LEGACY_ROLE_ACCESS.leader.permissions],
-  diacono: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned", "calendar.events.publish_assigned"],
+  // Política 16/10/2026: el Diácono no trae Finanzas por defecto.
+  diacono: ["calendar.read", "calendar.events.manage_assigned", "calendar.events.publish_assigned"],
 };
 
 /** Cuentas sembradas. `doc` = forma del documento users/{uid} (sin marcas de tiempo). */

@@ -124,9 +124,8 @@ const EXPECTED: Record<string, Record<string, boolean>> = {
   finance: Object.fromEntries(
     Object.keys(READ_OPS).map((k) => [k, !k.startsWith("users") && !k.startsWith("pastoral")]),
   ),
-  leader: Object.fromEntries(
-    Object.keys(READ_OPS).map((k) => [k, k === "financeMonthlySummaries get"]),
-  ),
+  // Política 16/10/2026: el líder no lee nada de Finanzas por defecto (ni el resumen).
+  leader: Object.fromEntries(Object.keys(READ_OPS).map((k) => [k, false])),
   inactive: Object.fromEntries(Object.keys(READ_OPS).map((k) => [k, false])),
 };
 
@@ -217,6 +216,35 @@ describe("Paridad financiera v1 ↔ legacy", () => {
 });
 
 // ── 2. users/{uid}: forma v1, escalada, IDOR, auto-protección ───────────────
+describe("Política de acceso financiero (16/10/2026): líderes sin Finanzas por defecto", () => {
+  const FIN_DETAIL_OPS = ["financeTransactions get", "financeTransactions list", "pastoralFollowups get", "titheProfiles get", "fundraisingCampaigns get", "sumupSyncRuns get", "appSettings get"];
+
+  it("líder legacy y v1 con el cargo Líder/Diácono: no leen nada de Finanzas, ni el resumen", async () => {
+    for (const u of ["leader", "v1-leader", "v1-leader-jovenes"])
+      for (const op of ["financeMonthlySummaries get", ...FIN_DETAIL_OPS])
+        expect({ u, op, ok: await allowed(() => READ_OPS[op](u)) }).toEqual({ u, op, ok: false });
+  });
+
+  it("líder con «Ver resumen financiero» otorgado a mano: lee SOLO el resumen", async () => {
+    expect(await allowed(() => READ_OPS["financeMonthlySummaries get"]("v1-leader-summary"))).toBe(true);
+    for (const op of FIN_DETAIL_OPS)
+      expect({ op, ok: await allowed(() => READ_OPS[op]("v1-leader-summary")) }).toEqual({ op, ok: false });
+    expect(await allowed(() => saveTransaction(dbOf(env, "v1-leader-summary"), "v1-leader-summary", "tx-ls", input))).toBe(false);
+  });
+
+  it("admin, pastor y finance (legacy y v1) conservan el resumen; inactivo sigue bloqueado", async () => {
+    for (const u of ["admin", "pastor", "finance", "v1-admin", "v1-pastor", "v1-finance"])
+      expect({ u, ok: await allowed(() => READ_OPS["financeMonthlySummaries get"](u)) }).toEqual({ u, ok: true });
+    for (const u of ["inactive", "v1-inactive"])
+      expect({ u, ok: await allowed(() => READ_OPS["financeMonthlySummaries get"](u)) }).toEqual({ u, ok: false });
+  });
+
+  it("el calendario del líder sigue funcionando (lee áreas y actividades)", async () => {
+    for (const u of ["leader", "v1-leader-jovenes", "v1-leader-summary"])
+      expect({ u, ok: await allowed(() => getDocs(collection(dbOf(env, u), "areas"))) }).toEqual({ u, ok: true });
+  });
+});
+
 describe("users v1", () => {
   it("el admin (legacy y v1) crea un usuario v1 y promueve un legacy a v1", async () => {
     await assertSucceeds(setDoc(doc(dbOf(env, "v1-admin"), "users", "nuevo"), newV1User("v1-admin", "nuevo")));

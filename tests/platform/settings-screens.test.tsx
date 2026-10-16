@@ -219,8 +219,10 @@ describe("Configuración › Usuarios y permisos", () => {
     expect(read).toBeChecked();
     expect(read).toBeDisabled();
     expect(within(dialog).getByText("Incluido por «Gestionar actividades de sus áreas».")).toBeVisible();
+    // Política 16/10/2026: el líder no trae Finanzas, pero el administrador puede otorgar
+    // «Ver resumen financiero» a mano (sigue en el catálogo y habilitado).
     const summary = within(dialog).getByRole("checkbox", { name: /Ver resumen financiero/ });
-    expect(summary).toBeChecked();
+    expect(summary).not.toBeChecked();
     expect(summary).toBeEnabled();
     const settings = within(dialog).getByRole("checkbox", { name: /Administrar configuración/ });
     expect(settings).toBeDisabled();
@@ -417,7 +419,7 @@ describe("Configuración › Usuarios y permisos", () => {
         access: {
           baseRole: "standard",
           position: "Líder",
-          permissions: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
+          permissions: ["calendar.read", "calendar.events.manage_assigned"],
           areaIds: ["jovenes"],
           homeModule: "calendar",
         },

@@ -62,7 +62,8 @@ export const P = {
 export const LEGACY_PERMS = {
   pastor: [P.summary, P.details, P.records, P.pastoral, P.calRead, P.manageAll],
   finance: [P.summary, P.details, P.records, P.calRead],
-  leader: [P.summary, P.calRead, P.manageAssigned],
+  // Política 16/10/2026: el rol legacy leader ya no trae Finanzas.
+  leader: [P.calRead, P.manageAssigned],
 };
 
 type Role = "admin" | "pastor" | "finance" | "leader";
@@ -119,6 +120,13 @@ export const USERS: Record<string, DocumentData> = {
   "v1-leader": v1User("v1-leader", {
     role: "leader",
     permissions: LEGACY_PERMS.leader,
+    homeModule: "calendar",
+  }),
+  // «Ver resumen financiero» otorgado a mano por el administrador (política 16/10/2026).
+  "v1-leader-summary": v1User("v1-leader-summary", {
+    role: "leader",
+    permissions: [P.summary, P.calRead, P.manageAssigned],
+    areaIds: ["jovenes"],
     homeModule: "calendar",
   }),
   "v1-leader-jovenes": v1User("v1-leader-jovenes", {

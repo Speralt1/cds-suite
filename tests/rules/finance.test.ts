@@ -182,19 +182,43 @@ describe("Reglas y operaciones reales, exclusivamente emulador", () => {
         .titheTotal,
     ).toBe(0);
   });
-  it("líder solo lee agregados; sin autorización no hay datos", async () => {
+  it("líder sin Finanzas por defecto; con «Ver resumen financiero» otorgado solo lee agregados; sin autorización no hay datos", async () => {
     await saveTransaction(db, "finance", "one", input);
+    // Política 16/10/2026: el rol legacy leader ya no lee el resumen.
     const leader = env.authenticatedContext("leader").firestore();
-    await assertSucceeds(
+    await assertFails(
       getDoc(doc(leader, "financeMonthlySummaries", "2026-08")),
     );
-    for (const c of [
-      "financeTransactions",
-      "titheProfiles",
-      "titheAttributions",
-      "pastoralFollowups",
-    ])
-      await assertFails(getDoc(doc(leader, c, "one")));
+    // Líder v1 al que el administrador otorgó a mano el resumen: solo agregados.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users", "leader-summary"), {
+        displayName: "leader-summary",
+        email: "leader-summary@example.test",
+        role: "leader",
+        active: true,
+        createdAt: Timestamp.now(),
+        accessSchemaVersion: 1,
+        baseRole: "standard",
+        position: "Líder",
+        permissions: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
+        areaIds: [],
+        homeModule: "calendar",
+        updatedAt: Timestamp.now(),
+        updatedBy: "seed",
+      });
+    });
+    const authorized = env.authenticatedContext("leader-summary").firestore();
+    await assertSucceeds(
+      getDoc(doc(authorized, "financeMonthlySummaries", "2026-08")),
+    );
+    for (const reader of [leader, authorized])
+      for (const c of [
+        "financeTransactions",
+        "titheProfiles",
+        "titheAttributions",
+        "pastoralFollowups",
+      ])
+        await assertFails(getDoc(doc(reader, c, "one")));
     for (const uid of ["missing", "inactive"])
       await assertFails(
         getDoc(

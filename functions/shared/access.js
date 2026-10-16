@@ -7,7 +7,7 @@
 //
 // Invariante: `settings.manage` existe solo vía baseRole = admin.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.INACTIVE_USER_WARNING = exports.LEADER_NO_AREAS_WARNING = exports.MIGRATION_ACTOR = exports.MODULE_PERMISSIONS = exports.MODULE_HREF = exports.MODULE_ORDER = exports.LEGACY_ROLE_ACCESS = exports.IMPLIES = exports.STORABLE_PERMISSIONS = exports.PERMISSIONS = void 0;
+exports.INACTIVE_USER_WARNING = exports.LEADER_NO_AREAS_WARNING = exports.MIGRATION_ACTOR = exports.MODULE_PERMISSIONS = exports.MODULE_HREF = exports.MODULE_ORDER = exports.PREVIOUS_RULES_LEGACY_FINANCE = exports.LEGACY_ROLE_ACCESS = exports.IMPLIES = exports.STORABLE_PERMISSIONS = exports.PERMISSIONS = void 0;
 exports.isPermission = isPermission;
 exports.isStorablePermission = isStorablePermission;
 exports.isLegacyRole = isLegacyRole;
@@ -63,12 +63,26 @@ exports.LEGACY_ROLE_ACCESS = {
         homeModule: "finance",
         permissions: ["finance.summary.read", "finance.details.read", "finance.records.manage", "calendar.read"],
     },
+    // Política 16/10/2026: líderes y diáconos SIN Finanzas por defecto. "Ver resumen financiero"
+    // (finance.summary.read) sigue en el catálogo y el administrador lo otorga a mano.
     leader: {
         baseRole: "standard",
         position: "Líder",
         homeModule: "calendar",
-        permissions: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
+        permissions: ["calendar.read", "calendar.events.manage_assigned"],
     },
+};
+/**
+ * Permisos financieros que las reglas YA PUBLICADAS (hasta el ruleset 80a69cd5, y las legacy de la
+ * Etapa A) dan a cada rol legacy. Solo para el detector de riesgo de rollback de
+ * `migrate-access-v1 --summary` (doc 25 §5.1): si se volviera a esas reglas, un v1 guardado como
+ * `leader` leería el resumen financiero. No usar para autorizar.
+ */
+exports.PREVIOUS_RULES_LEGACY_FINANCE = {
+    admin: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
+    pastor: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
+    finance: ["finance.summary.read", "finance.details.read", "finance.records.manage"],
+    leader: ["finance.summary.read"],
 };
 const ALL = new Set(types_1.PERMISSIONS);
 const STORABLE = new Set(types_1.STORABLE_PERMISSIONS);

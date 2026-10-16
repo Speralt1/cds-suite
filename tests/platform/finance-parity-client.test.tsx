@@ -63,7 +63,8 @@ describe("wrappers @deprecated = can() para los roles legacy", () => {
     expect(canSeeDetails(role)).toBe(ORIGINAL.details(role));
     expect(canSeePastoral(role)).toBe(ORIGINAL.pastoral(role));
     expect(can(legacy, "settings.manage")).toBe(role === "admin");
-    expect(can(legacy, "finance.summary.read")).toBe(true);
+    // Política 16/10/2026: el rol legacy leader ya no ve el resumen; admin, pastor y finance sí.
+    expect(can(legacy, "finance.summary.read")).toBe(role !== "leader");
   });
 
   it("deniega por defecto sin rol o con un rol inventado", () => {

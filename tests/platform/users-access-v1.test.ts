@@ -194,6 +194,48 @@ describe("cargos (presets)", () => {
     expect(POSITION_PRESETS.Líder.requiresAreas).toBe(true);
   });
 
+  describe("política de acceso financiero (16/10/2026)", () => {
+    const FINANCE = ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"];
+    it("Líder y Diácono: solo Calendario, sin ningún permiso financiero (directo ni implicado)", () => {
+      for (const name of ["Líder", "Diácono"] as const) {
+        const preset = POSITION_PRESETS[name];
+        expect(preset.permissions).toEqual(["calendar.read", "calendar.events.manage_assigned"]);
+        expect(preset.homeModule).toBe("calendar");
+        expect(preset.requiresAreas).toBe(true);
+        const eff = effectivePermissions(draftAsDoc({ ...draft(), ...preset, permissions: [...preset.permissions] }));
+        for (const f of FINANCE) expect(eff.has(f as Permission)).toBe(false);
+      }
+    });
+
+    it("Pastor, Finanzas y Administración conservan exactamente su acceso financiero", () => {
+      expect(POSITION_PRESETS.Pastor.permissions).toEqual([
+        "finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage",
+        "calendar.read", "calendar.events.manage_all",
+      ]);
+      expect(POSITION_PRESETS.Finanzas.permissions).toEqual(["finance.summary.read", "finance.details.read", "finance.records.manage", "calendar.read"]);
+      expect(POSITION_PRESETS.Administración.baseRole).toBe("admin");
+    });
+
+    it("«Ver resumen financiero» sigue en el catálogo y se puede otorgar a mano sin arrastrar detalle", () => {
+      expect(STORABLE_PERMISSIONS).toContain("finance.summary.read");
+      const granted = togglePermission(POSITION_PRESETS.Líder.permissions, "finance.summary.read", true);
+      expect(granted).toEqual(sortPermissions(["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"]));
+      const eff = effectivePermissions(draftAsDoc({ ...draft(), permissions: granted }));
+      expect(eff.has("finance.summary.read")).toBe(true);
+      for (const f of FINANCE.slice(1)) expect(eff.has(f as Permission)).toBe(false);
+      expect(deriveLegacyRole("standard", granted)).toBe("leader");
+    });
+
+    it("reaplicar el cargo Líder o Diácono nunca otorga Finanzas (y retira un resumen otorgado a mano)", () => {
+      for (const name of ["Líder", "Diácono"] as const) {
+        const withSummary = { ...draft(), permissions: togglePermission(POSITION_PRESETS[name].permissions, "finance.summary.read", true) };
+        const next = applyPositionPreset(withSummary, name);
+        expect(next.permissions.some((p) => p.startsWith("finance."))).toBe(false);
+        expect(presetDiffers(withSummary, name)).toBe(true); // la UI pide confirmación antes de aplicarlo
+      }
+    });
+  });
+
   it("aplicar un cargo reemplaza rol base, permisos y módulo inicial (y conserva áreas)", () => {
     const next = applyPositionPreset(draft(), "Pastor");
     expect(next.position).toBe("Pastor");

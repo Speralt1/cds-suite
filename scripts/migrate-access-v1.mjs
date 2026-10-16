@@ -40,7 +40,7 @@ const requireFromFunctions = createRequire(new URL("../functions/package.json", 
 const {
   planAccessMigration,
   MIGRATION_ACTOR,
-  LEGACY_ROLE_ACCESS,
+  PREVIOUS_RULES_LEGACY_FINANCE,
   isLegacyRole,
   effectivePermissions,
   modulesForPermissions,
@@ -287,7 +287,8 @@ export function aggregateReport(entries) {
     // manage_all implica manage_assigned pero no necesita áreas.
     if (areas.length === 0 && !eff.has("calendar.events.manage_all") && AREA_SCOPED.some((p) => eff.has(p))) report.needsAreas++;
     if (row.status === "skip_already_v1" && isLegacyRole(doc.role)) {
-      const legacyFinance = LEGACY_ROLE_ACCESS[doc.role].permissions.filter((p) => p.startsWith(FINANCE_PREFIX));
+      // Lo que darían las reglas anteriores (no el mapeo vigente): el riesgo es volver a ellas.
+      const legacyFinance = PREVIOUS_RULES_LEGACY_FINANCE[doc.role].filter((p) => p.startsWith(FINANCE_PREFIX));
       const grantsMore = doc.role === "admin" ? !eff.has("settings.manage") : legacyFinance.some((p) => !eff.has(p));
       if (grantsMore) report.rollbackRisk++;
     }

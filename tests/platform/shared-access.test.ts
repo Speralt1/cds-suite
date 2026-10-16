@@ -137,7 +137,7 @@ describe("normalizeAccess", () => {
       schema: "legacy",
       active: true,
       baseRole: "standard",
-      permissions: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
+      permissions: ["calendar.read", "calendar.events.manage_assigned"],
       areaIds: [],
       homeModule: null,
       position: "Líder",
@@ -182,7 +182,8 @@ describe("tabla legacy (fallback idéntico a la migración y a las reglas)", () 
       "calendar.events.manage_all",
     ],
     finance: ["finance.summary.read", "finance.details.read", "finance.records.manage", "calendar.read"],
-    leader: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
+    // Política 16/10/2026: líderes sin Finanzas por defecto.
+    leader: ["calendar.read", "calendar.events.manage_assigned"],
   };
 
   it.each(Object.keys(expected) as LegacyRole[])("%s: permisos efectivos exactos", (role) => {
@@ -200,7 +201,8 @@ describe("tabla legacy (fallback idéntico a la migración y a las reglas)", () 
     expect(matrix("admin")).toEqual({ detailsRead: true, recordsManage: true, pastoral: true, summary: true, settings: true });
     expect(matrix("pastor")).toEqual({ detailsRead: true, recordsManage: true, pastoral: true, summary: true, settings: false });
     expect(matrix("finance")).toEqual({ detailsRead: true, recordsManage: true, pastoral: false, summary: true, settings: false });
-    expect(matrix("leader")).toEqual({ detailsRead: false, recordsManage: false, pastoral: false, summary: true, settings: false });
+    // Solo cambia el leader (política 16/10/2026); admin, pastor y finance quedan idénticos.
+    expect(matrix("leader")).toEqual({ detailsRead: false, recordsManage: false, pastoral: false, summary: false, settings: false });
   });
 
   it("homeModule del mapeo: finance salvo leader (calendar)", () => {
@@ -253,7 +255,7 @@ describe("módulos visibles", () => {
     // El fallback legacy NO otorga Integrantes (doc 23 §9): pastor, finance y leader sin cambios.
     expect(visibleModules(legacy("pastor"))).toEqual([F, C, R]);
     expect(visibleModules(legacy("finance"))).toEqual([F, C, R]);
-    expect(visibleModules(legacy("leader"))).toEqual([F, C, R]);
+    expect(visibleModules(legacy("leader"))).toEqual([C, R]);
     expect(visibleModules(v1({ permissions: ["calendar.read"] }))).toEqual([C, R]);
     expect(visibleModules(v1({ permissions: ["finance.summary.read"] }))).toEqual([F]);
     expect(visibleModules(v1({ permissions: ["finance.details.read"] }))).toEqual([F, R]);
