@@ -104,10 +104,11 @@ export const POSITION_PRESETS: readonly PositionPreset[] = [
     requiresAreas: true,
   },
   {
+    // Política 16/10/2026: igual que Líder, sin Finanzas por defecto.
     position: "Diácono",
     baseRole: "standard",
-    permissions: ["finance.summary.read", "calendar.read", "calendar.events.manage_assigned"],
-    homeModule: "calendar",
+    permissions: LEGACY_ROLE_ACCESS.leader.permissions,
+    homeModule: LEGACY_ROLE_ACCESS.leader.homeModule,
     requiresAreas: true,
   },
 ];
