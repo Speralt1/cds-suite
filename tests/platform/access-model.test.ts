@@ -17,7 +17,8 @@ describe("accessModel", () => {
 
   it("funciona con el objeto legacy {role, active} de los mocks existentes", () => {
     const leader = accessModel({ role: "leader", active: true });
-    expect(leader.can("finance.summary.read")).toBe(true);
+    // Política 16/10/2026: el rol legacy leader no trae Finanzas.
+    expect(leader.can("finance.summary.read")).toBe(false);
     expect(leader.can("finance.details.read")).toBe(false);
     expect(leader.can("calendar.events.manage_assigned")).toBe(true);
     expect(leader.areaIds).toEqual([]);
@@ -37,7 +38,7 @@ describe("accessModel", () => {
   });
 
   it("áreas solo de v1 y canAny", () => {
-    const model = accessModel(profile("v1 líder con áreas").doc);
+    const model = accessModel(profile("v1 líder con áreas (preset, sin Finanzas)").doc);
     expect(model.areaIds).toEqual(["jovenes"]);
     expect(model.canAny(["settings.manage", "calendar.read"])).toBe(true);
     expect(model.canAny(["settings.manage", "finance.details.read"])).toBe(false);

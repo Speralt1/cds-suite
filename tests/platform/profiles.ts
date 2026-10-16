@@ -26,7 +26,8 @@ export const PROFILES: readonly TestProfile[] = [
   { name: "legacy admin", doc: { role: "admin", active: true }, modules: ["finance", "calendar", "reports", "settings"], home: "/finanzas" },
   { name: "legacy pastor", doc: { role: "pastor", active: true }, modules: ["finance", "calendar", "reports"], home: "/finanzas" },
   { name: "legacy finance", doc: { role: "finance", active: true }, modules: ["finance", "calendar", "reports"], home: "/finanzas" },
-  { name: "legacy leader", doc: { role: "leader", active: true }, modules: ["finance", "calendar", "reports"], home: "/calendario" },
+  // Política 16/10/2026: el rol legacy leader ya no trae Finanzas.
+  { name: "legacy leader", doc: { role: "leader", active: true }, modules: ["calendar", "reports"], home: "/calendario" },
   { name: "legacy inactive", doc: { role: "admin", active: false }, modules: [], home: "inactive" },
   { name: "legacy invalid role", doc: { role: "inventado", active: true }, modules: [], home: "no-modules" },
   { name: "sin documento", doc: null, modules: [], home: "inactive" },
@@ -55,7 +56,15 @@ export const PROFILES: readonly TestProfile[] = [
     home: "/calendario",
   },
   {
-    name: "v1 líder con áreas",
+    // Preset Líder/Diácono (política 16/10/2026): solo Calendario.
+    name: "v1 líder con áreas (preset, sin Finanzas)",
+    doc: v1({ position: "Líder", permissions: ["calendar.read", "calendar.events.manage_assigned"], areaIds: ["jovenes"] }),
+    modules: ["calendar", "reports"],
+    home: "/calendario",
+  },
+  {
+    // "Ver resumen financiero" otorgado a mano por el administrador.
+    name: "v1 líder con áreas y resumen financiero autorizado",
     doc: v1({
       position: "Líder",
       permissions: ["finance.summary.read", "calendar.events.manage_assigned"],
