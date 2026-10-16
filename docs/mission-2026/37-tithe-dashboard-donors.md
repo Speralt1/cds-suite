@@ -18,6 +18,8 @@ Se leyeron únicamente campos necesarios para comparar atribuciones, fichas, mov
 
 Hay 41 fichas: 34 personas y 7 familias; una está archivada. No hay atribuciones activas sin ficha en estos dos meses. La tarjeta anterior «Personas/familias con registro» ya usaba el mes seleccionado y contaba `profileId` distintos de atribuciones activas, pero el nombre no decía que eran diezmantes. «Nuevas fichas del año» contaba altas por `createdAt`, que no mide actividad de diezmos.
 
+La deduplicación se hace por ID de ficha, no por nombre. Solo 1 de las 41 fichas tiene `identityKey` (la protección es gradual para fichas antiguas). Hay un par de fichas del mismo tipo con nombre normalizado igual, pero en septiembre y octubre solo una ficha de ese par registró diezmos en cada mes, por lo que no infla los conteos auditados. No hay coincidencia de nombre entre persona y familia. No se fusionan fichas ni movimientos históricos automáticamente; el panel de posibles duplicados existente permite revisar el par por separado.
+
 ## Cálculo y alcance
 
 El total CLP sigue viniendo de `financeMonthlySummaries.titheTotal`; este cambio no recalcula ni reescribe el libro. Para contar a un diezmante, la atribución debe estar activa y coincidir con un movimiento activo de tipo ingreso, fuente diezmo, mismo ID, importe, fecha y período, y con una ficha existente de tipo persona o familia. Una ficha se cuenta una vez por mes; sus aportes se acumulan en el detalle. Una ficha archivada con aportes históricos válidos conserva su lugar en el período histórico. Aportes sin ficha o con vínculo inconsistente se omiten del conteo y generan un aviso agregado.
