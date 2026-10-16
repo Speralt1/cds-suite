@@ -159,3 +159,13 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
 - `firestore.rules` = ruleset productivo `80a69cd5` + **solo** los bloques de Consolidación (28 inserciones, 2 cambios: catálogo de permisos y `permissions.size() <= 10`). La lista de 24 colores de `validArea` queda idéntica a producción.
 - Se conservan Finanzas R2.5, SumUp, los 24 colores (AREA_COLORS 24, los 10 originales primero) y `build-shared --check`.
 - Producción de referencia: Hosting `0a6ab8858afd6a23`, Rules `80a69cd5-a2b4-413e-803e-193b5205c3b0`, `calendarpublicfeed-00002-ver` (doc 25 §0).
+
+## 11. Actualización sobre producción R2.7 (`638ea1f`, 16/10/2026)
+
+- Merge de `feature/preproduccion-mobile-v1` @ `638ea1f1ebe2a0bd57bb187e3945f9c64f01c2bf` (PR #31, política financiera) en esta rama: **sin conflictos textuales**. Verificación semántica:
+  - `firestore.rules` = ruleset productivo `5df51b09` + **solo** los bloques de Consolidación;
+  - `'leader'` en ninguna lista financiera; `legacyPermissions('leader')` solo Calendario;
+  - `functions/shared/*` regenerado y coherente (`build-shared --check`);
+  - presets Líder y Diácono sin Finanzas; `PREVIOUS_RULES_LEGACY_FINANCE` sigue alimentando el detector de rollback;
+  - `members.consolidation.*` sigue solo explícito o admin.
+- Producción de referencia: Hosting `2efde71606a551ae`, Rules `5df51b09-b460-4515-8fb5-505983c8f1c8`, `calendarpublicfeed-00002-ver` (doc 25 §0).
