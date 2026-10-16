@@ -121,6 +121,12 @@ describe("Reglas y operaciones reales, exclusivamente emulador", () => {
     expect((await getCountFromServer(collection(db, "titheProfiles"))).data().count).toBe(1);
     const leader = env.authenticatedContext("leader").firestore() as unknown as Firestore;
     await assertFails(getCountFromServer(collection(leader, "titheProfiles")));
+    const ids = Array.from({ length: 30 }, (_, i) => `batch-${i}`);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const id of ids)
+        await setDoc(doc(ctx.firestore(), "titheProfiles", id), { type: "person" });
+    });
+    expect((await getDocs(query(collection(db, "titheProfiles"), where(documentId(), "in", ids)))).size).toBe(30);
   });
   it("crea entrada y salida, edita de mes y anula sin perder auditoría", async () => {
     await saveTransaction(db, "finance", "one", input);
