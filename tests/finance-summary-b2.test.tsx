@@ -52,6 +52,10 @@ vi.mock("@/lib/finance/transactions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/finance/transactions")>()),
   saveTransaction: vi.fn(),
 }));
+// Bandera de Posición de fondos (lib/finance/features.ts): apagada por defecto;
+// algunas pruebas la encienden para cubrir la tarjeta cuando se vuelva a usar.
+const features = vi.hoisted(() => ({ fundsPosition: false }));
+vi.mock("@/lib/finance/features", () => ({ FINANCE_FEATURES: features }));
 // PR D (doc 30): SummaryPage monta la tarjeta de saldo; aquí se reemplaza por un doble.
 vi.mock("@/components/finance/bank/bank-balance-card", () => ({
   BankBalanceCard: (p: { variant?: string; connectSumupPayouts?: boolean }) => (
@@ -235,18 +239,34 @@ describe("Resumen integrado", () => {
     expect(screen.getByRole("heading", { name: "Calendario de caja · Octubre 2026" })).toBeInTheDocument();
   });
 
+  it("Posición de fondos apagada (por defecto): /finanzas no monta el saldo bancario y el resumen sigue completo", () => {
+    expect(features.fundsPosition).toBe(false);
+    render(<SummaryPage />);
+    expect(screen.queryByText("Posición de fondos")).toBeNull();
+    expect(screen.queryByTestId("bank-tile")).toBeNull();
+    expect(screen.queryByText(/Saldo bancario estimado/)).toBeNull();
+    expect(document.querySelector(".fin-funds")).toBeNull();
+    // Indicadores normales intactos.
+    expect(screen.getByRole("heading", { name: "Resultado de octubre 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Últimos movimientos · 12 en el período" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Calendario de caja · Octubre 2026" })).toBeInTheDocument();
+  });
+
   it("Posición de fondos: oculta sin tile, visible con tile y nunca para el líder", () => {
     const tile = <p>Tile de saldo</p>;
     const first = render(<SummaryDashboard />);
     expect(screen.queryByText("Posición de fondos")).toBeNull();
     first.unmount();
 
-    // /finanzas (SummaryPage) monta el saldo bancario en modo "funds" con abonos SumUp conectados.
+    // /finanzas (SummaryPage) monta el saldo bancario en modo "funds" con abonos SumUp
+    // conectados solo si la bandera está encendida.
+    features.fundsPosition = true;
     const page = render(<SummaryPage />);
     expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();
     expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-variant", "funds");
     expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-connect", "true");
     page.unmount();
+    features.fundsPosition = false;
 
     const second = render(<SummaryDashboard fundsBankTile={tile} />);
     expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();
