@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ADULTS_ONLY_NOTICE, SENSITIVE_NOTE_WARNING } from "@/lib/shared/members";
 import type { Person } from "@/lib/members/types";
@@ -358,6 +358,41 @@ describe("Registrar persona", () => {
     expect(screen.getByRole("heading", { name: /Persona registrada/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ana Torres" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Ver ficha/ })).toHaveAttribute("href", "/integrantes/consolidacion/persona?id=nuevo");
+  });
+
+  it("mismo nombre y mismo teléfono: Guardar pide antes «Es otra persona, continuar» (UX 18/10/2026)", async () => {
+    h.createPerson.mockResolvedValue({ personId: "nuevo", replay: false, duplicates: [{ personId: "p1", by: ["telefono"] }] });
+    renderWith(<NewPersonScreen />);
+    await waitFor(() => expect(screen.getByLabelText("Responsable de seguimiento")).toHaveValue("u-owner"));
+    fireEvent.change(screen.getByLabelText("Nombre completo *"), { target: { value: "  ana   torres " } });
+    fireEvent.change(screen.getByLabelText("Teléfono *"), { target: { value: "9 5555 0101" } });
+    const notice = screen.getByTestId("duplicate-notice");
+    expect(within(notice).getByText(/Coincide también el nombre/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Guardar persona" }));
+    expect(h.createPerson).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Ya hay una persona con este nombre y este teléfono.");
+    const go = within(notice).getByRole("button", { name: "Es otra persona, continuar" });
+    expect(go).toHaveFocus();
+    fireEvent.click(go);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar persona" }));
+    await waitFor(() => expect(h.createPerson).toHaveBeenCalledTimes(1));
+  });
+
+  it("persona cerrada: la próxima acción que quedó se muestra neutra, sin «Vencida» (UX 18/10/2026)", async () => {
+    const overdue = { nextAction: "Invitar al culto", nextActionDate: "2026-10-01", nextActionOwnerUid: "u-owner" };
+    h.persons = [
+      person({ id: "pc", fullName: "Cerrada Prueba", consolidationStatus: "sin_continuidad", closedReason: "se_mudo", projection: overdue }),
+      person({ id: "pa", fullName: "Abierta Prueba", projection: overdue }),
+    ];
+    await openPerson("pc");
+    const closed = screen.getByRole("region", { name: "Próxima acción" });
+    expect(within(closed).getByText("Quedó registrada antes del cierre; no genera alertas.")).toBeInTheDocument();
+    expect(within(closed).queryByText(/Vencida/)).toBeNull();
+    cleanup();
+    await openPerson("pa");
+    const open = screen.getByRole("region", { name: "Próxima acción" });
+    expect(within(open).getByText(/Vencida/)).toBeInTheDocument();
+    expect(within(open).queryByText(/antes del cierre/)).toBeNull();
   });
 
   it("errores de validación no llaman al callable; sin duplicados, navega a la ficha tras resolver", async () => {

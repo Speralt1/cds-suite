@@ -53,6 +53,7 @@ import {
   parseVisitCreate,
   suggestAfterFollowUp,
   suggestReopenOnVisit,
+  visitBeforeFirst,
   whatsappLink,
   type ClosedReason,
   type ConsolidationStatus,
@@ -439,6 +440,10 @@ function VisitSheet({ person, onClose }: SheetProps) {
       setErrors(fieldMessages(parsed.errors));
       return;
     }
+    if (visitBeforeFirst(date, person.firstVisitAt)) {
+      setErrors(fieldMessages({ date: "before_first_visit" }));
+      return;
+    }
     setErrors({});
     const res = await write.run(() => createVisit(payload));
     if (!res.ok) return;
@@ -525,6 +530,7 @@ function VisitSheet({ person, onClose }: SheetProps) {
             lang="es-CL"
             className="mem-input mem-input-date"
             value={date}
+            min={person.firstVisitAt ?? undefined}
             max={m.today}
             required
             aria-invalid={!!fieldError("date") || undefined}

@@ -25,6 +25,7 @@ exports.payloadTooLarge = payloadTooLarge;
 exports.parsePersonCreate = parsePersonCreate;
 exports.parsePersonUpdate = parsePersonUpdate;
 exports.parseStatusChange = parseStatusChange;
+exports.visitBeforeFirst = visitBeforeFirst;
 exports.parseVisitCreate = parseVisitCreate;
 exports.parseFollowUpCreate = parseFollowUpCreate;
 exports.checkTransition = checkTransition;
@@ -190,6 +191,7 @@ exports.FIELD_ERROR_TEXT = {
     future_date: "La fecha no puede ser futura.",
     too_old: "La fecha es demasiado antigua.",
     before_contact: "La próxima acción no puede ser anterior al contacto.",
+    before_first_visit: "La fecha no puede ser anterior a la primera visita.",
     pair_required: "Completa la próxima acción y su fecha, o deja ambas vacías.",
     confirm_required: "Confirma el cambio para continuar.",
 };
@@ -437,6 +439,14 @@ function parseStatusChange(raw) {
     return r.done(value);
 }
 exports.VISIT_CREATE_KEYS = ["requestId", "personId", "date", "calendarEventId", "note"];
+/**
+ * Una visita nueva no puede ser anterior a la primera visita registrada de la
+ * persona: la "Primera visita" (firstVisitAt) es la de su registro y el
+ * historial la muestra como tal. Sin firstVisitAt válido no se restringe.
+ */
+function visitBeforeFirst(date, firstVisitAt) {
+    return typeof firstVisitAt === "string" && (0, dates_1.isValidYmd)(firstVisitAt) && (0, dates_1.compareLocal)(date, firstVisitAt) < 0;
+}
 function parseVisitCreate(raw, today) {
     const r = start(raw, exports.VISIT_CREATE_KEYS);
     if (!(r instanceof Reader))

@@ -44,6 +44,7 @@ const {
   suggestReopenOnVisit,
   projectVisit,
   projectFollowUp,
+  visitBeforeFirst,
   projectionOf,
   EMPTY_PROJECTION,
   MEMBERS_ERROR_KEYS: E,
@@ -398,6 +399,8 @@ function createMembersService({ store, clock, logger = console }) {
           suggestReopen: suggestReopenOnVisit(pipelineOf(person)),
         };
       }
+
+      if (visitBeforeFirst(input.date, person.firstVisitAt)) throw invalidArgument({ date: "before_first_visit" });
 
       const at = store.serverTimestamp();
       const revision = revisionOf(person) + 1;

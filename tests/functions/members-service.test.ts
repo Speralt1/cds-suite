@@ -582,6 +582,23 @@ describe("membersVisitCreate", () => {
     expect(changesOf(store, personId).at(-1)!.data).toMatchObject({ action: "visit_recorded", revision: 3, actorUid: "u-coord", refId: expect.any(String) });
   });
 
+  it("visita anterior a la primera visita → invalid-argument before_first_visit, sin escribir (UX 18/10/2026)", async () => {
+    const { service, store } = setup();
+    const { personId } = await createPerson(service, { firstVisitDate: "2026-09-20" });
+    const before = structuredClone(store.doc("membersPeople", personId));
+    const visits = visitsOf(store, personId).length;
+    const changes = changesOf(store, personId).length;
+    expect(await rejection(service.visitCreate("u-coord", { requestId: rid(), personId, date: "2026-09-13" }))).toMatchObject({
+      code: "invalid-argument",
+      details: { fields: { date: "before_first_visit" } },
+    });
+    expect(store.doc("membersPeople", personId)).toEqual(before);
+    expect(visitsOf(store, personId)).toHaveLength(visits);
+    expect(changesOf(store, personId)).toHaveLength(changes);
+    // El mismo día de la primera visita sí se acepta.
+    await expect(service.visitCreate("u-coord", { requestId: rid(), personId, date: "2026-09-20" })).resolves.toMatchObject({ replay: false });
+  });
+
   it("(17) doble envío de visita → replay sin duplicar", async () => {
     const { service, store } = setup();
     const { personId } = await createPerson(service);

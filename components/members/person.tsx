@@ -42,7 +42,7 @@ import {
   type FollowUpType,
 } from "@/lib/shared/members";
 import { HISTORY_LIMIT, historyTruncated, useCalendarTitles, usePersonHistory } from "@/lib/members/client";
-import { timeline, type PersonView } from "@/lib/members/consolidation";
+import { isOpen, timeline, type PersonView } from "@/lib/members/consolidation";
 import type { PersonChange, TimelineItem } from "@/lib/members/types";
 import { useMembers, type MembersState } from "@/lib/members/use-members";
 import { EditPersonSheet } from "./person-form";
@@ -51,7 +51,6 @@ import {
   PEOPLE_HREF,
   PRIVACY_NOTE,
   firstName,
-  numericYmd,
   plural,
   relDay,
   shortDate,
@@ -292,6 +291,9 @@ function NextActionCard({ v }: { v: PersonView }) {
   const m = useMembers();
   const { open } = useMemberActions();
   const actionable = m.canManage && v.person.lifecycleStage === "en_consolidacion";
+  // Sin continuidad o integrada: la próxima acción que quedó no está vigente (el
+  // tablero ya no la cuenta); se muestra neutra y sin "Vencida".
+  const closed = !isOpen(v.person);
   const button = actionable && (
     <button type="button" className="button-secondary mem-btn-sm" onClick={() => open("followup", v.person.id)}>
       Registrar seguimiento
@@ -304,14 +306,18 @@ function NextActionCard({ v }: { v: PersonView }) {
       </h2>
       {v.next ? (
         <div className="mem-next-body">
-          <span className={`mem-next-icon ${v.nextOverdue ? "mem-tone-warning" : "mem-tone-info"}`} aria-hidden="true">
+          <span
+            className={`mem-next-icon ${closed ? "mem-tone-neutral" : v.nextOverdue ? "mem-tone-warning" : "mem-tone-info"}`}
+            aria-hidden="true"
+          >
             <AlarmClock size={18} />
           </span>
           <div className="mem-next-text">
             <p className="mem-next-title">{v.next.text}</p>
+            {closed && <p className="mem-help-13">Quedó registrada antes del cierre; no genera alertas.</p>}
             <p className="mem-help-13">
               {v.next.date ? (
-                v.nextOverdue ? (
+                v.nextOverdue && !closed ? (
                   <span className="mem-overdue">Vencida · era para el {shortDate(v.next.date)}</span>
                 ) : (
                   relDay(v.next.date, m.today)
@@ -523,7 +529,7 @@ function Banners({ v, changes }: { v: PersonView; changes: PersonChange[] }) {
         <InlineNotice tone="success" icon={CircleCheck}>
           <p>
             <strong>
-              {name} es integrante{stageAt ? ` desde el ${numericYmd(stageAt.slice(0, 10))}` : ""}.
+              {name} es integrante{stageAt ? ` desde el ${shortDateYear(stageAt.slice(0, 10))}` : ""}.
             </strong>{" "}
             Su historial de Consolidación se conserva. Integrado: ya no aparece en las alertas de Consolidación.
           </p>
@@ -541,7 +547,7 @@ function Banners({ v, changes }: { v: PersonView; changes: PersonChange[] }) {
       {p.doNotContact && (
         <InlineNotice tone="warning" icon={BellOff}>
           <p>
-            Pidió no recibir contacto{dncAt ? ` (${numericYmd(dncAt.slice(0, 10))})` : ""}. No se muestran WhatsApp ni alertas.
+            Pidió no recibir contacto{dncAt ? ` (${shortDateYear(dncAt.slice(0, 10))})` : ""}. No se muestran WhatsApp ni alertas.
           </p>
         </InlineNotice>
       )}

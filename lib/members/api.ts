@@ -82,7 +82,11 @@ const FIELD_OVERRIDES: Readonly<Record<string, Partial<Record<FieldErrorCode, st
   phone: { required: "Escribe el teléfono.", invalid: "Revisa el número: debe tener 9 dígitos (o el código de país con +)." },
   email: { invalid: "Correo no válido." },
   firstVisitDate: { required: "Indica la fecha de la primera visita.", future_date: "La primera visita no puede ser futura." },
-  date: { required: "Indica la fecha de la visita.", future_date: "La visita no puede ser futura." },
+  date: {
+    required: "Indica la fecha de la visita.",
+    future_date: "La visita no puede ser futura.",
+    before_first_visit: "La visita no puede ser anterior a la primera visita.",
+  },
   contactDate: { required: "Indica la fecha del contacto.", future_date: "El seguimiento no puede ser futuro." },
   result: { required: "Elige el resultado del contacto." },
   type: { required: "Elige el tipo de contacto." },

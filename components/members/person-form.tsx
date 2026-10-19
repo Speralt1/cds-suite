@@ -2,7 +2,8 @@
 
 // Registrar persona (16b §9.5) y Editar datos. Formulario de máx. 640 px con
 // footer fijo en móvil. Teléfono normalizado a la vista (mismas reglas que el
-// servidor), aviso de posible duplicado que NUNCA bloquea, aviso "solo
+// servidor), aviso de posible duplicado que NUNCA bloquea (con mismo nombre y
+// mismo teléfono/correo pide un toque de confirmación antes de guardar), aviso "solo
 // adultos" y advertencia de datos sensibles en la observación.
 // V1 sin fecha de nacimiento, edad, confesión de fe, bautismo ni notas iniciales.
 
@@ -31,6 +32,7 @@ import {
 } from "@/lib/shared/members";
 import { createPerson, fieldMessages, newRequestId, updatePerson, type DuplicateRef } from "@/lib/members/api";
 import { duplicateCandidates, type DuplicateBy } from "@/lib/members/consolidation";
+import { normalizeName } from "@/lib/shared/names";
 import type { Person } from "@/lib/members/types";
 import { useMembers } from "@/lib/members/use-members";
 import { PEOPLE_HREF, PRIVACY_NOTE, dateEcho, firstName, personHref, shortDate } from "./model";
@@ -52,10 +54,13 @@ function DuplicateNotice({
   matches,
   dismissed,
   onDismiss,
+  sameName = false,
 }: {
   matches: { person: Person; by: DuplicateBy[] }[];
   dismissed: boolean;
   onDismiss: () => void;
+  /** Además coincide el nombre: probablemente es la misma persona. */
+  sameName?: boolean;
 }) {
   const m = useMembers();
   const { open } = useMemberActions();
@@ -76,7 +81,11 @@ function DuplicateNotice({
           ? `ya hay ${matches.length} personas con este ${byPhone ? "teléfono" : "correo"}`
           : `ya hay una persona con este ${byPhone ? "teléfono" : "correo"}`}
       </p>
-      <p className="mem-help">Las familias suelen compartir teléfono: puedes guardar igual.</p>
+      <p className="mem-help">
+        {sameName
+          ? "Coincide también el nombre: probablemente es la misma persona. Si vino de nuevo, registra su visita."
+          : "Las familias suelen compartir teléfono: puedes guardar igual."}
+      </p>
       {matches.map(({ person }) => (
         <div key={person.id} className="mem-dup-person">
           <p className="mem-dup-line">
@@ -94,7 +103,7 @@ function DuplicateNotice({
           </div>
         </div>
       ))}
-      <button type="button" className="button-ghost mem-btn-sm mem-dup-continue" onClick={onDismiss}>
+      <button type="button" id="mem-np-dup-continue" className="button-ghost mem-btn-sm mem-dup-continue" onClick={onDismiss}>
         Es otra persona, continuar
       </button>
     </div>
@@ -171,6 +180,11 @@ function PersonFormContent({ onAnother }: { onAnother: () => void }) {
 
   const matches = useMemo(() => duplicateCandidates({ phone, email }, m.persons), [phone, email, m.persons]);
   const dupKey = matches.map((x) => x.person.id).join(",");
+  // Mismo nombre y mismo teléfono/correo: casi seguro la misma persona. Guardar
+  // pide antes «Es otra persona, continuar» (un toque; no bloquea).
+  const sameName = !!name.trim() && matches.some((x) => normalizeName(x.person.fullName) === normalizeName(name));
+  const needsDupConfirm = sameName && dismissed !== dupKey;
+  const [dupPrompt, setDupPrompt] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,6 +193,11 @@ function PersonFormContent({ onAnother }: { onAnother: () => void }) {
       const order = ["fullName", "phone", "email", "firstVisitDate", "calendarEventId", "arrivalSource", "invitedBy", "followUpOwnerUid", "visitNote"];
       const first = order.find((k) => clientErrors[k]);
       if (first) document.getElementById(`mem-np-${first}`)?.focus();
+      return;
+    }
+    if (needsDupConfirm) {
+      setDupPrompt(true);
+      document.getElementById("mem-np-dup-continue")?.focus();
       return;
     }
     const res = await write.run(() => createPerson(payload));
@@ -294,7 +313,15 @@ function PersonFormContent({ onAnother }: { onAnother: () => void }) {
             />
             <FieldError id="mem-np-email-error" message={show("email")} />
           </div>
-          <DuplicateNotice matches={matches} dismissed={!!dupKey && dismissed === dupKey} onDismiss={() => setDismissed(dupKey)} />
+          <DuplicateNotice
+            matches={matches}
+            sameName={sameName}
+            dismissed={!!dupKey && dismissed === dupKey}
+            onDismiss={() => {
+              setDismissed(dupKey);
+              setDupPrompt(false);
+            }}
+          />
         </section>
 
         <section className="panel mem-panel mem-form-section" aria-labelledby="mem-np-arrival">
@@ -414,10 +441,20 @@ function PersonFormContent({ onAnother }: { onAnother: () => void }) {
             <strong>Fecha de ingreso:</strong> hoy, {dateEcho(m.today)} · Se registra automáticamente.
           </p>
         </div>
-        {matches.length > 0 && dismissed !== dupKey && (
-          <InlineNotice tone="info" icon={Info}>
-            Hay un posible duplicado más arriba. Guardar sigue disponible: se marcará para revisarlo después.
+        {needsDupConfirm && dupPrompt ? (
+          <InlineNotice tone="warning" icon={TriangleAlert} role="alert">
+            Ya hay una persona con este nombre y este {matches.some((x) => x.by.includes("telefono")) ? "teléfono" : "correo"}. Si es
+            otra persona, pulsa «Es otra persona, continuar» más arriba y vuelve a guardar; si es la misma, registra su visita.
           </InlineNotice>
+        ) : (
+          matches.length > 0 &&
+          dismissed !== dupKey && (
+            <InlineNotice tone="info" icon={Info}>
+              {sameName
+                ? "Hay un posible duplicado más arriba con el mismo nombre: antes de guardar, confirma que es otra persona."
+                : "Hay un posible duplicado más arriba. Guardar sigue disponible: se marcará para revisarlo después."}
+            </InlineNotice>
+          )
         )}
         {!m.online && <OfflineNotice />}
         <FormError error={write.error} />

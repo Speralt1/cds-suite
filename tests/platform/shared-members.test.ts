@@ -15,6 +15,7 @@ import {
   parsePersonUpdate,
   parseStatusChange,
   parseVisitCreate,
+  visitBeforeFirst,
   payloadTooLarge,
   projectFollowUp,
   projectVisit,
@@ -168,6 +169,13 @@ describe("parseVisitCreate y parseFollowUpCreate", () => {
       value: { requestId: RID, personId: "p1", date: "2026-10-04", calendarEventId: "evt_1", note: null },
     });
     expect(parseVisitCreate({ requestId: RID, personId: "p1", date: "2026-10-09" }, TODAY)).toMatchObject({ ok: false, errors: { date: "future_date" } });
+  });
+  it("visita: no puede ser anterior a la primera visita registrada (UX 18/10/2026)", () => {
+    expect(visitBeforeFirst("2026-10-11", "2026-10-18")).toBe(true);
+    expect(visitBeforeFirst("2026-10-18", "2026-10-18")).toBe(false);
+    expect(visitBeforeFirst("2026-10-20", "2026-10-18")).toBe(false);
+    // Sin primera visita válida (datos antiguos o incompletos) no se restringe.
+    for (const first of [null, undefined, "", "18-10-2026", 20261018]) expect(visitBeforeFirst("2026-10-11", first)).toBe(false);
   });
   it("seguimiento: próxima acción y fecha van juntas y la fecha no es anterior al contacto (#27)", () => {
     const f = { requestId: RID, personId: "p1", contactDate: "2026-10-05", type: "llamada", result: "contactado" };
