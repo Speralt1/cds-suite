@@ -170,7 +170,7 @@ describe("parseVisitCreate y parseFollowUpCreate", () => {
     });
     expect(parseVisitCreate({ requestId: RID, personId: "p1", date: "2026-10-09" }, TODAY)).toMatchObject({ ok: false, errors: { date: "future_date" } });
   });
-  it("visita: no puede ser anterior a la primera visita registrada (UX 18/10/2026)", () => {
+  it("visitBeforeFirst: detecta fechas anteriores a la primera visita registrada (aviso, no bloqueo)", () => {
     expect(visitBeforeFirst("2026-10-11", "2026-10-18")).toBe(true);
     expect(visitBeforeFirst("2026-10-18", "2026-10-18")).toBe(false);
     expect(visitBeforeFirst("2026-10-20", "2026-10-18")).toBe(false);

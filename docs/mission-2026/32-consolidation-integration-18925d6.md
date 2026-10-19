@@ -213,7 +213,7 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
 
 **Corregido en V1:**
 
-1. Visita anterior a la primera visita: se rechaza en cliente y en la Function (`before_first_visit`). Antes dejaba dos «primeras visitas» distintas.
+1. Visita anterior a la primera visita registrada: se permite, como define el doc 23 §3 (la proyección `firstVisitDate` pasa a ser la más antigua y `firstVisitAt` no cambia). Ahora el formulario lo explica antes de guardar, sin bloquear. Un primer intento de rechazarla se revirtió tras la revisión de Atlas (M1): `firstVisitAt` no es editable y se perdía la forma de anotar esa visita.
 2. Mismo nombre y mismo teléfono/correo: Guardar pide antes «Es otra persona, continuar». Sigue sin bloquear a familias.
 3. Búsqueda sin resultados en la etapa actual: avisa si hay coincidencias en otras etapas, para no volver a registrar a alguien integrado o cerrado.
 4. Ficha cerrada: la próxima acción que quedó se muestra neutra, sin «Vencida».
@@ -224,6 +224,7 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
 **Mejoras para V1.1 (no bloquean):**
 
 - Capitalizar el nombre al registrar (hoy se guarda tal cual).
+- Decidir si «Primera visita» (`firstVisitAt`) debe poder corregirse con auditoría cuando se registró con la fecha equivocada (hoy no es editable; Atlas M1).
 - Revisar si el perfil de solo lectura debe ver el botón de WhatsApp.
 - En redirecciones por permiso, avisar siempre con el mismo mensaje.
 - Calendario de escritorio: chips de actividad de 22 px de alto (heredado de producción).

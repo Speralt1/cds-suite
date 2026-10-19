@@ -440,10 +440,6 @@ function VisitSheet({ person, onClose }: SheetProps) {
       setErrors(fieldMessages(parsed.errors));
       return;
     }
-    if (visitBeforeFirst(date, person.firstVisitAt)) {
-      setErrors(fieldMessages({ date: "before_first_visit" }));
-      return;
-    }
     setErrors({});
     const res = await write.run(() => createVisit(payload));
     if (!res.ok) return;
@@ -530,7 +526,6 @@ function VisitSheet({ person, onClose }: SheetProps) {
             lang="es-CL"
             className="mem-input mem-input-date"
             value={date}
-            min={person.firstVisitAt ?? undefined}
             max={m.today}
             required
             aria-invalid={!!fieldError("date") || undefined}
@@ -568,6 +563,12 @@ function VisitSheet({ person, onClose }: SheetProps) {
         {sameDay && (
           <InlineNotice tone="warning" icon={Info} role="status">
             Ya hay una visita registrada el {shortDate(date)}. ¿Registrar otra?
+          </InlineNotice>
+        )}
+        {!sameDay && person.firstVisitAt && visitBeforeFirst(date, person.firstVisitAt) && (
+          <InlineNotice tone="info" icon={Info} role="status">
+            Es anterior a su primera visita registrada ({shortDate(person.firstVisitAt)}). Se agrega al historial como visita; la
+            «Primera visita» del registro no cambia.
           </InlineNotice>
         )}
         <p className="mem-help">Se agrega al historial; las visitas anteriores no cambian.</p>

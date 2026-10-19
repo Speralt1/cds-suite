@@ -389,6 +389,8 @@ describe("Registrar persona", () => {
     const go = within(notice).getByRole("button", { name: "Es otra persona, continuar" });
     expect(go).toHaveFocus();
     fireEvent.click(go);
+    // El botón desaparece: el foco pasa a Guardar (Atlas M3).
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar persona" })).toHaveFocus());
     fireEvent.click(screen.getByRole("button", { name: "Guardar persona" }));
     await waitFor(() => expect(h.createPerson).toHaveBeenCalledTimes(1));
   });
@@ -489,6 +491,21 @@ describe("sheets", () => {
     expect(within(dialog).getByText(/Ya hay una visita registrada el .*¿Registrar otra\?/)).toBeInTheDocument();
     expect(within(dialog).getByText("Esta persona pidió no ser contactada.")).toBeInTheDocument();
     expect(within(dialog).getByText("0/280")).toBeInTheDocument();
+  });
+
+  it("visita anterior a la primera visita registrada: avisa sin bloquear (doc 23 §3; UX 18/10/2026)", async () => {
+    h.createVisit.mockResolvedValue({ visitId: "v", replay: false, suggestReopen: false, revision: 4 });
+    h.persons = [person({ id: "p1", fullName: "Ana Torres", firstVisitAt: "2026-10-01" })];
+    await openPerson("p1");
+    fireEvent.click(screen.getByRole("button", { name: /Registrar visita a Ana/ }));
+    const dialog = screen.getByRole("dialog", { name: /Registrar visita/ });
+    const date = within(dialog).getByLabelText("Fecha");
+    expect(date).not.toHaveAttribute("min");
+    fireEvent.change(date, { target: { value: "2026-09-27" } });
+    expect(within(dialog).getByText(/Es anterior a su primera visita registrada/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar visita" }));
+    await waitFor(() => expect(h.createVisit).toHaveBeenCalledTimes(1));
+    expect(h.createVisit.mock.calls[0][0]).toMatchObject({ personId: "p1", date: "2026-09-27" });
   });
 
   it("visita de alguien en Sin continuidad: tras guardar sugiere reabrir y solo reabre con el botón", async () => {

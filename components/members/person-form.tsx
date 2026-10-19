@@ -320,6 +320,8 @@ function PersonFormContent({ onAnother }: { onAnother: () => void }) {
             onDismiss={() => {
               setDismissed(dupKey);
               setDupPrompt(false);
+              // El botón desaparece al confirmar: el foco pasa a Guardar.
+              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".mem-form-foot button[type=submit]")?.focus());
             }}
           />
         </section>

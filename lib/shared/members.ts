@@ -191,7 +191,6 @@ export type FieldErrorCode =
   | "future_date"
   | "too_old"
   | "before_contact"
-  | "before_first_visit"
   | "pair_required"
   | "confirm_required";
 
@@ -206,7 +205,6 @@ export const FIELD_ERROR_TEXT: Readonly<Record<FieldErrorCode, string>> = {
   future_date: "La fecha no puede ser futura.",
   too_old: "La fecha es demasiado antigua.",
   before_contact: "La próxima acción no puede ser anterior al contacto.",
-  before_first_visit: "La fecha no puede ser anterior a la primera visita.",
   pair_required: "Completa la próxima acción y su fecha, o deja ambas vacías.",
   confirm_required: "Confirma el cambio para continuar.",
 };
@@ -551,9 +549,10 @@ export function parseStatusChange(raw: unknown): Parsed<StatusChangeInput> {
 export const VISIT_CREATE_KEYS = ["requestId", "personId", "date", "calendarEventId", "note"] as const;
 
 /**
- * Una visita nueva no puede ser anterior a la primera visita registrada de la
- * persona: la "Primera visita" (firstVisitAt) es la de su registro y el
- * historial la muestra como tal. Sin firstVisitAt válido no se restringe.
+ * ¿La fecha es anterior a la primera visita declarada al registrar (firstVisitAt)?
+ * Se permite (doc 23 §3: la proyección firstVisitDate pasa a ser la más antigua y
+ * firstVisitAt no cambia); el cliente solo lo explica antes de guardar.
+ * Sin firstVisitAt válido devuelve false.
  */
 export function visitBeforeFirst(date: Ymd, firstVisitAt: unknown): boolean {
   return typeof firstVisitAt === "string" && isValidYmd(firstVisitAt) && compareLocal(date, firstVisitAt) < 0;

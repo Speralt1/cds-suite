@@ -92,6 +92,7 @@ function summary(over: Partial<MonthlySummary> = {}): MonthlySummary {
 }
 
 beforeEach(() => {
+  features.fundsPosition = false;
   state.access = { role: "finance", active: true };
   state.summary = summary();
   state.summaryError = "";
@@ -261,12 +262,15 @@ describe("Resumen integrado", () => {
     // /finanzas (SummaryPage) monta el saldo bancario en modo "funds" con abonos SumUp
     // conectados solo si la bandera está encendida.
     features.fundsPosition = true;
-    const page = render(<SummaryPage />);
-    expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();
-    expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-variant", "funds");
-    expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-connect", "true");
-    page.unmount();
-    features.fundsPosition = false;
+    try {
+      const page = render(<SummaryPage />);
+      expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();
+      expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-variant", "funds");
+      expect(screen.getByTestId("bank-tile")).toHaveAttribute("data-connect", "true");
+      page.unmount();
+    } finally {
+      features.fundsPosition = false;
+    }
 
     const second = render(<SummaryDashboard fundsBankTile={tile} />);
     expect(screen.getByRole("heading", { name: "Posición de fondos" })).toBeInTheDocument();

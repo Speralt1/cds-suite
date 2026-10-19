@@ -29,6 +29,13 @@ interface TileDef {
   href: string;
 }
 
+
+/** Responsable en las listas: nombre corto, «Responsable sin acceso» o «Sin responsable». */
+function ownerShort(name: string | null, uid: string | null): string {
+  if (!uid) return "Sin responsable";
+  return name ? shortName(name) : "Responsable sin acceso";
+}
+
 function CountTiles({ tiles }: { tiles: TileDef[] }) {
   return (
     <section className="mem-tiles" aria-labelledby="mem-tiles-title" style={{ gridArea: "tiles" }}>
@@ -239,7 +246,7 @@ function DashboardContent() {
                       {f.text}
                     </Link>
                     <span className="mem-mini-sub">
-                      {f.person.fullName} · {f.ownerUid ? (m.ownerName(f.ownerUid) ? shortName(m.ownerName(f.ownerUid)!) : "Responsable sin acceso") : "Sin responsable"}
+                      {f.person.fullName} · {ownerShort(m.ownerName(f.ownerUid), f.ownerUid)}
                     </span>
                   </span>
                 </li>
