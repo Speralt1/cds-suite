@@ -592,6 +592,12 @@ function PeopleContent() {
   const [q, setQ] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const rows = m.loading || m.error ? [] : applyFilters(m, f, q);
+  // Búsqueda sin resultados: ¿hay coincidencias fuera de los filtros (otras etapas)?
+  // Evita registrar de nuevo a alguien integrado o sin continuidad.
+  const elsewhere =
+    !rows.length && q.trim() && !m.loading && !m.error
+      ? applyFilters(m, { ...f, situacion: "", responsable: "", alerta: "", etiqueta: "", etapa: "todas" }, q).length
+      : 0;
   const needing = rows.filter((v) => v.alerts.length).length;
   const nFilters = activeCount(f);
 
@@ -625,11 +631,28 @@ function PeopleContent() {
       <EmptyState
         icon={Search}
         title={`Ninguna persona coincide con «${q.trim()}».`}
-        body="Prueba con otro nombre, el teléfono sin espacios o el correo."
+        body={
+          elsewhere > 0
+            ? `${plural(elsewhere, "persona coincide", "personas coinciden")} fuera de los filtros actuales (por ejemplo, integradas o sin continuidad). ${elsewhere === 1 ? "Revísala" : "Revísalas"} antes de registrar a alguien de nuevo.`
+            : "Prueba con otro nombre, el teléfono sin espacios o el correo."
+        }
         action={
-          <button type="button" className="button-secondary" onClick={() => setQ("")}>
-            Limpiar búsqueda
-          </button>
+          elsewhere > 0 ? (
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => {
+                clearFilters();
+                setParam("etapa", "todas");
+              }}
+            >
+              Buscar en todas las etapas
+            </button>
+          ) : (
+            <button type="button" className="button-secondary" onClick={() => setQ("")}>
+              Limpiar búsqueda
+            </button>
+          )
         }
       />
     ) : (

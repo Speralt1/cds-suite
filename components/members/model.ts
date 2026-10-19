@@ -19,10 +19,12 @@ export const peopleHref = (params: Record<string, string> = {}) => {
 export const PRIVACY_NOTE = "Datos personales de uso pastoral. Solo los ve el equipo de Consolidación.";
 export const CALENDAR_FALLBACK_TITLE = "Actividad del calendario";
 
-/** "Ana T." (nombre + inicial del apellido). */
+/** "Ana T." (nombre + inicial del apellido). Ignora palabras que no empiezan con
+ * letra, p. ej. "Administración (prueba)" → "Administración". */
 export function shortName(name: string): string {
   const w = name.trim().split(/\s+/);
-  return w.length > 1 ? `${w[0]} ${w[1][0]}.` : name;
+  const last = w.slice(1).find((t) => /^\p{L}/u.test(t));
+  return last ? `${w[0]} ${last[0]}.` : w[0] || name;
 }
 
 export function firstName(name: string): string {

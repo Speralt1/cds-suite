@@ -239,7 +239,7 @@ function DashboardContent() {
                       {f.text}
                     </Link>
                     <span className="mem-mini-sub">
-                      {f.person.fullName} · {f.ownerUid ? shortName(m.ownerName(f.ownerUid) ?? "Responsable sin acceso") : "Sin responsable"}
+                      {f.person.fullName} · {f.ownerUid ? (m.ownerName(f.ownerUid) ? shortName(m.ownerName(f.ownerUid)!) : "Responsable sin acceso") : "Sin responsable"}
                     </span>
                   </span>
                 </li>

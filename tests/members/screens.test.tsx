@@ -234,6 +234,21 @@ describe("Personas", () => {
     expect(within(dialog).queryByRole("link", { name: /WhatsApp/ })).toBeNull();
   });
 
+  it("búsqueda sin resultados en la etapa actual avisa de coincidencias en otras etapas (UX 18/10/2026)", async () => {
+    h.persons = [
+      ...(h.persons as Person[]),
+      person({ id: "pi", fullName: "Irene Integrada", phoneE164: "+56955550999", lifecycleStage: "integrante", consolidationStatus: "integrado" }),
+    ];
+    window.history.replaceState(null, "", "/integrantes/consolidacion/personas");
+    renderWith(<PeopleScreen />);
+    await screen.findByRole("table");
+    fireEvent.change(screen.getByPlaceholderText(/Buscar/), { target: { value: "irene" } });
+    expect(await screen.findByText("Ninguna persona coincide con «irene».")).toBeInTheDocument();
+    expect(screen.getByText(/1 persona coincide fuera de los filtros actuales/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Buscar en todas las etapas" }));
+    expect(window.location.search).toContain("etapa=todas");
+  });
+
   it("solo lectura: el sheet de acciones no ofrece escrituras", async () => {
     h.user = READER;
     window.history.replaceState(null, "", "/integrantes/consolidacion/personas");

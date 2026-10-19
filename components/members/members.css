@@ -2229,6 +2229,21 @@
   }
 }
 
+/* iPad y tablets táctiles (≥ 768 px; en teléfonos ya rige el bloque de ≤ 767 px):
+   botones chicos ("Asignar", "Contactar", "Editar datos") y el nombre de la
+   persona en las listas con área táctil de 44 px. El nombre crece con padding y
+   margen negativo, así que la fila no cambia de alto. */
+@media (pointer: coarse) and (min-width: 768px) {
+  .cds-members .mem-btn-sm {
+    min-height: 44px;
+  }
+  .cds-members .mem-person-link {
+    display: inline-block;
+    padding-block: 12px;
+    margin-block: -12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cds-members .mem-flash,
   .cds-members .cal-dialog[open],

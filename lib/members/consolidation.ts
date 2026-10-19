@@ -130,7 +130,7 @@ export function computeAlerts(persons: readonly Person[], owners: ReadonlySet<st
         personId: p.id,
         severity: "high",
         since: p.entryDate,
-        detail: p.followUpOwnerUid ? "El responsable ya no tiene acceso" : "Nadie a cargo del seguimiento",
+        detail: p.followUpOwnerUid ? "El responsable anterior ya no tiene acceso" : "Nadie a cargo del seguimiento",
       });
     if (!pr.firstContactDate && hoursBetween(createdAtOf(p), now) > T.firstContactMaxHours)
       alerts.push({
