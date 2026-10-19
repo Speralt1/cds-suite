@@ -187,3 +187,43 @@ Una rama paralela (`feature/tithes-integrity-v1`) está agregando un normalizado
 | Functions | sin cambios (`calendarpublicfeed-00002-ver` y demás, doc 25 §0) |
 
 - Objetivos de rollback: Rules `5df51b09` (sigue siendo el último publicado); Hosting `ec3d614eb95dc213` (último publicado), con `2efde71606a551ae` como segundo nivel (doc 25 §0).
+
+## 13. Pruebas de usabilidad en emulador y ajuste de Finanzas (18/10/2026)
+
+**Finanzas · Posición de fondos oculta.** `lib/finance/features.ts` → `FINANCE_FEATURES.fundsPosition = false`. `/finanzas` no monta el tile «Saldo bancario estimado», así que la sección no se renderiza y no consulta saldos ni abonos SumUp. No se borra código, datos, cálculos, la configuración bancaria ni la conciliación SumUp. Para volver a mostrarla: `true` y publicar Hosting. No hay interruptor en la UI. Pruebas: bandera real apagada; resumen completo sin la sección; con la bandera encendida se conserva el comportamiento anterior. Verificado en navegador a 1440, 1024 y 390 px: sin hueco entre «Resultado» y «Calendario de caja» (16 px, espaciado normal).
+
+**Método.** Emulador local (`demo-cds-suite`) con datos ficticios del seed y perfiles de prueba. Navegación visual en el navegador integrado.
+
+- Barrido automático por ancho: scroll horizontal, elementos fuera de pantalla y áreas táctiles.
+- Anchos y pantallas: 1440, 1024, 768, 390 y 375 px sobre Inicio, Atención, Personas, Ficha, Registrar, Finanzas y Calendario.
+- Ningún dato real ni sesión de terceros.
+
+**Resultado por flujo (emulador):**
+
+| Flujo | Resultado |
+|---|---|
+| Dashboard | Indicadores, alertas, «Necesitan atención», «Volvieron» y navegación |
+| Personas | Registro y validaciones (vacío, teléfono, correo), edición, búsqueda por nombre/teléfono/correo, filtros y orden en la URL |
+| Visitas | Registrar visita y aviso de visita en el mismo día |
+| Seguimientos | Seguimiento con responsable y próxima acción (exige fecha), sugerencia de estado |
+| Estados | Por contactar → En seguimiento → Sin continuidad (motivo obligatorio) → Reabrir → Integrándose → Integrado (confirmación, irreversible) |
+| WhatsApp | `wa.me` con número normalizado +56, pestaña nueva, sin texto prellenado (diseño); oculto con «No contactar» |
+| Auditoría | Cada operación deja `membersPersonChanges` con actor, hora y revisión (0 sin actor u hora) |
+| Permisos (perfiles ficticios) | Admin: todo. Pastor: Finanzas, Calendario y Reportes, sin Integrantes (redirige con aviso). Líder: Calendario y Reportes, sin Finanzas ni Integrantes. Solo lectura: Integrantes sin acciones de escritura. Inactivo: bloqueado |
+
+**Corregido en V1:**
+
+1. Visita anterior a la primera visita: se rechaza en cliente y en la Function (`before_first_visit`). Antes dejaba dos «primeras visitas» distintas.
+2. Mismo nombre y mismo teléfono/correo: Guardar pide antes «Es otra persona, continuar». Sigue sin bloquear a familias.
+3. Búsqueda sin resultados en la etapa actual: avisa si hay coincidencias en otras etapas, para no volver a registrar a alguien integrado o cerrado.
+4. Ficha cerrada: la próxima acción que quedó se muestra neutra, sin «Vencida».
+5. Tablet táctil: botones chicos y nombres con área de 44 px.
+6. Nombre corto del responsable y texto de «responsable anterior sin acceso».
+7. Formato de fecha uniforme en los avisos de la ficha.
+
+**Mejoras para V1.1 (no bloquean):**
+
+- Capitalizar el nombre al registrar (hoy se guarda tal cual).
+- Revisar si el perfil de solo lectura debe ver el botón de WhatsApp.
+- En redirecciones por permiso, avisar siempre con el mismo mensaje.
+- Calendario de escritorio: chips de actividad de 22 px de alto (heredado de producción).
