@@ -34,6 +34,7 @@ export const IMPLIES: Readonly<Partial<Record<Permission, readonly Permission[]>
   "calendar.events.manage_all": ["calendar.events.manage_assigned"],
   "calendar.events.manage_assigned": ["calendar.read"],
   "calendar.events.publish_assigned": ["calendar.read"],
+  "members.consolidation.manage": ["members.consolidation.read"],
 };
 
 export interface LegacyRoleAccess {
@@ -76,10 +77,11 @@ export const LEGACY_ROLE_ACCESS: Readonly<Record<LegacyRole, Readonly<LegacyRole
 };
 
 /**
- * Permisos financieros que las reglas YA PUBLICADAS (hasta el ruleset 80a69cd5, y las legacy de la
- * Etapa A) dan a cada rol legacy. Solo para el detector de riesgo de rollback de
- * `migrate-access-v1 --summary` (doc 25 §5.1): si se volviera a esas reglas, un v1 guardado como
- * `leader` leería el resumen financiero. No usar para autorizar.
+ * Permisos financieros que las reglas YA PUBLICADAS dan a cada rol legacy (unión, conservadora):
+ * hasta el ruleset 80a69cd5 eso afecta solo a documentos de esquema legacy con role leader; con las
+ * reglas solo-por-rol de la Etapa A (`e6b2084`) afectaría también a un v1 guardado como `leader`.
+ * Solo para el detector de riesgo de rollback de `migrate-access-v1 --summary` (doc 25 §5.1), que
+ * por eso puede sobrecontar en la dirección segura. No usar para autorizar.
  */
 export const PREVIOUS_RULES_LEGACY_FINANCE: Readonly<Record<LegacyRole, readonly Permission[]>> = {
   admin: ["finance.summary.read", "finance.details.read", "finance.records.manage", "finance.pastoral.manage"],
@@ -232,11 +234,14 @@ export function deriveLegacyRole(baseRole: BaseRole, perms: readonly Permission[
 
 // ---------- Módulos y módulo inicial ----------
 
-export const MODULE_ORDER: readonly ModuleId[] = ["finance", "calendar", "reports", "settings"];
+// Integrantes (Consolidación V1, doc 23) solo se ve con permiso EXPLÍCITO o admin:
+// el fallback legacy no lo otorga a ningún rol.
+export const MODULE_ORDER: readonly ModuleId[] = ["finance", "calendar", "members", "reports", "settings"];
 
 export const MODULE_HREF: Readonly<Record<ModuleId, string>> = {
   finance: "/finanzas",
   calendar: "/calendario",
+  members: "/integrantes",
   reports: "/reportes",
   settings: "/configuracion",
 };
@@ -245,6 +250,7 @@ export const MODULE_HREF: Readonly<Record<ModuleId, string>> = {
 export const MODULE_PERMISSIONS: Readonly<Record<ModuleId, readonly Permission[]>> = {
   finance: ["finance.summary.read"],
   calendar: ["calendar.read"],
+  members: ["members.consolidation.read"],
   reports: ["finance.details.read", "calendar.read"],
   settings: ["settings.manage"],
 };

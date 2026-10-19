@@ -25,6 +25,7 @@ export const SHARED_FILES = Object.freeze([
   "share-token-format",
   "names",
   "sumup-payouts",
+  "members",
 ]);
 
 export const generatedHeader = (name) =>

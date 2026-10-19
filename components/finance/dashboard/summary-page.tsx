@@ -44,6 +44,7 @@ import { CashModal } from "../offerings/cash-modal";
 import { BalanceBand, BalanceBandSkeleton } from "./balance-band";
 import { FundsPosition } from "./funds-position";
 import { BankBalanceCard } from "../bank/bank-balance-card";
+import { FINANCE_FEATURES } from "@/lib/finance/features";
 import { CashCalendarSection, CashCalendarSkeleton } from "./cash-calendar";
 import { AREA_TO_KEY, CashDayPanel, dateLabelShort } from "./cash-day-panel";
 import "./tokens.css";
@@ -227,8 +228,16 @@ export interface SummaryDashboardProps {
 // el tile "Saldo bancario estimado" en Posición de fondos. FundsPosition ya lo
 // limita a finance.details.read; la tarjeta consulta los abonos SumUp con la
 // callable de solo lectura y, si no está disponible, se muestra "incompleto".
+// Con FINANCE_FEATURES.fundsPosition apagada no se monta: la sección no se
+// renderiza y el resto del resumen queda igual (sin hueco).
 export function SummaryPage() {
-  return <SummaryDashboard fundsBankTile={<BankBalanceCard variant="funds" connectSumupPayouts />} />;
+  return (
+    <SummaryDashboard
+      fundsBankTile={
+        FINANCE_FEATURES.fundsPosition ? <BankBalanceCard variant="funds" connectSumupPayouts /> : undefined
+      }
+    />
+  );
 }
 
 export function SummaryDashboard({ fundsBankTile, fundsTiles }: SummaryDashboardProps = {}) {

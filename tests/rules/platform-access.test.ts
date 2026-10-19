@@ -10,12 +10,18 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
+  getCountFromServer,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
   type DocumentData,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -232,6 +238,29 @@ describe("Política de acceso financiero (16/10/2026): líderes sin Finanzas por
     expect(await allowed(() => saveTransaction(dbOf(env, "v1-leader-summary"), "v1-leader-summary", "tx-ls", input))).toBe(false);
   });
 
+  it("panel de diezmantes (PR #32): sus consultas exigen detalle; resumen o Integrantes solos no bastan", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "titheAttributions", "seed-tx"), { profileId: "seed-profile", period: "2026-07", date: Timestamp.now(), status: "active" });
+    });
+    const ops = (u: string): Record<string, () => Promise<unknown>> => {
+      const db = dbOf(env, u);
+      const byId = (c: string, id: string) => getDocs(query(collection(db, c), where(documentId(), "in", [id])));
+      return {
+        "aportes del mes": () => getDocs(query(collection(db, "titheAttributions"), where("period", "==", "2026-07"), orderBy("date", "desc"), limit(500))),
+        "movimientos por ID": () => byId("financeTransactions", "seed-tx"),
+        "aportes por ID": () => byId("titheAttributions", "seed-tx"),
+        "fichas por ID": () => byId("titheProfiles", "seed-profile"),
+        "conteo de fichas": () => getCountFromServer(collection(db, "titheProfiles")),
+      };
+    };
+    for (const u of ["v1-finance", "pastor", "v1-admin"])
+      for (const [op, run] of Object.entries(ops(u)))
+        expect({ u, op, ok: await allowed(run) }).toEqual({ u, op, ok: true });
+    for (const u of ["leader", "v1-leader", "v1-leader-summary", "v1-members-read", "v1-members-manage", "v1-inactive"])
+      for (const [op, run] of Object.entries(ops(u)))
+        expect({ u, op, ok: await allowed(run) }).toEqual({ u, op, ok: false });
+  });
+
   it("admin, pastor y finance (legacy y v1) conservan el resumen; inactivo sigue bloqueado", async () => {
     for (const u of ["admin", "pastor", "finance", "v1-admin", "v1-pastor", "v1-finance"])
       expect({ u, ok: await allowed(() => READ_OPS["financeMonthlySummaries get"](u)) }).toEqual({ u, ok: true });
@@ -420,6 +449,8 @@ describe("firestore.rules: tablas de acceso", () => {
       [P.manageAssigned]: [P.manageAssigned, P.manageAll],
       [P.manageAll]: [P.manageAll],
       [P.publish]: [P.publish],
+      [P.memRead]: [P.memRead, P.memManage],
+      [P.memManage]: [P.memManage],
       "settings.manage": [],
     });
   });
@@ -462,6 +493,7 @@ describe("firestore.rules: tablas de acceso", () => {
   it.each([
     ["calendarRead", P.calRead],
     ["calendarManageAll", P.manageAll],
+    ["membersRead", P.memRead],
   ])("%s() ≡ can('%s') (implicantes y roles legacy)", (fn, perm) => {
     const g = gates(fn);
     expect(g).toHaveLength(1);
@@ -504,7 +536,9 @@ describe("firestore.rules: tablas de acceso", () => {
 
   it("el catálogo almacenable no incluye settings.manage", () => {
     const catalog = list(body("permissionCatalogNoSettings"));
-    expect(catalog).toEqual([P.summary, P.details, P.records, P.pastoral, P.calRead, P.manageAssigned, P.manageAll, P.publish]);
+    expect(catalog).toEqual([
+      P.summary, P.details, P.records, P.pastoral, P.calRead, P.manageAssigned, P.manageAll, P.publish, P.memRead, P.memManage,
+    ]);
   });
 
   it("ya no quedan los helpers financieros por rol", () => {
