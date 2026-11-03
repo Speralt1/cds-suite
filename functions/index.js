@@ -530,3 +530,33 @@ exports.membersOwnerOptions = onCall(
   { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
   createMembersCallableHandler(membersService, "ownerOptions"),
 );
+
+// ---------- Integrantes › Ve por los tuyos (doc 40 · H3b) ----------
+// Cuatro callables agrupados por quien los llama; `request.data = { op, payload }`.
+// `outreachTableOp` NO exige sesión: el enlace de la mesa lleva un token que se valida por hash.
+
+const { FieldPath } = require("firebase-admin/firestore");
+const { createOutreachStore } = require("./outreach/firestore-store");
+const { createOutreachService, createOutreachCallableHandler } = require("./outreach/service");
+
+const outreachService = createOutreachService({ store: createOutreachStore({ db, FieldValue, FieldPath }), clock });
+
+exports.outreachCoordinatorOp = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createOutreachCallableHandler(outreachService, "coordinator"),
+);
+
+exports.outreachFollowupOp = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createOutreachCallableHandler(outreachService, "followup"),
+);
+
+exports.outreachTableOp = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createOutreachCallableHandler(outreachService, "table"),
+);
+
+exports.outreachDecisionOp = onCall(
+  { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },
+  createOutreachCallableHandler(outreachService, "decision"),
+);

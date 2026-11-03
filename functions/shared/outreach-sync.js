@@ -17,6 +17,7 @@
 // - Una cancelación web no borra: deja la inscripción «cancelada»; si la persona
 //   ya asistió, va a revisión.
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.registrationIdFor = registrationIdFor;
 exports.applyInbound = applyInbound;
 exports.emptySyncState = emptySyncState;
 const names_1 = require("./names");
@@ -25,7 +26,8 @@ const outreach_model_1 = require("./outreach-model");
 /** Autor de la asistencia marcada en la puerta del sitio público. */
 const WEB_ACTOR = "vplt-web";
 const PUBLIC_FIELDS = ["fullName", "phoneE164", "email", "invitedByName"];
-function regIdFor(editionId, externalId) {
+/** Id estable de la inscripción web: (edición, externalId) → mismo documento al reimportar. */
+function registrationIdFor(editionId, externalId) {
     return `${editionId}_web_${externalId.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 80)}`;
 }
 function duplicateCandidates(state, phone, email, name, selfId) {
@@ -90,7 +92,7 @@ function applyInbound(prev, batch, ctx) {
             advance();
             continue;
         }
-        const id = regIdFor(state.editionId, rec.externalId);
+        const id = registrationIdFor(state.editionId, rec.externalId);
         const idx = state.registrations.findIndex((r) => r.id === id);
         const existing = idx >= 0 ? state.registrations[idx] : null;
         if (rec.cancelled) {

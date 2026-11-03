@@ -84,7 +84,8 @@ export interface SyncReport {
 const WEB_ACTOR = "vplt-web";
 const PUBLIC_FIELDS = ["fullName", "phoneE164", "email", "invitedByName"] as const;
 
-function regIdFor(editionId: string, externalId: string): string {
+/** Id estable de la inscripción web: (edición, externalId) → mismo documento al reimportar. */
+export function registrationIdFor(editionId: string, externalId: string): string {
   return `${editionId}_web_${externalId.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 80)}`;
 }
 
@@ -158,7 +159,7 @@ export function applyInbound(
       advance();
       continue;
     }
-    const id = regIdFor(state.editionId, rec.externalId);
+    const id = registrationIdFor(state.editionId, rec.externalId);
     const idx = state.registrations.findIndex((r) => r.id === id);
     const existing = idx >= 0 ? state.registrations[idx] : null;
 
