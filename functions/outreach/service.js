@@ -9,7 +9,7 @@
  * por separado. El dominio puro viene de lib/shared/outreach-*.ts compilado a
  * functions/shared/outreach-*.js: aquí NO se reimplementa.
  *
- * Reglas transversales (mismo patrón que members/service.js):
+ * Reglas transversales (mismo patrón que el servicio de Integrantes):
  * - Inyectable: `store` (firestore-store.js o memoria), `clock`, `logger`.
  * - Auth + permiso con `can()` (admin implícito). La mesa NO tiene sesión: el
  *   token (43 car. base64url) viaja en el cuerpo (POST), se guarda solo su
@@ -1058,7 +1058,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     const out = await store.runTransaction(async (tx) => {
       const ctx = await openTable(tx, data);
       const res = await fn(tx, ctx);
-      tx.update(ctx.secretPath, { rate: ctx.rate }); // fn no escribe nada cuando devuelve un rechazo
+      tx.update(ctx.secretPath, String(data.table), { rate: ctx.rate }); // fn no escribe nada cuando devuelve un rechazo
       return res;
     });
     if (out && out.fail) throw out.fail;
