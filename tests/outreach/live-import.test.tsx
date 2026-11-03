@@ -38,6 +38,25 @@ describe("Importar inscripciones", () => {
     expect(await screen.findByText(/Importación aplicada: 2 nuevas/)).toBeInTheDocument();
   });
 
+  it("consentimiento del sitio: sin casilla advierte; con casilla exige versión y viaja en cada fila", async () => {
+    const user = userEvent.setup();
+    m.importRegistrations.mockResolvedValue({ dryRun: true, rows: 2, report: report(), review: [], reviewTotal: 0 });
+    render(<ImportView edition={EDITION} />);
+    expect(screen.getByRole("note")).toHaveTextContent(/no podrán incluirse en la distribución/);
+    await user.upload(screen.getByLabelText("Archivo CSV"), new File([CSV], "a.csv"));
+    await user.click(await screen.findByRole("button", { name: "Ver informe sin aplicar" }));
+    expect((m.importRegistrations.mock.calls[0][1] as { consents: unknown[] }[]).every((r) => r.consents.length === 0)).toBe(true);
+
+    await user.click(screen.getByLabelText("Este texto autoriza el seguimiento posterior del evento"));
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.queryByRole("button", { name: /informe sin aplicar/ })).toBeNull();
+    await user.type(screen.getByLabelText("Versión del consentimiento del sitio"), "v2-2026-11");
+    await user.click(screen.getByLabelText("Este texto autoriza mensajes de WhatsApp"));
+    await user.click(await screen.findByRole("button", { name: "Ver informe sin aplicar" }));
+    const rows = m.importRegistrations.mock.calls[1][1] as { consents: { purpose: string; textVersion: string }[] }[];
+    expect(rows[0].consents.map((c) => [c.purpose, c.textVersion])).toEqual([["seguimiento_evento", "v2-2026-11"], ["mensajes_whatsapp", "v2-2026-11"]]);
+  });
+
   it("archivo con errores: informa la fila sin datos personales y no ofrece enviar si no hay filas", async () => {
     const user = userEvent.setup();
     render(<ImportView edition={EDITION} />);

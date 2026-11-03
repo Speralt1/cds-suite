@@ -43,6 +43,13 @@ export interface CsvParseOptions {
   kind?: CsvKind;
   /** Instante de la importación: hora de ingreso cuando el CSV solo dice «usada = sí». */
   now?: Date | number;
+  /**
+   * Consentimiento dado UNA vez en el sitio al pedir la entrada (decisión 03/11). Con `followUp`
+   * cada fila recibe seguimiento_evento (+ mensajes_whatsapp si `whatsapp`) con esa versión del
+   * texto. Las columnas de consentimiento del CSV, si existen, tienen prioridad. Nunca agrega
+   * traspaso_consolidacion.
+   */
+  siteConsent?: { textVersion: string; followUp: boolean; whatsapp: boolean };
 }
 
 // ---------- CSV ----------
@@ -283,6 +290,13 @@ export function parseSiteCsv(text: string, options: CsvParseOptions): CsvParseRe
 
     const consents: InboundRegistration["consents"] = [];
     const version = get("consentVersion");
+    const site = options.siteConsent;
+    if (!version && site && site.followUp && site.textVersion.trim()) {
+      const grantedAt = toLocal(get("consentAt"), now);
+      const v = site.textVersion.trim().slice(0, 40);
+      consents.push({ purpose: "seguimiento_evento", textVersion: v, grantedAt });
+      if (site.whatsapp) consents.push({ purpose: "mensajes_whatsapp", textVersion: v, grantedAt });
+    }
     if (version) {
       const grantedAt = toLocal(get("consentAt"), now);
       if (isYes(get("consentFollow"))) consents.push({ purpose: "seguimiento_evento", textVersion: version.slice(0, 40), grantedAt });

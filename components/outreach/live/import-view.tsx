@@ -2,10 +2,10 @@
 
 // Importar inscripciones (coordinación): archivo → informe sin aplicar → confirmar.
 // Aplicar solo se habilita tras un informe (dry-run) del MISMO archivo.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CloudDownload } from "lucide-react";
 import * as api from "@/lib/outreach/client";
-import { parseSiteCsv, type CsvParseResult } from "@/lib/outreach/csv-import";
+import { parseSiteCsv } from "@/lib/outreach/csv-import";
 import { isReadOnly } from "@/lib/outreach/model";
 import { Done, ErrorNote, ISSUE_LABEL, Loading, readFileText, useAction } from "./ui";
 
@@ -20,8 +20,11 @@ const REPORT_LABEL: Record<keyof api.ImportReport, string> = {
 };
 
 export default function ImportView({ edition, onImported }: { edition: api.EditionSummary; onImported?: () => void }) {
-  const [parsed, setParsed] = useState<CsvParseResult | null>(null);
   const [fileKey, setFileKey] = useState(0);
+  const [text, setText] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  const [followUp, setFollowUp] = useState(false);
+  const [whatsapp, setWhatsapp] = useState(false);
   const [preview, setPreview] = useState<api.ImportResult | null>(null);
   const [applied, setApplied] = useState<api.ImportResult | null>(null);
   const act = useAction();
@@ -30,10 +33,15 @@ export default function ImportView({ edition, onImported }: { edition: api.Editi
   const onFile = async (file: File | undefined) => {
     setPreview(null);
     setApplied(null);
-    if (!file) return setParsed(null);
-    setParsed(parseSiteCsv(await readFileText(file), { editionYear: edition.year }));
+    if (!file) return setText(null);
+    setText(await readFileText(file));
     setFileKey((k) => k + 1);
   };
+  const consentOk = !followUp || version.trim() !== "";
+  const parsed = useMemo(
+    () => (text === null ? null : parseSiteCsv(text, { editionYear: edition.year, siteConsent: { textVersion: version, followUp, whatsapp: followUp && whatsapp } })),
+    [text, edition.year, version, followUp, whatsapp],
+  );
   const rows = parsed?.rows ?? [];
   const run = async (dryRun: boolean) => {
     const res = await act.run(() => api.importRegistrations(edition.id, rows, dryRun));
@@ -60,6 +68,27 @@ export default function ImportView({ edition, onImported }: { edition: api.Editi
             <span>Archivo CSV</span>
             <input key={fileKey} type="file" accept=".csv,text/csv" className="form-input" onChange={(e) => void onFile(e.target.files?.[0])} />
           </label>
+          <fieldset className="vp-results">
+            <legend>Consentimiento del sitio</legend>
+            <label className="vp-as">
+              <span>Versión del consentimiento del sitio</span>
+              <input className="form-input" value={version} placeholder="v2-2026-11" maxLength={40} onChange={(e) => { setVersion(e.target.value); setPreview(null); }} />
+            </label>
+            <label className={followUp ? "is-on" : ""}>
+              <input type="checkbox" checked={followUp} onChange={(e) => { setFollowUp(e.target.checked); setPreview(null); }} />
+              Este texto autoriza el seguimiento posterior del evento
+            </label>
+            <label className={whatsapp ? "is-on" : ""}>
+              <input type="checkbox" checked={whatsapp} disabled={!followUp} onChange={(e) => { setWhatsapp(e.target.checked); setPreview(null); }} />
+              Este texto autoriza mensajes de WhatsApp
+            </label>
+          </fieldset>
+          {!followUp && (
+            <p className="vp-error" role="note">
+              Sin esta autorización, las personas se importan sin consentimiento: no podrán incluirse en la distribución ni recibir seguimiento.
+            </p>
+          )}
+          {followUp && version.trim() === "" && <p className="vp-small">Escribe la versión del texto para continuar.</p>}
           {parsed && (
             <div className="vp-small" role="status">
               {parsed.kind ? `Tipo: ${parsed.kind}. ` : ""}
@@ -108,6 +137,7 @@ export default function ImportView({ edition, onImported }: { edition: api.Editi
           )}
 
           {rows.length > 0 &&
+            consentOk &&
             !applied &&
             (preview ? (
               <div className="vp-actions">

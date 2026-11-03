@@ -95,4 +95,24 @@ describe("CSV del sitio · lector", () => {
     expect(parseSiteCsv("id,nombre,menor\n1,Ana,no", { editionYear: 2026 }).errors[0].message).toMatch(/Faltan columnas obligatorias: estado/);
     expect(parseSiteCsv(ASISTENTES, { editionYear: 1800 }).errors.length).toBeGreaterThan(3);
   });
+
+  it("siteConsent: con followUp cada fila recibe el consentimiento; sin él, ninguno; nunca traspaso", () => {
+    const csv = "id,nombre,menor,estado\n7,Ana,no,aprobado\n";
+    const now = Date.UTC(2026, 10, 3, 15, 0);
+    const on = parseSiteCsv(csv, { editionYear: 2026, now, siteConsent: { textVersion: " v2-2026-11 ", followUp: true, whatsapp: true } });
+    expect(on.rows[0].consents.map((c) => [c.purpose, c.textVersion])).toEqual([["seguimiento_evento", "v2-2026-11"], ["mensajes_whatsapp", "v2-2026-11"]]);
+    expect(on.rows[0].consents[0].grantedAt).toMatch(/^2026-11-03T/);
+    const only = parseSiteCsv(csv, { editionYear: 2026, siteConsent: { textVersion: "v2", followUp: true, whatsapp: false } });
+    expect(only.rows[0].consents.map((c) => c.purpose)).toEqual(["seguimiento_evento"]);
+    const off = parseSiteCsv(csv, { editionYear: 2026, siteConsent: { textVersion: "v2", followUp: false, whatsapp: true } });
+    expect(off.rows[0].consents).toEqual([]);
+    expect(JSON.stringify(on.rows)).not.toContain("traspaso_consolidacion");
+  });
+
+  it("siteConsent: las columnas de consentimiento del CSV tienen prioridad", () => {
+    const csv = "id,nombre,menor,estado,autoriza_seguimiento,version_consentimiento\n7,Ana,no,aprobado,no,fila-1\n8,Beto,no,aprobado,sí,fila-1\n";
+    const r = parseSiteCsv(csv, { editionYear: 2026, siteConsent: { textVersion: "global", followUp: true, whatsapp: true } });
+    expect(r.rows[0].consents).toEqual([]);
+    expect(r.rows[1].consents.map((c) => [c.purpose, c.textVersion])).toEqual([["seguimiento_evento", "fila-1"]]);
+  });
 });
