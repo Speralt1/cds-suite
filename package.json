@@ -19,6 +19,7 @@
     "emulators": "firebase emulators:start --only auth,firestore --project demo-cds-suite",
     "emulators:platform": "firebase emulators:start --only auth,firestore,functions --project demo-cds-suite",
     "seed:platform": "CDS_SEED_LOCAL=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCLOUD_PROJECT=demo-cds-suite node scripts/seed-platform-calendar-emulator.mjs",
+    "seed:outreach": "CDS_SEED_LOCAL=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCLOUD_PROJECT=demo-cds-suite node scripts/seed-outreach-emulator.mjs",
     "dev:emulators": "node scripts/dev-platform.mjs --next-only",
     "dev:platform": "node scripts/dev-platform.mjs",
     "migrate:access:dry": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-cds-suite node scripts/migrate-access-v1.mjs --emulator",
