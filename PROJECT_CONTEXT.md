@@ -3,11 +3,11 @@
 > Punto de entrada obligatorio para cualquier IA, persona o agente que trabaje en CDS Suite.
 > Leer este archivo antes de proponer arquitectura, reorganizar ramas, desplegar o iniciar una nueva Slice.
 
-> **Estado verificado el 03/11/2026:** integración `feature/preproduccion-mobile-v1` @ `531e42e` (PR #20 fusionado el 19/10). Consolidación y `fundsPosition: false` están en código, no desplegados. Hosting live `ec3d614eb95dc213` (16/10), Rules `5df51b09…`, sin Functions ni índices `members*`. Finanzas y Calendario sí están publicados. Ver [revisión vigente y evento](docs/mission-2026/38-project-review-event-20261103.md). Los relatos de §2–§9 y §18–§20 son históricos; §16–§17 tienen prioridad para continuar.
+> **Estado verificado el 03/11/2026:** integración `feature/preproduccion-mobile-v1` @ `531e42e` (PR #20 fusionado el 19/10). Consolidación y `fundsPosition: false` están en código, no desplegados. Hosting live `ec3d614eb95dc213` (16/10), Rules `5df51b09…`, sin Functions ni índices `members*`. Finanzas y Calendario sí están publicados. Ver [revisión vigente y evento](docs/mission-2026/38-project-review-event-20261103.md) y la **[hoja de ruta única](docs/mission-2026/41-roadmap-suite.md)**. Los relatos de §2–§9 y §18–§20 son históricos; §16–§17 tienen prioridad para continuar.
 
 ## 1. Identidad del proyecto
 
-- **Nombre:** CDS Suite
+- **Nombre:** CDS Suite. **Nombre visible propuesto: «Alero · Casa de Salvación»** (doc 39; implementado en rama, no desplegado). El cambio de marca no toca proyecto Firebase, colecciones, Functions, rutas ni permisos.
 - **Propósito:** suite operativa para Casa de Salvación, organizada por módulos (§1.1). Su foco actual son finanzas (SumUp, ofrendas, cafetería, diezmos, movimientos, reportes y configuración) y calendario.
 - **Owner:** Salvador
 - **Repositorio:** `Speralt1/cds-suite`
@@ -16,6 +16,8 @@
 - **Línea de integración / preproducción:** `feature/preproduccion-mobile-v1`
 - **Rama de integración activa:** `feature/preproduccion-mobile-v1` @ `531e42e`; Hosting vigente corresponde a la versión documentada para PR #32 / `1951f2b`.
 - **Revisión en curso:** `review/consolidation-event-ux-20261103`, desde `531e42e`; login visual y simulación ficticia 300/15, sin producción (doc 38).
+- **Rediseño y evento:** `design/suite-redesign-vplt-20261103`, apilada sobre la anterior: identidad Alero, núcleo de dominio de «Ve por los tuyos» con simulación, docs 39–41. Sin producción.
+- **Dependencias:** `chore/deps-security-20261103` (PR #34) desde integración; audit productivo 9→0. Sin deploy.
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees`
 - **Trello:** pendiente de enlazar.
 
@@ -28,6 +30,7 @@
 | **Reportes** | Finanzas y Calendario publicados. |
 | **Configuración** | Áreas, usuarios/permisos y Finanzas publicados. |
 | **Integrantes › Consolidación V1** | PR #20 fusionado en `531e42e`; probado con emuladores. **No desplegado**; no crear datos reales como prueba. |
+| **Integrantes › Ve por los tuyos** | Núcleo de dominio y simulación 300/15 en rama; backend, permisos e integraciones propuestos (docs 40–41). Ruta productiva muestra «en preparación». |
 | **Equipos** | Áreas y permisos como base; no hay módulo propio de turnos/equipos. |
 
 El modelo de acceso nuevo es `role` (legacy, se conserva) + `baseRole` + `position` + `permissions[]` + `areaIds[]` + `homeModule` + `active` + `accessSchemaVersion`. Las reglas tienen un fallback exacto al rol legacy mientras dure la migración. Detalle en `docs/mission-2026/18-platform-core-calendar-production-spec.md` §3.
@@ -350,12 +353,14 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - **Previews conservadas:** PR #3 `8e79cd1`, PR #4 `b65e85b`. Lector de campañas: #8/#9 Draft, #9 conflictivo.
 - **Slice 3A preservada:** `mission/slice3a-sumup-fees` @ `6d67de5` (14 commits exclusivos).
 - **Checkout canónico histórico:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`; esta revisión usa un worktree aislado y no lo reemplaza.
-- **Evidencia vigente:** doc 38; lista nominal de accesos fuera del repositorio público.
+- **Evidencia vigente:** docs 38–41; lista nominal de accesos y revisiones del sitio del evento y del motor de mensajería en el expediente privado, fuera del repositorio público.
+- **Sitio del evento:** el sistema de inscripciones vive en `Speralt1/web-casa-de-salvacion` (privado), en producción desde 01/11; edición 2026 configurada para el 28/11/2026 18:00 (confirmar). Cada push a su rama de producción despliega.
 - **Última verificación:** 2026-11-03. Ningún deploy ni cambio de permisos en esta revisión.
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
+0. Seguir la **hoja de ruta única (doc 41)**: F0 revisión de PR #33, PR #34 y la rama de rediseño; confirmar fecha del evento, nombre y logo.
 1. Revisar el PR de login y simulaciones (doc 38) y su CI. Pruebas técnicas con perfiles ficticios, sin depender de titulares reales.
 2. Para publicar Consolidación, reanudar doc 25 desde C-A0 con baseline vivo y backup; C-A2.5 (merge) ya está hecho. C-A3 índices → C-A4 Rules → C-A5 seis `members*` por nombre → C-A6 Hosting → smokes/piloto admin. El doc 25 conserva filas de estado anteriores al merge: usar la evidencia viva del doc 38.
 3. Antes de abrir el evento a 15 responsables: separar inscripción de visita, asistencia por evento, consentimiento y acceso solo a asignados. V1 excluye decisiones religiosas; diseño restringido y aprobación separada antes de almacenarlas.
