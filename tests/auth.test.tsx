@@ -164,6 +164,22 @@ describe("session boundaries", () => {
 });
 
 describe("login", () => {
+  it("permite revisar la contraseña sin enviarla ni modificarla", async () => {
+    const interaction = userEvent.setup();
+    render(<AuthProvider><LoginPage /></AuthProvider>);
+    await resolveSession(null);
+    const password = screen.getByLabelText("Contraseña");
+    await interaction.type(password, " clave ficticia ");
+    expect(password).toHaveAttribute("type", "password");
+    await interaction.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect(password).toHaveValue(" clave ficticia ");
+    expect(screen.getByRole("button", { name: "Ocultar contraseña" })).toHaveAttribute("aria-pressed", "true");
+    await interaction.click(screen.getByRole("button", { name: "Ocultar contraseña" }));
+    expect(password).toHaveAttribute("type", "password");
+    expect(firebase.signIn).not.toHaveBeenCalled();
+  });
+
   it("validates empty fields without calling Firebase", async () => {
     const interaction = userEvent.setup();
     render(
