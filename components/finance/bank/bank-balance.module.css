@@ -3,10 +3,10 @@
    emite. iPad primero: 2×2 en 600–1199 px, 4 columnas desde 1200 px. */
 
 .card {
-  border: 1px solid var(--color-line, #e2e7df);
+  border: 1px solid var(--color-line, #e3dcd1);
   border-radius: 16px;
   background: #fff;
-  color: var(--color-ink, #233c33);
+  color: var(--color-ink, #1f1b17);
   padding: 20px;
 }
 
@@ -29,7 +29,7 @@
   margin-top: 2px;
   font-size: 13px;
   line-height: 20px;
-  color: var(--color-muted, #68776e);
+  color: var(--color-muted, #6b6158);
 }
 
 .grid {
@@ -55,15 +55,15 @@
   min-width: 0;
   flex-direction: column;
   gap: 6px;
-  border: 1px solid var(--color-line, #e2e7df);
+  border: 1px solid var(--color-line, #e3dcd1);
   border-radius: 12px;
-  background: var(--color-canvas, #f8f9f6);
+  background: var(--color-canvas, #f6f3ee);
   padding: 14px 16px;
 }
 
 .figurePrimary {
-  border-color: var(--color-primary, #285b45);
-  background: var(--color-primary-soft, #eaf1e9);
+  border-color: var(--color-primary, #1f1b17);
+  background: var(--color-primary-soft, #f3e7df);
 }
 
 .label {
@@ -84,17 +84,17 @@
   font-size: 16px;
   line-height: 22px;
   font-weight: 600;
-  color: var(--color-muted, #68776e);
+  color: var(--color-muted, #6b6158);
 }
 
 .negative {
-  color: var(--color-danger, #a02e2e);
+  color: var(--color-danger, #b4234a);
 }
 
 .hint {
   font-size: 12px;
   line-height: 18px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .badges {
@@ -118,18 +118,18 @@
 
 .badge {
   background: #fff;
-  color: var(--color-primary, #285b45);
-  border: 1px solid var(--color-primary, #285b45);
+  color: var(--color-primary, #1f1b17);
+  border: 1px solid var(--color-primary, #1f1b17);
 }
 
 .badgeWarn {
-  background: var(--color-warning-soft, #fbf1de);
-  color: var(--color-warning-ink, #6f4c14);
+  background: var(--color-warning-soft, #fbf0d9);
+  color: var(--color-warning-ink, #6e4800);
 }
 
 .badgeInfo {
-  background: var(--color-info-soft, #e5eef6);
-  color: var(--color-info, #245a86);
+  background: var(--color-info-soft, #e8eef4);
+  color: var(--color-info, #3f5b78);
 }
 
 .actions {
@@ -146,7 +146,7 @@
   gap: 6px;
   border-radius: 10px;
   padding: 0 14px;
-  background: var(--color-primary, #285b45);
+  background: var(--color-primary, #1f1b17);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -154,7 +154,7 @@
 
 .linkButton:focus-visible,
 .textButton:focus-visible {
-  outline: 2px solid var(--color-primary, #285b45);
+  outline: 2px solid var(--color-primary, #1f1b17);
   outline-offset: 2px;
 }
 
@@ -165,7 +165,7 @@
   gap: 6px;
   border-radius: 10px;
   padding: 0 10px;
-  color: var(--color-primary, #285b45);
+  color: var(--color-primary, #1f1b17);
   font-size: 14px;
   font-weight: 600;
   text-decoration: underline;
@@ -184,13 +184,13 @@
   gap: 6px;
   font-size: 12px;
   line-height: 18px;
-  color: var(--color-warning-ink, #6f4c14);
+  color: var(--color-warning-ink, #6e4800);
 }
 
 .skeleton {
   height: 96px;
   border-radius: 12px;
-  background: var(--color-line, #e2e7df);
+  background: var(--color-line, #e3dcd1);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -210,7 +210,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: var(--color-danger, #a02e2e);
+  color: var(--color-danger, #b4234a);
   font-size: 14px;
 }
 
@@ -230,12 +230,12 @@
 .sheetIntro {
   font-size: 13px;
   line-height: 20px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .lines {
   display: grid;
-  border-top: 1px solid var(--color-line, #e2e7df);
+  border-top: 1px solid var(--color-line, #e3dcd1);
 }
 
 .line {
@@ -244,7 +244,7 @@
   gap: 4px 8px;
   align-items: baseline;
   padding: 10px 0;
-  border-bottom: 1px solid var(--color-line, #e2e7df);
+  border-bottom: 1px solid var(--color-line, #e3dcd1);
 }
 
 .sign {
@@ -262,7 +262,7 @@
   grid-column: 2 / 4;
   font-size: 12px;
   line-height: 18px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .lineAmount {
@@ -282,7 +282,7 @@
   font-size: 13px;
   line-height: 20px;
   border-radius: 10px;
-  background: var(--color-canvas, #f8f9f6);
+  background: var(--color-canvas, #f6f3ee);
   padding: 10px 12px;
 }
 

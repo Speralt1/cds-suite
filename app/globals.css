@@ -1,32 +1,52 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-canvas: #f8f9f6;
-  --color-ink: #233c33;
-  --color-muted: #68776e;
-  --color-primary: #285b45;
-  --color-primary-soft: #eaf1e9;
-  --color-line: #e2e7df;
-  --color-sand: #f0ece2;
-  --color-danger: #a02e2e;
-  --color-warning: #9a6a1f;
-  --color-warning-soft: #fbf1de;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --color-canvas: #f6f3ee;
+  --color-ink: #1f1b17;
+  --color-muted: #6b6158;
+  --color-primary: #1f1b17;
+  --color-primary-soft: #f3e7df;
+  --color-line: #e3dcd1;
+  --color-sand: #f1ebe1;
+  --color-danger: #b4234a;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #fbf0d9;
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  /* Alero (doc 39): Fraunces solo en títulos de 22 px o más; nunca en tablas ni montos. */
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+}
+
+/* Alero · identidad (doc 39 §4). La teja es identidad, foco y Evento; la acción
+   principal es tinta. Los colores de módulo marcan DÓNDE estás, nunca un estado. */
+@theme inline {
+  --color-brand: #a8432a;
+  --color-brand-strong: #8c3721;
+  --color-brand-soft: #f6e6dd;
+  --color-surface: #fffdf9;
+  --color-sunken: #eee9e1;
+  --color-input-line: #8f8478;
+  --color-module-finance: #0f6b6b;
+  --color-module-calendar: #3a4fa8;
+  --color-module-members: #8a3b7a;
+  --color-module-teams: #56661c;
+  --color-module-event: #a8432a;
+  --radius-control: 0.5rem;
+  --radius-sheet: 0.75rem;
 }
 
 /* Platform Core · Shell de CDS Suite (18b §1.1). Tokens nuevos; los existentes
    no cambian. Valores del shell oscuro aprobado (PR #3, --fx-side-*). */
 @theme inline {
-  --color-side: #14231d;
-  --color-side-hover: #1d3229;
-  --color-side-active: #244233;
-  --color-side-accent: #7fc79c;
-  --color-side-focus: #8fd1a8;
-  --color-side-text: #c9d6ce;
-  --color-side-muted: #8aa197;
-  --color-side-line: #23392f;
-  --color-info: #245a86;
-  --color-info-soft: #e5eef6;
+  --color-side: #1c1916;
+  --color-side-hover: #28231f;
+  --color-side-active: #3a2f28;
+  --color-side-accent: #e58b6b;
+  --color-side-focus: #f0a486;
+  --color-side-text: #e8e1d7;
+  --color-side-muted: #aba196;
+  --color-side-line: #332c26;
+  --color-info: #3f5b78;
+  --color-info-soft: #e8eef4;
   /* Paleta cerrada de áreas (16b §4.1). Texto en color de área: SIEMPRE -ink. */
   --color-area-azul: var(--area-azul-swatch);
   --color-area-azul-ink: var(--area-azul-ink);
@@ -106,20 +126,20 @@
    cambian de valor (--color-warning, --color-warning-soft, --color-info y
    --color-info-soft ya existen arriba con los mismos valores). */
 @theme inline {
-  --color-income: #256b47;
-  --color-income-soft: #e8f2ec;
-  --color-expense: #a4482f;
-  --color-expense-soft: #f8ece6;
-  --color-chart-income: #285b45;
-  --color-chart-expense: #c0694c;
-  --color-chart-result: #60746b;
-  --color-result-ink: #233c33;
-  --color-result-surface: #f0ece2;
-  --color-result-line: #ddd5c3;
-  /* --color-warning (#9a6a1f) queda SOLO para iconos y bordes; todo texto de
+  --color-income: #1e7a4c;
+  --color-income-soft: #e6f2ea;
+  --color-expense: #9e3b55;
+  --color-expense-soft: #f8e8ec;
+  --color-chart-income: #1f1b17;
+  --color-chart-expense: #c26b80;
+  --color-chart-result: #7a6f63;
+  --color-result-ink: #1f1b17;
+  --color-result-surface: #f1ebe1;
+  --color-result-line: #ddd3c4;
+  /* --color-warning (#8a5a00) queda SOLO para iconos y bordes; todo texto de
      advertencia usa --color-warning-ink (5,47:1 sobre --color-warning-soft). */
-  --color-warning-ink: #7a5216;
-  --color-muted-strong: #5f6d65;
+  --color-warning-ink: #6e4800;
+  --color-muted-strong: #5e554c;
 }
 
 /* Shell (Design Lock 28 §B "Shell"). Medidas en rem: crecen con "Aa". */
@@ -243,6 +263,20 @@ html[data-text-size="xlarge"] {
   --area-mostaza-soft: #f2ecdf;
 }
 
+.font-display,
+.app-content main > div > h1:first-child,
+.cds-members .mem-module-head h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-optical-sizing: auto;
+}
+.tabular,
+.kpi p,
+.mem-tile-value,
+.transaction-row [data-amount] {
+  font-variant-numeric: tabular-nums;
+}
 body {
   margin: 0;
   background: var(--color-canvas);
@@ -262,11 +296,11 @@ button:disabled {
   cursor: not-allowed;
 }
 ::selection {
-  background: #d5e6d8;
-  color: #233c33;
+  background: #f1d9cd;
+  color: #1f1b17;
 }
 :focus-visible {
-  outline: 3px solid #7b9d56;
+  outline: 3px solid #a8432a;
   outline-offset: 4px;
 }
 .skip-link {
@@ -296,14 +330,14 @@ button:disabled {
   transition: background-color 150ms;
 }
 .button-primary:hover {
-  background: #1e4936;
+  background: #3a332d;
 }
 .button-primary:disabled {
   opacity: 0.65;
 }
 .form-input {
   width: 100%;
-  border: 1px solid #cbd4ca;
+  border: 1px solid #c9bfb1;
   border-radius: 10px;
   background: white;
   padding: 0.8125rem 0.875rem;
@@ -311,7 +345,7 @@ button:disabled {
   color: var(--color-ink);
 }
 .form-input::placeholder {
-  color: #7b857d;
+  color: #7a6f63;
 }
 .form-input:focus {
   border-color: var(--color-primary);
@@ -352,7 +386,7 @@ button:disabled {
   border-bottom: 2px solid transparent;
   /* Darker than --color-muted: at 4.46:1 on --color-canvas it falls just
      short of the 4.5:1 AA text contrast target. */
-  color: #5f6d65;
+  color: #5e554c;
   font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
@@ -451,7 +485,7 @@ button:disabled {
   width: 100%;
   min-width: 0;
   min-height: 2.75rem;
-  border: 1px solid #cbd4ca;
+  border: 1px solid #c9bfb1;
   border-radius: 9px;
   background: white;
   padding: 0.625rem 0.75rem;
@@ -729,7 +763,7 @@ button:disabled {
   width: 100%;
   min-width: 0;
   padding: 0.6875rem 0.75rem;
-  border: 1px solid #cbd4ca;
+  border: 1px solid #c9bfb1;
   border-radius: 9px;
   background: white;
   font-size: 1rem;
@@ -755,9 +789,9 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 .notice.error {
-  background: #fff0ed;
-  border: 1px solid #e9c3bc;
-  color: #922f2e;
+  background: #fbe8ec;
+  border: 1px solid #edb9c6;
+  color: #96203f;
 }
 .notice.success {
   background: var(--color-primary-soft);
@@ -869,15 +903,15 @@ button:disabled {
   font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  background: #f0f3ed;
+  background: #eee9e1;
   color: var(--color-muted);
 }
 .transaction-row + .transaction-row {
   border-top: 1px solid var(--color-line);
 }
 .transaction-row.is-voided {
-  background: #f6f5f3;
-  color: #737872;
+  background: #f3efe8;
+  color: #7a6f63;
 }
 .transaction-actions {
   display: flex;
@@ -924,11 +958,11 @@ button:disabled {
   color: var(--color-primary);
 }
 .status-pill.voided {
-  background: #eee4df;
+  background: #f2e1e6;
   color: #864b3a;
 }
 .transaction-row.is-group {
-  background: #fbfbf9;
+  background: #fbf8f3;
 }
 .group-toggle {
   display: inline-flex;
@@ -1069,7 +1103,7 @@ button:disabled {
   min-width: 0;
 }
 .profile-card:hover {
-  border-color: #8aa18b;
+  border-color: #8f8478;
 }
 .profile-card h3 {
   font-size: 1.0625rem;
@@ -1153,7 +1187,7 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-muted);
-  background: #f0f3ed;
+  background: #eee9e1;
 }
 .tithe-history-group th {
   background: var(--color-canvas);
@@ -1605,16 +1639,16 @@ button:disabled {
   justify-content: center;
   gap: 8px;
   padding: 0.625rem 1rem;
-  border: 1px solid #e4bbb6;
+  border: 1px solid #edb9c6;
   border-radius: 10px;
-  background: #fff7f5;
-  color: #8e302b;
+  background: #fdf3f5;
+  color: #96203f;
   font-size: 0.8125rem;
   font-weight: 500;
 }
 
 .button-danger:hover {
-  background: #fff0ed;
+  background: #fbe8ec;
 }
 
 .button-danger:disabled {
@@ -2427,7 +2461,7 @@ button:disabled {
   gap: 11px;
   padding: 0.625rem 0.8125rem;
   overflow: hidden;
-  border: 1px dashed #bac8be;
+  border: 1px dashed #cfc6b8;
   border-radius: 11px;
   background: var(--color-canvas);
   color: var(--color-primary);
@@ -2717,7 +2751,7 @@ button:disabled {
 }
 
 .status-voided {
-  background: #f1f1ef;
+  background: #efe9e0;
   color: #686868;
 }
 
@@ -2754,7 +2788,7 @@ button:disabled {
 .text-button { width:fit-content; padding:0; border:0; background:transparent; color:var(--color-primary); font-weight:700; cursor:pointer; }
 .giving-public-shell { width:min(680px,calc(100% - 24px)); margin:0 auto; padding:1.75rem 0 2.75rem; }
 .giving-public-hero { margin-top:18px; padding:1.75rem; border:1px solid var(--color-line); border-radius:20px; background:white; }
-.giving-public-hero h1 { margin-top:7px; font-size:clamp(2.125rem,8vw,3.25rem); color:#213c31; }
+.giving-public-hero h1 { margin-top:7px; font-size:clamp(2.125rem,8vw,3.25rem); color:#2e2722; }
 .giving-public-hero > p:last-child { margin-top:12px; color:var(--color-muted); line-height:1.55; }
 .giving-methods { display:grid; gap:12px; margin-top:12px; }
 .giving-method-card { padding:1.5rem; border:1px solid var(--color-line); border-radius:18px; background:white; }
@@ -3234,7 +3268,7 @@ button:disabled {
 .cash-loading {
   background: var(--color-canvas);
   /* Not --color-muted: 4.46:1 on --color-canvas misses AA (see above). */
-  color: #5f6d65;
+  color: #5e554c;
 }
 .finance-form .cash-date-confirm {
   flex-direction: row;
@@ -3833,17 +3867,18 @@ button:disabled {
 }
 .app-brand-mark {
   display: flex;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.875rem;
+  height: 1.875rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: var(--color-side-accent);
-  color: var(--color-side);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.025em;
+  border-radius: 9px;
+  background: var(--color-brand);
+  color: #fffdf9;
+}
+.app-brand-mark svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 .app-brand-text {
   min-width: 0;
@@ -3851,9 +3886,11 @@ button:disabled {
 .app-brand-name {
   display: block;
   color: white;
-  font-size: 0.875rem;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
   font-weight: 600;
-  line-height: 1.125rem;
+  line-height: 1.25rem;
+  letter-spacing: -0.005em;
 }
 .app-brand-sub {
   display: block;
@@ -4083,7 +4120,7 @@ button:disabled {
     margin-top: 0.5rem;
     padding: 0 0.5rem;
     background: transparent;
-    color: #f4b4b4;
+    color: #edb9c6;
     box-shadow: none;
   }
 }
@@ -4292,7 +4329,7 @@ button:disabled {
 /* Superficies claras dentro de la barra oscura (popover y hoja "Aa"): anillo
    de foco normal; el verde claro de la barra no contrasta sobre blanco. */
 .app-topbar :is(.text-size-popover, dialog) :focus-visible {
-  outline-color: #7b9d56;
+  outline-color: #a8432a;
 }
 .text-size-title {
   margin-bottom: 0.5rem;

@@ -111,7 +111,7 @@ describe("AppShell: módulos por perfil", () => {
     shell();
     expect(screen.getByRole("link", { name: "Saltar al contenido" })).toHaveAttribute("href", "#main-content");
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
-    const brand = screen.getAllByRole("link", { name: /Casa de Salvación · CDS Suite/ });
+    const brand = screen.getAllByRole("link", { name: /Alero · Casa de Salvación/ });
     expect(brand[0]).toHaveAttribute("href", "/inicio");
     expect(screen.queryByText(/V0\.2/)).toBeNull();
   });

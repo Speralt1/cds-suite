@@ -1,16 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Fraunces, Inter } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/auth-provider";
 import { PwaRegister } from "@/components/pwa-register";
 import { PREPAINT_SCRIPT } from "@/lib/ui/prepaint";
 import "./globals.css";
 
+// Alero (doc 39 §5): next/font descarga en la build y sirve desde el mismo
+// origen; el navegador no pide nada a Google.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap", axes: ["SOFT", "opsz"] });
+
 export const metadata: Metadata = {
-  applicationName: "CDS Administración",
+  applicationName: "Alero",
   title: {
-    default: "CDS Administración | Casa de Salvación",
-    template: "%s | CDS Administración",
+    default: "Alero · Casa de Salvación",
+    template: "%s · Alero",
   },
-  description: "Espacio de administración de Casa de Salvación.",
+  description: "Alero: finanzas, calendario, personas y equipos de Casa de Salvación.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -35,7 +41,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "CDS",
+    title: "Alero",
     statusBarStyle: "default",
   },
   formatDetection: {
@@ -51,7 +57,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#285b45",
+  themeColor: "#1f1b17",
 };
 
 export default function RootLayout({
@@ -60,7 +66,7 @@ export default function RootLayout({
   return (
     // suppressHydrationWarning: el script previo al pintado fija
     // data-text-size y data-sidebar en <html> antes de hidratar (Design Lock 28).
-    <html lang="es-CL" suppressHydrationWarning>
+    <html lang="es-CL" className={`${inter.variable} ${fraunces.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
       </head>

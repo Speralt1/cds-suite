@@ -71,7 +71,7 @@ export function ModuleSubnav({
             href={href}
             aria-current={current ? "page" : undefined}
             className={`-mb-px inline-flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium whitespace-nowrap focus-visible:rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary max-sm:h-11 max-sm:px-3.5 ${
-              current ? "border-primary text-primary" : "border-transparent text-[#5f6d65] hover:text-ink"
+              current ? "border-primary text-primary" : "border-transparent text-[#5e554c] hover:text-ink"
             }`}
           >
             {Icon && <Icon className="size-4" aria-hidden="true" />}

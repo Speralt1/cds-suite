@@ -6,8 +6,8 @@
 .tx-reference {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.75rem;
-  /* Not --color-muted: #5f6d65 keeps ≥ 4.5:1 on white. */
-  color: #5f6d65;
+  /* Not --color-muted: #5e554c keeps ≥ 4.5:1 on white. */
+  color: #5e554c;
 }
 .tithe-history-ref {
   display: block;
@@ -18,16 +18,16 @@
   margin: 0.25rem 0 1rem;
   padding: 0.75rem 0.875rem;
   border-radius: 10px;
-  border: 1px solid #e3cf9f;
+  border: 1px solid #ebd49c;
   background: var(--color-warning-soft);
-  color: #6b4a12;
+  color: #6e4800;
   font-size: 0.8125rem;
   line-height: 1.5;
 }
 .profile-match-notice.is-blocking {
-  border-color: #e9c3bc;
-  background: #fff0ed;
-  color: #922f2e;
+  border-color: #edb9c6;
+  background: #fbe8ec;
+  color: #96203f;
 }
 .profile-match-notice p {
   margin: 0 0 0.5rem;
@@ -99,7 +99,7 @@
   align-items: center;
   margin: 0 0 0.625rem;
   font-size: 1.0625rem;
-  color: #922f2e;
+  color: #96203f;
 }
 .tithe-duplicate-confirm p {
   margin: 0 0 0.5rem;

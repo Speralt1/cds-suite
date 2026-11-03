@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
-import { Brand } from "@/components/layout/brand";
+import { AleroMark } from "@/components/layout/alero-mark";
 import { SessionLoading } from "@/components/ui/session-loading";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getAuthErrorMessage } from "@/lib/auth/errors";
@@ -55,46 +55,34 @@ export default function LoginPage() {
 
   return (
     <main className={styles.page}>
-      <section className={styles.intro} aria-label="Casa de Salvación">
-        <Brand />
-        <div className={styles.introBody}>
-          <p className={styles.eyebrow}>CDS SUITE</p>
-          <p className={styles.title}>
-            La vida de nuestra iglesia,
-            <br />
-            en un mismo lugar.
-          </p>
-          <p className={styles.description}>
-            Organiza lo cotidiano y dedica más tiempo a las personas.
-          </p>
-          <div
-            className={styles.index}
-            aria-label="Espacios de trabajo según tus permisos"
-          >
-            <p>
-              <span aria-hidden="true">01</span> Finanzas
-            </p>
-            <p>
-              <span aria-hidden="true">02</span> Calendario
-            </p>
-            <p>
-              <span aria-hidden="true">03</span> Integrantes
-            </p>
-          </div>
+      <section className={styles.intro} aria-label="Alero · Casa de Salvación">
+        <svg className={styles.eave} viewBox="0 0 400 160" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <path d="M-20 150 200 10l220 140" />
+        </svg>
+        <div className={styles.lockup}>
+          <span className={styles.mark}>
+            <AleroMark />
+          </span>
+          <span>
+            <span className={styles.wordmark}>Alero</span>
+            <span className={styles.church}>Casa de Salvación</span>
+          </span>
         </div>
-        <p className={styles.introFooter}>
-          Casa de Salvación <span aria-hidden="true">/</span> Administración
-        </p>
+        <div className={styles.introBody}>
+          <p className={styles.title}>Al alero de la casa, cada persona y cada peso tienen quién los cuide.</p>
+          <ul className={styles.modules} aria-label="Lo que encontrarás según tus permisos">
+            <li>Finanzas</li>
+            <li>Calendario</li>
+            <li>Integrantes</li>
+          </ul>
+        </div>
       </section>
       <section className={styles.access} aria-labelledby="login-title">
         <div className={styles.formWrap}>
-          <p className={styles.eyebrow}>TU ESPACIO DE TRABAJO</p>
           <h1 id="login-title" className={styles.formTitle}>
             Iniciar sesión
           </h1>
-          <p className={styles.formDescription}>
-            Ingresa con el correo que registró tu administrador.
-          </p>
+          <p className={styles.formDescription}>Usa el correo con el que te invitó el administrador.</p>
           <form
             className={styles.form}
             onSubmit={handleSubmit}
@@ -193,18 +181,15 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-          <div className={styles.help}>
-            <p>¿Es tu primer ingreso?</p>
+          <details className={styles.help}>
+            <summary>¿Es tu primer ingreso?</summary>
             <p>
-              Abre el correo de acceso y define tu contraseña. Si no lo
-              encuentras, revisa Spam o pide al administrador que reenvíe el
-              acceso.
+              Abre el correo de acceso y define tu contraseña desde el enlace. Si no lo encuentras, revisa Spam o pide al
+              administrador que te reenvíe el acceso. Nadie de la iglesia te pedirá tu contraseña.
             </p>
-          </div>
+          </details>
         </div>
-        <p className={styles.accessFooter}>
-          Acceso exclusivo para usuarios autorizados.
-        </p>
+        <p className={styles.accessFooter}>Acceso solo para personas autorizadas por Casa de Salvación.</p>
       </section>
     </main>
   );

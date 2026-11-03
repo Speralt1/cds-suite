@@ -1,179 +1,212 @@
+/* /login · Alero (doc 39). CSS Module aislado: no afecta al resto de la suite.
+   Panel de identidad en tinta cálida con el alero como línea; formulario sobre
+   superficie clara. Sin fuentes remotas en tiempo de ejecución (next/font). */
 .page {
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   color: var(--color-ink);
-  background: white;
+  background: var(--color-surface);
 }
 .intro {
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding: clamp(2rem, 4vw, 4rem);
-  background: var(--color-canvas);
-  border-right: 1px solid var(--color-line);
+  overflow: hidden;
+  padding: clamp(2rem, 4vw, 3.5rem);
+  background: var(--color-side);
+  color: var(--color-side-text);
+  isolation: isolate;
+}
+.eave {
+  position: absolute;
+  inset: auto -2% 18% -2%;
+  width: 104%;
+  height: 42%;
+  z-index: -1;
+}
+.eave path {
+  fill: none;
+  stroke: var(--color-brand);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.9;
+}
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+.mark {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  background: var(--color-brand);
+  color: #fffdf9;
+}
+.mark svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.wordmark {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #fffdf9;
+}
+.church {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  color: var(--color-side-muted);
 }
 .introBody {
-  margin: auto 0;
-  padding: 4rem 0;
-}
-.eyebrow {
-  font-size: 0.6875rem;
-  font-weight: 650;
-  letter-spacing: 0.13em;
-  color: var(--color-muted-strong);
+  margin: auto 0 0;
+  padding-top: 6rem;
 }
 .title {
-  margin: 1.5rem 0;
-  font-size: clamp(2rem, 3.4vw, 3.5rem);
-  line-height: 1.14;
-  letter-spacing: -0.045em;
+  max-width: 28rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.625rem);
   font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: #fffdf9;
   text-wrap: balance;
 }
-.description {
-  max-width: 23rem;
-  color: var(--color-muted-strong);
-  font-size: 1rem;
-  line-height: 1.8;
-}
-.index {
-  margin-top: 3rem;
-  max-width: 26rem;
-  border-top: 1px solid var(--color-line);
-}
-.index p {
+.modules {
   display: flex;
-  gap: 1.25rem;
-  align-items: center;
-  border-bottom: 1px solid var(--color-line);
-  padding: 1rem 0;
-  font-size: 0.875rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
 }
-.index span {
-  color: var(--color-muted-strong);
-  font-size: 0.6875rem;
-  font-variant-numeric: tabular-nums;
-}
-.introFooter,
-.accessFooter {
-  color: var(--color-muted-strong);
-  font-size: 0.75rem;
-  line-height: 1.6;
-}
-.introFooter span {
-  margin: 0 0.75rem;
-  color: var(--color-muted-strong);
+.modules li {
+  border: 1px solid var(--color-side-line);
+  border-radius: 999px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--color-side-text);
 }
 .access {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 3rem clamp(1.5rem, 5vw, 5rem) 2rem;
+  padding: clamp(1.5rem, 5vw, 4rem);
 }
 .formWrap {
+  width: min(100%, 24rem);
   margin: auto;
-  padding: 3rem 0;
-  width: 100%;
-  max-width: 24rem;
 }
 .formTitle {
-  margin-top: 1rem;
+  font-family: var(--font-display);
   font-size: 2rem;
-  line-height: 1.2;
-  letter-spacing: -0.035em;
-  font-weight: 550;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
 }
 .formDescription {
-  margin-top: 0.875rem;
-  font-size: 0.875rem;
-  line-height: 1.7;
-  color: var(--color-muted-strong);
+  margin-top: 0.625rem;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  line-height: 1.6;
 }
 .form {
-  margin-top: 2rem;
   display: grid;
   gap: 1.25rem;
+  margin-top: 2rem;
 }
-.form input {
+.form :global(.form-input) {
   min-height: 3.125rem;
-  border-radius: 0.5rem;
-  background: white;
-}
-.form input:focus-visible,
-.reveal:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 3px;
+  border-color: var(--color-input-line);
+  border-radius: var(--radius-control);
 }
 .password {
   position: relative;
 }
-.password input {
-  padding-right: 3.25rem;
+.password :global(.form-input) {
+  padding-right: 3.5rem;
 }
 .reveal {
   position: absolute;
+  top: 50%;
   right: 0.25rem;
-  top: 0.25rem;
-  width: 2.75rem;
-  height: 2.75rem;
   display: grid;
   place-items: center;
-  color: var(--color-muted-strong);
-  border-radius: 0.375rem;
-  cursor: pointer;
+  width: 2.75rem;
+  height: 2.75rem;
+  transform: translateY(-50%);
+  border-radius: 6px;
+  color: var(--color-muted);
+  transition: color 120ms, background-color 120ms;
 }
 .reveal:hover {
-  background: var(--color-canvas);
-}
-.reveal:disabled {
-  cursor: wait;
+  background: var(--color-sunken);
+  color: var(--color-ink);
 }
 .submit {
-  width: 100%;
   min-height: 3.125rem;
-  margin-top: 0.25rem;
-  border-radius: 0.5rem;
-  transition: background-color 140ms ease;
+  width: 100%;
+  border-radius: var(--radius-control);
+  font-size: 0.9375rem;
 }
 .help {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
+  margin-top: 1.75rem;
   border-top: 1px solid var(--color-line);
-  font-size: 0.8125rem;
-  line-height: 1.7;
-  color: var(--color-muted-strong);
+  padding-top: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
-.help p:first-child {
+.help summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  cursor: pointer;
   font-weight: 600;
-  color: var(--color-ink);
-  margin-bottom: 0.375rem;
+  list-style-position: inside;
+}
+.help p {
+  color: var(--color-muted);
 }
 .accessFooter {
+  margin-top: 2rem;
   text-align: center;
-  margin-top: 1rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
 }
-@media (max-width: 1023px) {
+@media (max-width: 860px) {
   .page {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
   }
   .intro {
-    padding: 1.5rem;
-    background: white;
-    border: 0;
+    padding: 1.25rem 1.25rem 2.25rem;
   }
-  .introBody,
-  .introFooter {
+  .eave {
+    display: none;
+  }
+  .introBody {
+    padding-top: 2rem;
+  }
+  .title {
+    font-size: 1.5rem;
+  }
+  .modules {
     display: none;
   }
   .access {
-    padding: 0 1.5rem 1.5rem;
-  }
-  .formWrap {
-    padding: 1rem 0 2rem;
+    justify-content: flex-start;
+    padding: 2rem 1.25rem 1.5rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .submit {
+  .reveal {
     transition: none;
   }
 }
