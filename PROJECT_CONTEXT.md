@@ -3,6 +3,8 @@
 > Punto de entrada obligatorio para cualquier IA, persona o agente que trabaje en CDS Suite.
 > Leer este archivo antes de proponer arquitectura, reorganizar ramas, desplegar o iniciar una nueva Slice.
 
+> **Estado verificado el 03/11/2026:** integración `feature/preproduccion-mobile-v1` @ `531e42e` (PR #20 fusionado el 19/10). Consolidación y `fundsPosition: false` están en código, no desplegados. Hosting live `ec3d614eb95dc213` (16/10), Rules `5df51b09…`, sin Functions ni índices `members*`. Finanzas y Calendario sí están publicados. Ver [revisión vigente y evento](docs/mission-2026/38-project-review-event-20261103.md). Los relatos de §2–§9 y §18–§20 son históricos; §16–§17 tienen prioridad para continuar.
+
 ## 1. Identidad del proyecto
 
 - **Nombre:** CDS Suite
@@ -12,8 +14,8 @@
 - **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`
 - **Base histórica/default actual de GitHub:** `feature/base-cds-suite`
 - **Línea de integración / preproducción:** `feature/preproduccion-mobile-v1`
-- **Rama activa de trabajo (base productiva):** `mission/slice6-usability` (PR #1)
-- **Rama de la misión en curso:** `mission/platform-core-calendar-v1`. Es el Draft PR "[NO DEPLOY] Platform Core V1 + Calendar" contra `mission/slice6-usability` (§19)
+- **Rama de integración activa:** `feature/preproduccion-mobile-v1` @ `531e42e`; Hosting vigente corresponde a la versión documentada para PR #32 / `1951f2b`.
+- **Revisión en curso:** `review/consolidation-event-ux-20261103`, desde `531e42e`; login visual y simulación ficticia 300/15, sin producción (doc 38).
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees`
 - **Trello:** pendiente de enlazar.
 
@@ -21,11 +23,12 @@
 
 | Módulo | Estado |
 |---|---|
-| **Finanzas** | En código productivo, en la base de PR #1 |
-| **Calendario** | Código productivo en `mission/platform-core-calendar-v1`, validado solo con emuladores. **No desplegado** |
-| **Reportes** | Reportes financieros (PR #1) y reporte de Calendario (misión platform-core-calendar). **No desplegado** |
-| **Configuración** | General y Finanzas (PR #1); Áreas y Usuarios y permisos (misión platform-core-calendar). **No desplegado** |
-| **Integrantes › Consolidación V1** | Código productivo en `mission/consolidation-v1-fasttrack` (stacked sobre PR #5), validado con emuladores. **No desplegado.** Sin datos reales. La preview de PR #4 sigue siendo solo referencia de diseño |
+| **Finanzas** | Publicado: movimientos, caja, diezmos, resumen, conciliación y reportes. Tarjeta de saldo oculta en código nuevo, aún no publicada esa retirada. |
+| **Calendario** | Publicado: actividades, áreas, permisos, enlace público y reporte. |
+| **Reportes** | Finanzas y Calendario publicados. |
+| **Configuración** | Áreas, usuarios/permisos y Finanzas publicados. |
+| **Integrantes › Consolidación V1** | PR #20 fusionado en `531e42e`; probado con emuladores. **No desplegado**; no crear datos reales como prueba. |
+| **Equipos** | Áreas y permisos como base; no hay módulo propio de turnos/equipos. |
 
 El modelo de acceso nuevo es `role` (legacy, se conserva) + `baseRole` + `position` + `permissions[]` + `areaIds[]` + `homeModule` + `active` + `accessSchemaVersion`. Las reglas tienen un fallback exacto al rol legacy mientras dure la migración. Detalle en `docs/mission-2026/18-platform-core-calendar-production-spec.md` §3.
 
@@ -338,30 +341,26 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 > Por ahora esta sección se actualiza manualmente.
 
 <!-- AUTO-STATUS:START -->
-- **Base histórica:** `feature/base-cds-suite` @ `084bd4d` (default de GitHub; Project Control)
-- **Producción (`cds-administracion`) — VIGENTE (2026-10-08):** rama `feature/preproduccion-mobile-v1` @ **`a312c96`** = Etapa A `0d1bb0d` + SumUp CASH `ee33aa9` (PR #6) + recuperación del Hosting del 05/10 `06301ae` (PR #10, `ea18d62`) + seguridad del modal de efectivo (PR #11, `a312c96`):
-  - Hosting **`3d1dc8bc8d1bcc29`** (R0G, 2026-10-08 12:49Z);
-  - Firestore Rules `2d9939ab-2a9e-491e-b176-1cafd939e568`; Storage `f700d246…`;
-  - Functions `sumupsyncnow-00007-wut`, `sumupsyncscheduled-00008-nek`, `campaignshare-00002-dij`;
-  - baseline financiero **A9 post-CASH** (`~/cds-ops/baseline-a9.json`).
-  - **Platform Core / Calendar y Consolidación: NOT DEPLOYED.**
-- **HISTÓRICO — NO USAR como objetivo de deploy ni de rollback** (no tienen SumUp CASH ni R0G): Hosting `edb77ffc04532a95`, `9e616f79835a96c2`, `7fb393576208f8c0`, `f4591416f0474b0f`; Functions `-00006`/`-00007` de la Etapa A; ruleset `8d0087d6…`; commits `648afd1`, `e6b2084`/`0d1bb0d` como fuente de Functions o Hosting.
-- **Pila de release (R1/R4, 2026-10-08):** `feature/preproduccion-mobile-v1` (`a312c96`) → PR #5 `mission/platform-core-calendar-v1` (`a8d782d`, base = preproducción, Draft) → PR #7 `mission/consolidation-v1-fasttrack` (base = PR #5, Draft). Ambos integran CASH y R0G; gates y Atlas en verde. Runbooks: doc 20 §13/§14/§19 y doc 25.
-- **Functions:** todo deploy es **por nombre**. El árbol tiene `sumupSyncNow` con `requireFinanceUser` refactorizado, **no desplegado**; requiere un GO separado.
-- **Previews (solo diseño, no se fusionan):** `mission/ux-finanzas-2026-preview` @ `8e79cd1` (PR #3) y `mission/calendar-integrantes-preview` @ `b65e85b` (PR #4)
-- **Trabajo posterior preservado:** `mission/slice3a-sumup-fees` @ `6d67de5` (sin tocar)
-- **Checkout canónico local:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`; deploy solo desde `~/cds-deploy` en el commit exacto
-- **Última sincronización de contexto:** 2026-10-08 (R0G desplegado; pila reconciliada, R1/R4)
+- **Base histórica/default:** `feature/base-cds-suite` @ `084bd4d` (control plane; no es la base funcional).
+- **Integración:** `feature/preproduccion-mobile-v1` @ `531e42e`, merge PR #20 el 19/10; CI SUCCESS, run `39199885370`.
+- **Consolidación:** rama `integration/consolidation-v1-on-18925d6` @ `dc5fbf9`, ya contenida; PR #7 queda Draft histórico. **NOT DEPLOYED**.
+- **Saldo esperado:** `FINANCE_FEATURES.fundsPosition = false` ya integrado; retirada no publicada aún.
+- **Producción, lectura del 03/11:** Finanzas + Platform Core / Calendario publicados; Hosting `ec3d614eb95dc213`, release `1792125366342000` (16/10, versión documentada para PR #32 / `1951f2b`; Firebase no certifica SHA); Rules `5df51b09-b460-4515-8fb5-505983c8f1c8`; 6 Functions ACTIVE de SumUp, campañas y calendario, ninguna `members*`; sin índices compuestos `members*`.
+- **Functions:** cualquier deploy por nombre y GO separado; no redesplegar SumUp como efecto colateral.
+- **Previews conservadas:** PR #3 `8e79cd1`, PR #4 `b65e85b`. Lector de campañas: #8/#9 Draft, #9 conflictivo.
+- **Slice 3A preservada:** `mission/slice3a-sumup-fees` @ `6d67de5` (14 commits exclusivos).
+- **Checkout canónico histórico:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`; esta revisión usa un worktree aislado y no lo reemplaza.
+- **Evidencia vigente:** doc 38; lista nominal de accesos fuera del repositorio público.
+- **Última verificación:** 2026-11-03. Ningún deploy ni cambio de permisos en esta revisión.
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-1. **C-A0 fresco** (doc 25 §1.1) con GO explícito: A5, `prod-snap.sh`, backup `pre-etapa-b-*`, montos = A9. Después, la Etapa B por fases (doc 20 §13) y Consolidación (doc 25). Cada fase con su propio GO.
-2. *(Histórico)* La Etapa A (PR #1) se desplegó el 03/04-10. SumUp CASH se desplegó el 05/10 y R0G el 08/10 (doc 21).
-3. Confirmar qué parte de Slice 3A se integra después.
-4. Mantener `feature/preproduccion-mobile-v1` como línea de integración mientras esas decisiones sigan abiertas.
-5. No cambiar todavía la default branch de GitHub.
-6. **Ningún deploy** de reglas, Functions ni Hosting sin el plan de rollout del doc 18 §12 y sin aprobación humana explícita en cada paso.
+1. Revisar el PR de login y simulaciones (doc 38) y su CI. Pruebas técnicas con perfiles ficticios, sin depender de titulares reales.
+2. Para publicar Consolidación, reanudar doc 25 desde C-A0 con baseline vivo y backup; C-A2.5 (merge) ya está hecho. C-A3 índices → C-A4 Rules → C-A5 seis `members*` por nombre → C-A6 Hosting → smokes/piloto admin. El doc 25 conserva filas de estado anteriores al merge: usar la evidencia viva del doc 38.
+3. Antes de abrir el evento a 15 responsables: separar inscripción de visita, asistencia por evento, consentimiento y acceso solo a asignados. V1 excluye decisiones religiosas; diseño restringido y aprobación separada antes de almacenarlas.
+4. Mantener `feature/preproduccion-mobile-v1` como integración, preservar Slice 3A y no cambiar default.
+5. **Ningún deploy** sin aprobación humana explícita por fase. No activar WSP ni enviar mensajes reales como efecto colateral.
 
 ## 18. Hitos recientes
 

@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, LoaderCircle, LockKeyhole, Sprout } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { Brand } from "@/components/layout/brand";
 import { SessionLoading } from "@/components/ui/session-loading";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getAuthErrorMessage } from "@/lib/auth/errors";
 import { markLandingIntent } from "@/lib/access/landing-intent";
+import styles from "./login.module.css";
 
 export default function LoginPage() {
   const { user, loading, initializationError, login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +43,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
       setPassword("");
+      setShowPassword(false);
     } catch (error) {
       setError(getAuthErrorMessage(error));
     } finally {
@@ -51,68 +54,49 @@ export default function LoginPage() {
   if (loading || (user && !initializationError)) return <SessionLoading />;
 
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      <section
-        className="relative flex flex-col overflow-hidden border-b border-line bg-[#edf1e9] px-7 py-7 sm:px-12 lg:border-r lg:border-b-0 lg:px-16 lg:py-12"
-        aria-label="Casa de Salvación"
-      >
+    <main className={styles.page}>
+      <section className={styles.intro} aria-label="Casa de Salvación">
         <Brand />
-        <div className="my-auto hidden max-w-xl py-24 lg:block">
-          <span className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#ced9c8] px-3 py-1.5 text-[0.625rem] font-semibold tracking-[0.15em] text-primary">
-            <span className="size-1.5 rounded-full bg-primary" />
-            NUESTRA COMUNIDAD, CONECTADA
-          </span>
-          <h1 className="text-4xl leading-[1.13] font-medium tracking-[-0.045em] sm:text-5xl xl:text-6xl">
-            Un espacio para
+        <div className={styles.introBody}>
+          <p className={styles.eyebrow}>CDS SUITE</p>
+          <p className={styles.title}>
+            La vida de nuestra iglesia,
             <br />
-            servir y crecer
-            <br />
-            <span className="text-primary">juntos.</span>
-          </h1>
-          <p className="mt-6 max-w-sm text-sm leading-7 text-muted">
-            La administración de nuestra iglesia, en un solo lugar. Más orden
-            para dedicar tiempo a lo que nos une.
+            en un mismo lugar.
           </p>
-          <div className="mt-12 hidden items-center gap-4 border-t border-[#d6dfd1] pt-7 lg:flex">
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-white/70">
-              <Sprout
-                className="size-6 text-primary"
-                strokeWidth={1.5}
-                aria-hidden="true"
-              />
-            </span>
-            <div>
-              <p className="text-sm font-medium">Casa de Salvación</p>
-              <p className="mt-1 text-xs text-muted">
-                Fe, comunidad y propósito.
-              </p>
-            </div>
+          <p className={styles.description}>
+            Organiza lo cotidiano y dedica más tiempo a las personas.
+          </p>
+          <div
+            className={styles.index}
+            aria-label="Espacios de trabajo según tus permisos"
+          >
+            <p>
+              <span aria-hidden="true">01</span> Finanzas
+            </p>
+            <p>
+              <span aria-hidden="true">02</span> Calendario
+            </p>
+            <p>
+              <span aria-hidden="true">03</span> Integrantes
+            </p>
           </div>
         </div>
-        <p className="hidden text-xs text-muted lg:block">
-          CDS Suite <span className="mx-2">·</span> Administración con propósito
+        <p className={styles.introFooter}>
+          Casa de Salvación <span aria-hidden="true">/</span> Administración
         </p>
       </section>
-      <section className="flex flex-col bg-white px-7 py-12 sm:px-12 lg:px-16">
-        <div className="my-auto w-full max-w-sm self-center py-4 lg:py-12">
-          <span className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-line bg-canvas">
-            <LockKeyhole
-              className="size-5 text-primary"
-              strokeWidth={1.5}
-              aria-hidden="true"
-            />
-          </span>
-          <p className="mb-3 text-[0.625rem] font-semibold tracking-[0.17em] text-muted">
-            BIENVENIDO A CDS ADMINISTRACIÓN
-          </p>
-          <h2 className="text-3xl font-medium tracking-tight">
-            Qué bueno verte.
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-muted">
-            Ingresa con tu cuenta para acceder a tu espacio de trabajo.
+      <section className={styles.access} aria-labelledby="login-title">
+        <div className={styles.formWrap}>
+          <p className={styles.eyebrow}>TU ESPACIO DE TRABAJO</p>
+          <h1 id="login-title" className={styles.formTitle}>
+            Iniciar sesión
+          </h1>
+          <p className={styles.formDescription}>
+            Ingresa con el correo que registró tu administrador.
           </p>
           <form
-            className="mt-9 space-y-5"
+            className={styles.form}
             onSubmit={handleSubmit}
             noValidate
             aria-label="Iniciar sesión"
@@ -146,19 +130,38 @@ export default function LoginPage() {
               >
                 Contraseña
               </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="form-input"
-                placeholder="Ingresa tu contraseña"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                disabled={submitting}
-                aria-describedby={error ? "login-error" : undefined}
-              />
+              <div className={styles.password}>
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  className="form-input"
+                  placeholder="Ingresa tu contraseña"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={submitting}
+                  aria-describedby={error ? "login-error" : undefined}
+                />
+                <button
+                  type="button"
+                  className={styles.reveal}
+                  aria-label={
+                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                  }
+                  aria-pressed={showPassword}
+                  aria-controls="password"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  disabled={submitting}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Eye size={18} aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </div>
             {(error || initializationError) && (
               <p
@@ -172,7 +175,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={submitting || !!initializationError}
-              className="button-primary mt-2 w-full"
+              className={`button-primary ${styles.submit}`}
             >
               {submitting ? (
                 <>
@@ -190,15 +193,17 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-          <p className="mt-7 text-center text-xs leading-6 text-muted">
-            Acceso exclusivo para usuarios autorizados.
-            <br />
-            Si necesitas una cuenta, contacta al administrador.
-          </p>
+          <div className={styles.help}>
+            <p>¿Es tu primer ingreso?</p>
+            <p>
+              Abre el correo de acceso y define tu contraseña. Si no lo
+              encuentras, revisa Spam o pide al administrador que reenvíe el
+              acceso.
+            </p>
+          </div>
         </div>
-        <p className="mt-10 text-center text-xs text-muted">
-          Casa de Salvación <span className="mx-2 text-line">/</span> CDS Suite
-          V0.2
+        <p className={styles.accessFooter}>
+          Acceso exclusivo para usuarios autorizados.
         </p>
       </section>
     </main>
