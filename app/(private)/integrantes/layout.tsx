@@ -26,11 +26,20 @@ const ITEMS: ModuleSubnavItem[] = [
 // «Ve por los tuyos» (doc 40): pestaña visible solo con el submódulo habilitado
 // o en la simulación local; la build productiva actual no la muestra.
 const OUTREACH_ITEM: ModuleSubnavItem = { href: "/integrantes/ve-por-los-tuyos", label: "Ve por los tuyos", icon: CalendarHeart };
-const NAV_ITEMS = OUTREACH_FEATURES.enabled || OUTREACH_SIM ? [...ITEMS, OUTREACH_ITEM] : ITEMS;
+const OUTREACH_PERMS = [
+  "members.outreach.coordinate",
+  "members.outreach.reception",
+  "members.outreach.followup_assigned",
+  "members.outreach.decisions",
+] as const;
 
 export default function MembersLayout({ children }: { children: React.ReactNode }) {
   const access = useAccessModel();
   const canManage = access.can("members.consolidation.manage");
+  const canConsolidation = access.can("members.consolidation.read");
+  const showOutreach = OUTREACH_FEATURES.enabled || OUTREACH_SIM || access.canAny(OUTREACH_PERMS);
+  // Consolidación solo con members.consolidation.read; Ve por los tuyos según interruptor, simulación o permiso.
+  const navItems = [...(canConsolidation ? ITEMS : []), ...(showOutreach ? [OUTREACH_ITEM] : [])];
   const onNewPerson = (usePathname() ?? "").replace(/\/+$/, "").endsWith("/consolidacion/nueva");
   return (
     <div className="cds-members">
@@ -42,11 +51,16 @@ export default function MembersLayout({ children }: { children: React.ReactNode 
           </Link>
         )}
       </div>
-      <ModuleSubnav label="Integrantes" items={NAV_ITEMS} />
-      <MembersProvider>
-        <ModuleNotices />
+      <ModuleSubnav label="Integrantes" items={navItems} />
+      {canConsolidation ? (
+        <MembersProvider>
+          <ModuleNotices />
+          <div className="mt-6">{children}</div>
+        </MembersProvider>
+      ) : (
+        // Sin members.consolidation.read las colecciones members* se niegan: no se suscribe el proveedor.
         <div className="mt-6">{children}</div>
-      </MembersProvider>
+      )}
     </div>
   );
 }

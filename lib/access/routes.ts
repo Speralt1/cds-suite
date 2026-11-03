@@ -24,6 +24,14 @@ export interface RouteRule {
   module: ModuleId | null;
 }
 
+export const OUTREACH_PERMISSIONS: readonly Permission[] = [
+  "members.outreach.coordinate",
+  "members.outreach.reception",
+  "members.outreach.followup_assigned",
+  "members.outreach.decisions",
+];
+const MEMBERS_MODULE_PERMISSIONS: readonly Permission[] = ["members.consolidation.read", ...OUTREACH_PERMISSIONS];
+
 const anyOf = (...permissions: Permission[]) => ({ anyOf: permissions }) as const;
 
 export const ROUTE_RULES: readonly RouteRule[] = [
@@ -45,12 +53,27 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     label: "Compartir calendario",
     module: "calendar",
   },
-  // Integrantes › Consolidación V1 (doc 23): solo members.consolidation.* explícito o admin.
+  // Integrantes: la raíz y su módulo se abren con Consolidación (doc 23) o cualquier permiso de
+  // Ve por los tuyos (doc 40); cada sub-área exige el suyo (gana el prefijo más largo).
   {
     path: "/integrantes",
     match: "prefix",
-    access: anyOf("members.consolidation.read"),
+    access: anyOf(...MEMBERS_MODULE_PERMISSIONS),
     label: "Integrantes",
+    module: "members",
+  },
+  {
+    path: "/integrantes/consolidacion",
+    match: "prefix",
+    access: anyOf("members.consolidation.read"),
+    label: "Consolidación",
+    module: "members",
+  },
+  {
+    path: "/integrantes/ve-por-los-tuyos",
+    match: "prefix",
+    access: anyOf(...OUTREACH_PERMISSIONS),
+    label: "Ve por los tuyos",
     module: "members",
   },
   {
