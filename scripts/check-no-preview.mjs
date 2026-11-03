@@ -21,6 +21,7 @@ export const REQUIRED_ROUTES = Object.freeze([
   "integrantes/consolidacion/personas.html",
   "integrantes/consolidacion/nueva.html",
   "integrantes/consolidacion/persona.html",
+  "mesa.html",
 ]);
 
 /** Texto que nunca debe aparecer en la build productiva (código o HTML). */
@@ -64,7 +65,9 @@ export function checkOut(outDir) {
   for (let i = 0; i < files.length; i++) {
     if (!/\.(html|js|css|json|txt|webmanifest)$/.test(files[i])) continue;
     const text = fs.readFileSync(files[i], "utf8");
-    for (const needle of FORBIDDEN_TEXT) if (text.includes(needle)) problems.push(`"${needle}" en ${rel[i]}`);
+    // La mesa pública (doc 40 · H4) envía el valor de marca por la callable: solo su chunk puede llevarlo.
+    const isMesa = /(^|\/)app\/mesa\/page-[^/]*\.js$/.test(rel[i]);
+    for (const needle of FORBIDDEN_TEXT) if (text.includes(needle) && !(isMesa && needle === "acepto_a_cristo")) problems.push(`"${needle}" en ${rel[i]}`);
     for (const field of FORBIDDEN_FIELDS) if (new RegExp(`\\b${field}\\b`).test(text)) problems.push(`campo excluido "${field}" en ${rel[i]}`);
   }
   return problems;

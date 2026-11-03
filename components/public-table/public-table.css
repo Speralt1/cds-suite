@@ -1,0 +1,194 @@
+/* Mesa pública (doc 40 · H4). Todo bajo .pt-root; tokens de app/globals.css.
+   Targets ≥44 px, inputs de 16 px (sin zoom en iOS), sin scroll horizontal a 360 px. */
+.pt-root {
+  min-height: 100dvh;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 15px;
+  line-height: 22px;
+}
+.pt-root *,
+.pt-root *::before,
+.pt-root *::after {
+  box-sizing: border-box;
+}
+.pt-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pt-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--color-brand);
+  color: white;
+}
+.pt-mark-icon {
+  width: 24px;
+  height: 24px;
+}
+.pt-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+}
+.pt-small,
+.pt-meta {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--color-muted);
+}
+.pt-name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pt-search,
+.pt-field {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.pt-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--color-input-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+.pt-input:focus-visible,
+.pt-btn:focus-visible,
+.pt-link:focus-visible,
+.pt-agree:focus-within {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.pt-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sheet);
+  background: var(--color-surface);
+}
+.pt-people {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pt-people li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+.pt-group {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-brand-strong);
+}
+.pt-btn {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pt-btn-primary {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: white;
+}
+.pt-btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+.pt-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pt-wide {
+  width: 100%;
+}
+.pt-link {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--color-brand-strong);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.pt-agree {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-input-line);
+  border-radius: var(--radius-control);
+}
+.pt-agree input {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--color-ink);
+}
+.pt-agree.is-on {
+  border-color: var(--color-ink);
+  background: var(--color-sunken);
+}
+.pt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pt-warn,
+.pt-notice {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+.pt-warn p,
+.pt-notice span {
+  margin: 0;
+}
+@media (max-width: 400px) {
+  .pt-actions {
+    grid-template-columns: 1fr;
+  }
+}
