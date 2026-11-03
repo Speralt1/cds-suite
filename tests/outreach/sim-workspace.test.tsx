@@ -35,7 +35,7 @@ describe("«Ve por los tuyos» · espacio simulado (doc 40)", () => {
     expect(screen.getByRole("heading", { name: "Próximamente 1" })).toBeInTheDocument();
   });
 
-  it("mesa: busca por código de entrada, exige el «sí» de la persona y marca con un toque", async () => {
+  it("mesa: busca por nombre, exige el «sí» de la persona y marca con un toque", async () => {
     const user = userEvent.setup();
     const sim = initialSimState();
     const marked = new Set(sim.decisions.map((d) => d.registrationId));
@@ -43,8 +43,8 @@ describe("«Ve por los tuyos» · espacio simulado (doc 40)", () => {
     if (!target?.ticketCode) throw new Error("la simulación debía tener alguien sin marca en la mesa 12");
     render(<SimWorkspace />);
     await user.click(screen.getByRole("button", { name: /Mesa/ }));
-    const before = Number(within(screen.getByRole("heading", { name: /Marcadas en esta mesa/ })).getByText(/\d+/).textContent);
-    await user.type(screen.getByLabelText(/código de la entrada/), target.ticketCode.toLowerCase());
+    const before = Number(screen.getByRole("heading", { name: /En esta mesa 12/ }).textContent!.replace(/^.*\s/, ""));
+    await user.type(screen.getByLabelText(/Busca por nombre o apellido/), target.fullName);
     const results = screen.getByRole("list", { name: "Resultados" });
     expect(within(results).getByText(target.fullName)).toBeInTheDocument();
     // La mesa nunca ve teléfonos.
@@ -54,7 +54,25 @@ describe("«Ve por los tuyos» · espacio simulado (doc 40)", () => {
     expect(accept).toBeDisabled();
     await user.click(screen.getByLabelText(/Dijo que sí/));
     await user.click(accept);
-    expect(screen.getByRole("heading", { name: `Marcadas en esta mesa ${before + 1}` })).toBeInTheDocument();
+    // ya estaba sentada en la mesa 12: el total no cambia y ahora lleva su marca
+    expect(screen.getByRole("heading", { name: `En esta mesa 12 ${before}` })).toBeInTheDocument();
+    const row = screen.getAllByText(target.fullName).map((n) => n.closest("li")).find((li) => li?.textContent?.includes("Aceptó a Cristo"));
+    expect(row).toBeTruthy();
+  });
+
+  it("mesa: «Está en mi mesa» sienta sin decisión ni «sí» y aparece como «Sin marca»", async () => {
+    const user = userEvent.setup();
+    const sim = initialSimState();
+    const target = sim.sync.registrations.find((r) => r.status === "activa" && r.tableNumber == null && r.fullName.trim().split(/\s+/).length >= 2);
+    if (!target) throw new Error("la simulación debía tener alguien sin mesa");
+    render(<SimWorkspace />);
+    await user.click(screen.getByRole("button", { name: /Mesa/ }));
+    const before = Number(screen.getByRole("heading", { name: /En esta mesa 12/ }).textContent!.replace(/^.*\s/, ""));
+    await user.type(screen.getByLabelText(/Busca por nombre o apellido/), target.fullName);
+    await user.click(within(screen.getByRole("list", { name: "Resultados" })).getAllByRole("button", { name: "Elegir" })[0]);
+    expect(screen.getByRole("checkbox", { name: "¿Te podemos anotar para acompañarte? · Dijo que sí" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Está en mi mesa (sin decisión)" }));
+    expect(screen.getByRole("heading", { name: `En esta mesa 12 ${before + 1}` })).toBeInTheDocument();
   });
 
   it("una edición cerrada se consulta aparte y sin pendientes de la vigente", async () => {

@@ -4,7 +4,7 @@
 import { confirmBatch, moveInProposal, proposeDistribution, type BatchResult, type DistributionProposal } from "../distribution";
 import { changeAttendance, pendingAttendance, recordContact, type Edition, type EventContact, type Registration, type TeamMember } from "../model";
 import { applyInbound, type InboundRegistration, type ReviewItem, type SyncReport, type SyncState } from "../sync";
-import { addAtTable, markAtTable, tableAffinity, unmarkAtTable, type EventTable, type TableMark } from "../tables";
+import { addAtTable, markAtTable, seatAtTable, tableAffinity, unmarkAtTable, type EventTable, type TableMark } from "../tables";
 import type { DecisionRecord } from "../model";
 import { OUTREACH_SIM_MARKER, SIM_EDITION, simDecisions, simRegistrations, simTables, simTeam, withAttendance, withTables } from "./fixtures";
 
@@ -43,6 +43,7 @@ export type SimAction =
   | { type: "discard-proposal" }
   | { type: "contact"; contact: EventContact }
   | { type: "table-mark"; table: number; registrationId: string; mark: TableMark; moveHere?: boolean }
+  | { type: "table-seat"; table: number; registrationId: string; moveHere?: boolean }
   | { type: "table-unmark"; table: number; registrationId: string }
   | { type: "table-add"; table: number; fullName: string; phone: string; requestId: string }
   | { type: "clear-error" };
@@ -160,6 +161,16 @@ export function simReducer(state: SimState, action: SimAction): SimState {
       );
       if (!res.ok) return { ...state, error: res.error === "otra_mesa" ? `está en la mesa ${res.otherTable}` : res.error };
       return { ...state, error: null, decisions: res.value.decisions, sync: { ...state.sync, registrations: res.value.registrations } };
+    }
+    case "table-seat": {
+      const table = state.tables.find((t) => t.number === action.table);
+      if (!table) return state;
+      const res = seatAtTable(
+        { registrations: state.sync.registrations, decisions: state.decisions },
+        { table, eventDate: state.edition.eventDate, registrationId: action.registrationId, moveHere: action.moveHere, now: SIM_TABLE_NOW },
+      );
+      if (!res.ok) return { ...state, error: res.error === "otra_mesa" ? `está en la mesa ${res.otherTable}` : res.error };
+      return { ...state, error: null, sync: { ...state.sync, registrations: res.value.registrations } };
     }
     case "table-unmark": {
       const table = state.tables.find((t) => t.number === action.table);

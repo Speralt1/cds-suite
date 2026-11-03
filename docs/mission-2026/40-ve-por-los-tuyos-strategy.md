@@ -93,11 +93,11 @@ Habrá **~35 mesas**, cada una con un encargado que **también hace el seguimien
 
 **Cómo marca el encargado** (implementado en `tables.ts` y en la vista «Mesa» de la simulación):
 1. Abre el **enlace de su mesa** en el teléfono: sin usuario ni contraseña, válido de D 16:00 a D+1 02:00, revocable por coordinación. El backend guarda solo el hash del token (mismo patrón que el calendario público).
-2. Busca a la persona por el **código de su entrada** o por **≥3 letras del nombre**; nunca ve teléfonos, correos ni el padrón completo.
-3. Toca **«¿Te podemos anotar para acompañarte? · Dijo que sí»** y luego **«Aceptó a Cristo»** o **«Quiere conversar»**. Sin marca = no registrada.
-4. La persona queda en esa mesa, con «Asistió» (está presente) y con la autorización de seguimiento confirmada en la mesa. Puede deshacer sus propias marcas mientras el enlace esté vigente.
+2. Busca a cada persona de su mesa por **nombre o apellido** (≥3 letras; los códigos de entrada no se importan); nunca ve teléfonos, correos ni el padrón completo.
+3. **Un toque por persona: «Está en mi mesa (sin decisión)»**. Queda sentada en esa mesa y con «Asistió»; el permiso de seguimiento viene del sitio. Así **todos los de la mesa** pasan a su encargado aunque no expresen nada. La lista «En esta mesa N» muestra a todos, con su marca o «Sin marca».
+4. **Decisión (opcional):** si la persona expresó algo, el encargado toca **«¿Te podemos anotar para acompañarte? · Dijo que sí»** y **«Aceptó a Cristo»** o **«Quiere conversar»**; eso además confirma el permiso en la mesa. Puede deshacer sus propias marcas (la persona sigue sentada) mientras el enlace esté vigente.
 5. Si llegó sin inscripción: nombre y teléfono, y queda en la mesa. Los posibles duplicados van a coordinación; nunca se fusionan.
-6. Si figura en otra mesa, la marca la trae a esta solo con confirmación explícita.
+6. Si figura en otra mesa, sentarla o marcarla la trae a esta solo con confirmación explícita.
 
 **Después:** la distribución propone a cada persona con el encargado de su mesa («vínculo previo»); quienes no tengan mesa, o cuyo encargado no esté activo, se reparten por equilibrio. Coordinación ve conteos por mesa sin nombres; cada encargado ve solo a su mesa en Mi lista.
 
