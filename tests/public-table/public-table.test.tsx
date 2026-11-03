@@ -210,7 +210,7 @@ describe("PublicTable", () => {
     const [a, b] = api.tableMark.mock.calls.map((c) => c[1]);
     expect(a.requestId).toBe(b.requestId);
     expect(a.requestId).toMatch(/^[A-Za-z0-9_-]{6,64}$/);
-    await screen.findByText(/Aún no hay marcas|Quiere conversar/);
+    await screen.findByText(/Aún no hay nadie anotado|Quiere conversar/);
     expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
   });
 
