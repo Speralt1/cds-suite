@@ -34,9 +34,10 @@ describe("grupos de operaciones", () => {
     expect(COORDINATOR_OPS).toEqual([
       "editionCreate", "editionUpdate", "editionTransition", "teamSet", "tablesSet", "tableLinkIssue", "tableLinkRevoke",
       "importRegistrations", "confirmAbsences", "distributionPropose", "distributionConfirm", "reassign", "releaseAssignee", "stats",
+      "reviewList", "reviewResolve", "teamCandidates", "tablesList",
     ]);
     expect(FOLLOWUP_OPS).toEqual(["contactRecord", "doNotContactSet"]);
-    expect(Object.keys(TABLE_OPS)).toEqual(["search", "mark", "unmark", "addWalkIn"]);
+    expect(Object.keys(TABLE_OPS)).toEqual(["search", "mark", "seat", "unmark", "addWalkIn", "listMine"]);
     expect(DECISION_OPS).toEqual(["decisionRecord", "decisionList", "decisionStats"]);
   });
   it("la mesa no exige sesión pero sí token; los demás grupos exigen sesión", async () => {

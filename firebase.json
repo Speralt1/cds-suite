@@ -50,6 +50,14 @@
         ]
       },
       {
+        "source": "/mesa",
+        "headers": [
+          { "key": "Referrer-Policy", "value": "no-referrer" },
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+          { "key": "Cache-Control", "value": "no-store" }
+        ]
+      },
+      {
         "source": "/calendario-publico",
         "headers": [
           {
@@ -68,6 +76,13 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "/api/mesa",
+        "function": {
+          "functionId": "outreachTableOp",
+          "region": "southamerica-west1"
+        }
+      },
       {
         "source": "/api/sumup-sync",
         "function": {

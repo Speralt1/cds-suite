@@ -35,6 +35,19 @@ function createOutreachStore({ db, FieldValue, FieldPath }) {
     return snap.exists ? snap.data() : null;
   }
 
+  /** Usuarios activos (hasta 2.000), para listar candidatos del equipo. */
+  async function listUsers() {
+    const out = [];
+    let afterId = null;
+    while (out.length < 2000) {
+      const page = await list("users", { where: [["active", "==", true]], limit: 500, afterId });
+      out.push(...page);
+      if (page.length < 500) break;
+      afterId = page[page.length - 1].id;
+    }
+    return out;
+  }
+
   async function get(collection, id) {
     if (RESERVED_ID.test(id)) return null;
     const snap = await ref(collection, id).get();
@@ -79,7 +92,7 @@ function createOutreachStore({ db, FieldValue, FieldPath }) {
     );
   }
 
-  return { getUser, get, list, serverTimestamp, runTransaction };
+  return { getUser, listUsers, get, list, serverTimestamp, runTransaction };
 }
 
 module.exports = { createOutreachStore };

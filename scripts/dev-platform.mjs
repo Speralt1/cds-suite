@@ -8,6 +8,12 @@
  *   npm run dev:emulators   (--next-only) solo next dev con el entorno demo,
  *                           contra emuladores ya levantados.
  *
+ * Reloj local de «Ve por los tuyos» (SOLO emulador): para probar la ventana del
+ * enlace de mesa, p. ej.
+ *   OUTREACH_DEV_NOW=2026-11-28T21:00 NEXT_PUBLIC_CDS_OUTREACH_LIVE=1 npm run dev:platform
+ * La variable llega a Functions porque el emulador hereda process.env; el
+ * servicio la ignora si FUNCTIONS_EMULATOR no es "true".
+ *
  * El entorno demo se pasa como variables de proceso, que Next NO pisa con
  * .env.local (las variables ya presentes en process.env tienen prioridad), así
  * que .env.local (producción) queda intacto y sin efecto en esta sesión.
@@ -189,6 +195,12 @@ async function main() {
   const seedCode = await seed.exited;
   if (seedCode !== 0) {
     console.error("[dev] El seed falló. Deteniendo todo.");
+    await shutdown(1);
+    return;
+  }
+  const outreach = run("seed-outreach", process.execPath, [path.join(ROOT, "scripts", "seed-outreach-emulator.mjs")], { ...process.env, ...SEED_ENV }, { persistent: false });
+  if ((await outreach.exited) !== 0) {
+    console.error("[dev] El seed de Ve por los tuyos falló. Deteniendo todo.");
     await shutdown(1);
     return;
   }

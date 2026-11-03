@@ -688,7 +688,7 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
   const closes = state.edition.eventDate ? tableLinkWindow(state.edition.eventDate).closesAt.slice(11) : "";
   const results = useMemo(() => searchForTable(state.sync.registrations, state.decisions, query), [state.sync.registrations, state.decisions, query]);
   const mine = state.sync.registrations.filter((r) => r.status === "activa" && r.tableNumber === tableNo).map((r) => toRow(r, state.decisions));
-  const marked = mine.filter((r) => r.mark);
+  mine.sort((a, b) => a.fullName.localeCompare(b.fullName));
   const pick = (id: string) => {
     setSelected(id);
     setAgreed(false);
@@ -696,6 +696,13 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
   const mark = (m: TableMark, moveHere = false) => {
     if (!selected) return;
     dispatch({ type: "table-mark", table: tableNo, registrationId: selected, mark: m, moveHere });
+    setSelected(null);
+    setQuery("");
+    setAgreed(false);
+  };
+  const seat = (moveHere = false) => {
+    if (!selected) return;
+    dispatch({ type: "table-seat", table: tableNo, registrationId: selected, moveHere });
     setSelected(null);
     setQuery("");
     setAgreed(false);
@@ -722,7 +729,7 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
       </div>
 
       <label className="vp-search">
-        <span>Busca por el código de la entrada o por el nombre</span>
+        <span>Busca por nombre o apellido</span>
         <input
           className="form-input"
           value={query}
@@ -730,12 +737,12 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
             setQuery(e.target.value);
             setSelected(null);
           }}
-          placeholder="VP042 o «Marta Ro…»"
+          placeholder="Marta Ro…"
           autoComplete="off"
           inputMode="search"
         />
       </label>
-      {query.trim().length > 0 && results.length === 0 && <p className="vp-small">Sin resultados. Escribe al menos 3 letras o el código completo.</p>}
+      {query.trim().length > 0 && results.length === 0 && <p className="vp-small">Sin resultados. Escribe al menos 3 letras del nombre o apellido.</p>}
       {results.length > 0 && !selected && (
         <ul className="vp-people" aria-label="Resultados">
           {results.map((r) => (
@@ -764,7 +771,7 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
             <p className="vp-small">Figura en la mesa {selectedRow.tableNumber}. Si está sentada aquí, márcala igual y quedará en esta mesa.</p>
           )}
           <label className={`vp-agree${agreed ? " is-on" : ""}`}>
-            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+            <input type="checkbox" checked={agreed} aria-label="¿Te podemos anotar para acompañarte? · Dijo que sí" onChange={(e) => setAgreed(e.target.checked)} />
             ¿Te podemos anotar para acompañarte? · Dijo que sí
           </label>
           <div className="vp-mark-actions">
@@ -780,6 +787,9 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
               </button>
             ))}
           </div>
+          <button type="button" className="button-secondary" onClick={() => seat(selectedRow.tableNumber != null && selectedRow.tableNumber !== tableNo)}>
+            Está en mi mesa (sin decisión)
+          </button>
           <button type="button" className="vp-link" onClick={() => setSelected(null)}>
             Cancelar
           </button>
@@ -788,21 +798,23 @@ function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch })
 
       <section className="vp-group" aria-labelledby="vp-marked">
         <h3 id="vp-marked" className="vp-group-title is-brand">
-          Marcadas en esta mesa <span className="tabular">{marked.length}</span>
+          En esta mesa {tableNo} <span className="tabular">{mine.length}</span>
         </h3>
-        {marked.length === 0 ? (
-          <p className="vp-small">Aún no hay marcas. Busca a la persona y elige lo que expresó.</p>
+        {mine.length === 0 ? (
+          <p className="vp-small">Aún no hay nadie anotado. Busca a cada persona de tu mesa y toca «Está en mi mesa»; si expresó algo, elige además su decisión.</p>
         ) : (
           <ul className="vp-people">
-            {marked.map((r) => (
+            {mine.map((r) => (
               <li key={r.id}>
                 <div className="vp-person">
                   <p className="vp-person-name">{r.fullName}</p>
-                  <p className="vp-person-meta">{r.mark && TABLE_MARK_LABEL[r.mark]}</p>
+                  <p className="vp-person-meta">{r.mark ? TABLE_MARK_LABEL[r.mark] : "Sin marca"}</p>
                 </div>
-                <button type="button" className="vp-link" onClick={() => dispatch({ type: "table-unmark", table: tableNo, registrationId: r.id })}>
-                  Deshacer
-                </button>
+                {r.mark && (
+                  <button type="button" className="vp-link" onClick={() => dispatch({ type: "table-unmark", table: tableNo, registrationId: r.id })}>
+                    Deshacer
+                  </button>
+                )}
               </li>
             ))}
           </ul>

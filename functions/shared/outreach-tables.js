@@ -19,6 +19,7 @@ exports.normalizeTicketCode = normalizeTicketCode;
 exports.searchForTable = searchForTable;
 exports.toRow = toRow;
 exports.markAtTable = markAtTable;
+exports.seatAtTable = seatAtTable;
 exports.unmarkAtTable = unmarkAtTable;
 exports.addAtTable = addAtTable;
 exports.tableAffinity = tableAffinity;
@@ -143,6 +144,36 @@ function markAtTable(state, input) {
     const registrations = [...state.registrations];
     registrations[idx] = next;
     return { ok: true, value: { registrations, decisions: [...state.decisions, decision] } };
+}
+/**
+ * «Está en mi mesa»: la persona queda sentada aquí y presente (mesa-N), sin
+ * decisión y sin tocar el permiso (viene del sitio). El encargado de la mesa
+ * la acompaña después aunque no exprese ninguna decisión.
+ */
+function seatAtTable(state, input) {
+    const link = linkUsable(input.table, input.eventDate, input.now);
+    if (!link.ok)
+        return link;
+    const idx = state.registrations.findIndex((r) => r.id === input.registrationId);
+    if (idx < 0)
+        return { ok: false, error: "no_encontrada" };
+    const reg = state.registrations[idx];
+    if (reg.status !== "activa")
+        return { ok: false, error: "inscripcion_inactiva" };
+    const here = input.table.number;
+    if (reg.tableNumber != null && reg.tableNumber !== here && !input.moveHere)
+        return { ok: false, error: "otra_mesa", otherTable: reg.tableNumber };
+    if (reg.tableNumber === here)
+        return { ok: false, error: "sin_cambio" };
+    const next = {
+        ...reg,
+        tableNumber: here,
+        ...(reg.attendance !== "asistio" ? { attendance: "asistio", attendanceAt: input.now, attendanceBy: `mesa-${here}` } : {}),
+        revision: reg.revision + 1,
+    };
+    const registrations = [...state.registrations];
+    registrations[idx] = next;
+    return { ok: true, value: { ...state, registrations } };
 }
 /** Deshacer: solo la mesa que marcó y dentro de la ventana. La historia queda en el backend. */
 function unmarkAtTable(state, input) {

@@ -8,6 +8,7 @@ import {
   linkUsable,
   markAtTable,
   searchForTable,
+  seatAtTable,
   tableAffinity,
   tableLinkWindow,
   tableSummaries,
@@ -154,6 +155,35 @@ describe("markAtTable", () => {
     expect(free.ownerUid).toBeNull();
     expect(free.memberPersonId).toBeNull();
     expect(free.assignmentBatchId).toBeNull();
+  });
+});
+
+describe("seatAtTable", () => {
+  const seat = (state: State, over: Partial<Parameters<typeof seatAtTable>[1]> = {}) => seatAtTable(state, { table: table(), eventDate: D, registrationId: "p1", now: OPEN, ...over });
+  it("sienta, marca asistencia por mesa-N y no crea decisión ni consentimiento", () => {
+    const r = seat(st(person({ consents: [] })));
+    if (!r.ok) throw new Error(r.error);
+    const p = r.value.registrations[0];
+    expect(p).toMatchObject({ tableNumber: 3, attendance: "asistio", attendanceBy: "mesa-3", revision: 2 });
+    expect(p.consents).toEqual([]);
+    expect(r.value.decisions).toEqual([]);
+  });
+  it("conserva la asistencia ya registrada", () => {
+    const r = seat(st(person({ attendance: "asistio", attendanceAt: "2026-11-28T17:00", attendanceBy: "coord" })));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.value.registrations[0]).toMatchObject({ attendanceAt: "2026-11-28T17:00", attendanceBy: "coord" });
+  });
+  it("repetir devuelve sin_cambio; otra mesa exige moveHere", () => {
+    expect(seat(st(person({ tableNumber: 3 })))).toMatchObject({ ok: false, error: "sin_cambio" });
+    expect(seat(st(person({ tableNumber: 5 })))).toMatchObject({ ok: false, error: "otra_mesa", otherTable: 5 });
+    const moved = seat(st(person({ tableNumber: 5 })), { moveHere: true });
+    expect(moved.ok && moved.value.registrations[0].tableNumber).toBe(3);
+  });
+  it("rechaza desconocidas, inactivas y enlace/ventana inválidos", () => {
+    expect(seat(st(person()), { registrationId: "zz" })).toMatchObject({ error: "no_encontrada" });
+    expect(seat(st(person({ status: "cancelada" })))).toMatchObject({ error: "inscripcion_inactiva" });
+    expect(seat(st(person()), { now: "2026-11-28T15:00" })).toMatchObject({ error: "fuera_de_horario" });
+    expect(seat(st(person()), { table: table({ linkHash: null }) })).toMatchObject({ error: "sin_enlace" });
   });
 });
 

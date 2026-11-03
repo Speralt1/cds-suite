@@ -137,6 +137,23 @@ describe("Ve por los tuyos vía Firestore emulado", () => {
     expect(again.replay).toBe(true);
   });
 
+  it("«está en mi mesa»: sienta sin decisión, listMine lo muestra con mark null y otra mesa recibe otra-mesa", async () => {
+    const f = await fixture(5);
+    await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });
+    await f.toEvento();
+    const t = await f.tokens();
+    const id = f.ids[1];
+    const seat = (table: number, extra: Record<string, unknown> = {}) => service.tableSeat({ editionId: f.editionId, table, token: t[table], registrationId: id, requestId: rid(), ...extra });
+    expect((await seat(1)).replay).toBe(false);
+    const mine = await service.tableListMine({ editionId: f.editionId, table: 1, token: t[1] });
+    expect(mine.items).toEqual([{ id, fullName: expect.any(String), mark: null }]);
+    await expect(seat(2)).rejects.toMatchObject({ message: "outreach/otra-mesa" });
+    expect((await db.collection("outreachDecisions").doc(id).get()).exists).toBe(false);
+    expect((await db.collection("outreachRegistrations").doc(id).get()).data()).toMatchObject({ tableNumber: 1, attendance: "asistio" });
+    expect((await seat(2, { moveHere: true })).replay).toBe(false);
+    expect((await service.tableListMine({ editionId: f.editionId, table: 1, token: t[1] })).items).toEqual([]);
+  });
+
   it("dos coordinaciones confirman el mismo lote en paralelo: sin doble asignación", async () => {
     const f = await fixture(40);
     await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });
@@ -156,6 +173,30 @@ describe("Ve por los tuyos vía Firestore emulado", () => {
     for (const r of regs) loads[r.ownerUid] = (loads[r.ownerUid] || 0) + 1;
     expect(Object.values(loads).every((n) => n <= 20)).toBe(true);
     for (const id of f.ids.slice(0, 5)) expect((await db.collection(`outreachRegistrations/${id}/assignments`).get()).size).toBe(1);
+  });
+
+  it("dos lotes DISTINTOS confirmados a la vez para el mismo responsable nunca superan el tope", async () => {
+    const f = await fixture(10);
+    await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });
+    await f.toEvento();
+    await f.toSeguimiento();
+    await service.teamSet("e2e-c1", { editionId: f.editionId, members: [{ uid: "e2e-lead-a", roles: ["responsable"], maxAssigned: 3 }, { uid: "e2e-lead-b", roles: ["responsable"] }] });
+    const mk = async (batchId: string, ids: string[]) =>
+      db.collection("outreachAssignmentBatches").doc(batchId).set({ editionId: f.editionId, status: "propuesto", createdBy: "e2e-c1", assignments: ids.map((registrationId) => ({ registrationId, ownerUid: "e2e-lead-a", baseRevision: 1 })), unassigned: [] });
+    const bA = `b-${rid()}`;
+    const bB = `b-${rid()}`;
+    await mk(bA, f.ids.slice(0, 3));
+    await mk(bB, f.ids.slice(3, 6));
+    const [a, b] = await Promise.all([
+      service.distributionConfirm("e2e-c1", { editionId: f.editionId, batchId: bA }),
+      service.distributionConfirm("e2e-c2", { editionId: f.editionId, batchId: bB }),
+    ]);
+    expect(a.applied + b.applied).toBe(3);
+    expect([...a.conflicts, ...b.conflicts]).toHaveLength(3);
+    expect([...a.conflicts, ...b.conflicts].every((c: { reason: string }) => c.reason === "tope")).toBe(true);
+    const owned = (await db.collection("outreachRegistrations").where("editionId", "==", f.editionId).where("ownerUid", "==", "e2e-lead-a").get()).size;
+    expect(owned).toBe(3);
+    expect((await db.collection(`outreachEditions/${f.editionId}/team`).doc("e2e-lead-a").get()).data()!.openCount).toBe(3);
   });
 
   it("contacto registrado mientras se reasigna: el responsable se re-verifica dentro de la transacción", async () => {

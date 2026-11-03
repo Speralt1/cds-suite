@@ -91,10 +91,14 @@ const COORDINATOR_OPS = Object.freeze([
   "reassign",
   "releaseAssignee",
   "stats",
+  "reviewList",
+  "reviewResolve",
+  "teamCandidates",
+  "tablesList",
 ]);
 const FOLLOWUP_OPS = Object.freeze(["contactRecord", "doNotContactSet"]);
 /** op público → método del servicio. */
-const TABLE_OPS = Object.freeze({ search: "tableSearch", mark: "tableMark", unmark: "tableUnmark", addWalkIn: "tableAddWalkIn" });
+const TABLE_OPS = Object.freeze({ search: "tableSearch", mark: "tableMark", seat: "tableSeat", unmark: "tableUnmark", addWalkIn: "tableAddWalkIn", listMine: "tableListMine" });
 const DECISION_OPS = Object.freeze(["decisionRecord", "decisionList", "decisionStats"]);
 
 const EDITION_ACTIVE = new Set(["inscripcion", "evento", "seguimiento"]);
@@ -250,13 +254,57 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     });
   }
 
-  async function teamMembers(tx, editionId, uids) {
-    const out = [];
-    for (const uid of uids) {
-      const m = await tx.get(sub(editionId, "team"), uid);
-      if (m) out.push(m);
+  // ---------- contador de abiertas por responsable (tope entre lotes concurrentes) ----------
+
+  /** Abierta = con responsable, activa y sin baja. Es lo que cuenta contra el tope. */
+  const isOpenReg = (d) => Boolean(d && d.ownerUid && d.status === "activa" && !d.doNotContact);
+
+  async function countOpen(editionId, uid) {
+    let n = 0;
+    let afterId = null;
+    for (;;) {
+      const page = await store.list(C.regs, { where: [["editionId", "==", editionId], ["ownerUid", "==", uid]], limit: 500, afterId });
+      n += page.filter((r) => isOpenReg(r.data)).length;
+      if (page.length < 500) return n;
+      afterId = page[page.length - 1].id;
     }
+  }
+
+  /**
+   * Lee (dentro de la transacción, ANTES de escribir) el equipo de los uids dados.
+   * `count` usa `openCount` del miembro; si aún no existe (equipo anterior al contador)
+   * parte del recuento real, y la primera escritura lo fija.
+   */
+  async function loadTeamState(tx, editionId, uids) {
+    const out = new Map();
+    for (const uid of new Set(uids.filter(Boolean))) {
+      const doc = await tx.get(sub(editionId, "team"), uid);
+      if (doc) out.set(uid, { doc, count: typeof doc.openCount === "number" ? doc.openCount : null });
+    }
+    for (const [uid, st] of out) if (st.count === null) st.count = await countOpen(editionId, uid);
     return out;
+  }
+
+  /** Aplica deltas al contador (solo a miembros existentes). Siempre dentro de la misma transacción que la asignación. */
+  function writeOpenDeltas(tx, editionId, state, deltas) {
+    for (const [uid, delta] of Object.entries(deltas)) {
+      const st = state.get(uid);
+      if (!st || delta === 0) continue;
+      st.count = Math.max(0, st.count + delta);
+      tx.update(sub(editionId, "team"), uid, { openCount: st.count });
+    }
+  }
+  const addDelta = (deltas, uid, n) => {
+    if (uid) deltas[uid] = (deltas[uid] || 0) + n;
+  };
+  const capOf = (st, ed) => (st.doc.maxAssigned ?? ed.maxPerOwner);
+
+  function toIso(value) {
+    if (!value) return null;
+    if (typeof value === "string") return value;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value.toDate === "function") return value.toDate().toISOString();
+    return null;
   }
 
   const editionSummary = (id, ed) => ({
@@ -436,11 +484,14 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     return store.runTransaction(async (tx) => {
       const ed = await loadEdition(tx, input.editionId);
       assertOpen(ed);
+      const prev = {};
+      for (const m of input.members) prev[m.uid] = await tx.get(sub(input.editionId, "team"), m.uid);
       for (const m of input.members) {
+        const openCount = prev[m.uid] && typeof prev[m.uid].openCount === "number" ? prev[m.uid].openCount : undefined;
         tx.set(
           sub(input.editionId, "team"),
           m.uid,
-          clean({ uid: m.uid, displayName: names[m.uid], roles: [...new Set(m.roles)], active: m.active, maxAssigned: m.maxAssigned ?? null, updatedBy: uid, updatedAt: store.serverTimestamp() }),
+          clean({ uid: m.uid, displayName: names[m.uid], roles: [...new Set(m.roles)], active: m.active, maxAssigned: m.maxAssigned ?? null, openCount, updatedBy: uid, updatedAt: store.serverTimestamp() }),
         );
       }
       return { count: input.members.length };
@@ -582,7 +633,14 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
         const id = reviewId(input.editionId, item);
         reviewDocs.set(id, await reader.get(C.inbox, id));
       }
+      const importDeltas = {};
+      for (const r of changed) {
+        const prevDoc = existingDocs.get(r.id);
+        if (isOpenReg(prevDoc) !== isOpenReg(r)) addDelta(importDeltas, prevDoc.ownerUid, isOpenReg(r) ? 1 : -1);
+      }
+      const importTeam = writer && Object.keys(importDeltas).length ? await loadTeamState(reader, input.editionId, Object.keys(importDeltas)) : new Map();
       if (writer) {
+        writeOpenDeltas(writer, input.editionId, importTeam, importDeltas);
         for (const r of created) writer.create(C.regs, r.id, regDoc(r, flags));
         for (const r of changed) writer.update(C.regs, r.id, regDoc(r, flagsOfDoc(existingDocs.get(r.id))));
         for (const item of res.state.review) {
@@ -705,18 +763,21 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
   async function distributionConfirm(uid, data) {
     await authorize(uid, [PERM.coordinate]);
     checkSize(data);
-    const input = parse(data, { editionId: ["id"], batchId: ["id"] });
+    const input = parse(data, {
+      editionId: ["id"],
+      batchId: ["id"],
+      notes: ["list", { opt: true, max: 200, of: { registrationId: ["id"], note: ["str", { max: 200 }] } }],
+    });
     const batch = await store.get(C.batches, input.batchId);
     if (!batch || batch.editionId !== input.editionId) throw new HttpsError("not-found", E.notFound);
     if (batch.status === "confirmado") return { batchId: input.batchId, replay: true, ...batch.result };
     const ed = await store.get(C.editions, input.editionId);
     if (!ed) throw new HttpsError("not-found", E.notFound);
     if (ed.status !== "evento" && ed.status !== "seguimiento") throw new HttpsError("failed-precondition", E.invalidTransition);
-    const team = await loadTeam(input.editionId);
-    const caps = {};
-    const loads = {};
-    for (const m of team) if (m.active && m.roles.includes("responsable")) (caps[m.uid] = m.maxAssigned ?? ed.maxPerOwner), (loads[m.uid] = 0);
-    for (const r of await listAll(C.regs, [["editionId", "==", input.editionId]])) if (r.data.ownerUid in loads && r.data.status === "activa" && !r.data.doNotContact) loads[r.data.ownerUid] += 1;
+    // Excedente justificado: una nota de coordinación (en el ítem de la propuesta o en `notes`) permite superar el tope.
+    const notes = new Map();
+    for (const a of batch.assignments) if (typeof a.note === "string" && a.note.trim()) notes.set(a.registrationId, a.note.trim());
+    for (const n of input.notes || []) notes.set(n.registrationId, n.note);
 
     const result = { applied: 0, alreadyApplied: 0, conflicts: [] };
     const all = batch.assignments;
@@ -732,7 +793,9 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
           if (d) docs.set(a.registrationId, d);
           decs.set(a.registrationId, await tx.get(C.decisions, a.registrationId));
         }
-        const localLoads = { ...loads };
+        // El contador del responsable se lee y escribe en ESTA transacción: dos lotes distintos no pueden superar el tope.
+        const team = await loadTeamState(tx, input.editionId, chunk.map((a) => a.ownerUid));
+        const pending = {};
         const out = { applied: [], alreadyApplied: 0, conflicts: [] };
         const toApply = [];
         for (const a of chunk) {
@@ -742,31 +805,40 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
             out.alreadyApplied += 1;
             continue;
           }
-          if (!(a.ownerUid in caps)) out.conflicts.push({ registrationId: a.registrationId, reason: "responsable_invalido" });
-          else if (!d.ownerUid && localLoads[a.ownerUid] >= caps[a.ownerUid]) out.conflicts.push({ registrationId: a.registrationId, reason: "sin_capacidad" });
-          else {
-            if (!d.ownerUid) localLoads[a.ownerUid] += 1;
-            toApply.push(a);
+          const st = team.get(a.ownerUid);
+          if (!st || st.doc.active !== true || !st.doc.roles.includes("responsable")) {
+            out.conflicts.push({ registrationId: a.registrationId, reason: "responsable_invalido" });
+            continue;
           }
+          const counts = d.status === "activa" && !d.doNotContact && !d.ownerUid;
+          if (counts && st.count + (pending[a.ownerUid] || 0) + 1 > capOf(st, edNow) && !notes.has(a.registrationId)) {
+            out.conflicts.push({ registrationId: a.registrationId, reason: "tope" });
+            continue;
+          }
+          if (counts) addDelta(pending, a.ownerUid, 1);
+          toApply.push(a);
         }
         const res = dist.confirmBatch(
           [...docs.values()].map(regFromDoc),
-          { editionId: input.editionId, batchId: input.batchId, assignments: toApply, unassigned: [], excluded: [], loads: {}, caps },
+          { editionId: input.editionId, batchId: input.batchId, assignments: toApply, unassigned: [], excluded: [], loads: {}, caps: {} },
         );
         for (const c of res.result.conflicts) out.conflicts.push(c);
         const appliedSet = new Set(res.result.applied);
+        const deltas = {};
         for (const reg of res.registrations) {
           if (!appliedSet.has(reg.id)) continue;
           const raw = docs.get(reg.id);
+          const note = notes.get(reg.id);
           tx.update(C.regs, reg.id, regDoc(reg, flagsOfDoc(raw)));
-          tx.create(regSub(reg.id, "assignments"), input.batchId, { ownerUid: reg.ownerUid, previousOwnerUid: null, batchId: input.batchId, reason: null, byUid: uid, revision: reg.revision, at: store.serverTimestamp() });
+          tx.create(regSub(reg.id, "assignments"), input.batchId, clean({ ownerUid: reg.ownerUid, previousOwnerUid: null, batchId: input.batchId, reason: null, note, byUid: uid, revision: reg.revision, at: store.serverTimestamp() }));
           writeChange(tx, reg.id, reg.revision, { action: "asignacion", fields: ["ownerUid"] }, uid);
           if (decs.get(reg.id)) tx.update(C.decisions, reg.id, { assigneeUid: reg.ownerUid, editionActive: raw.editionActive === true });
+          addDelta(deltas, reg.ownerUid, 1);
           out.applied.push(reg.id);
         }
+        writeOpenDeltas(tx, input.editionId, team, deltas);
         return out;
       });
-      for (const id of part.applied) loads[docsOwner(batch, id)] += 1;
       result.applied += part.applied.length;
       result.alreadyApplied += part.alreadyApplied;
       result.conflicts.push(...part.conflicts);
@@ -777,7 +849,6 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     });
     return { batchId: input.batchId, replay: false, ...result };
   }
-  const docsOwner = (batch, regId) => batch.assignments.find((a) => a.registrationId === regId).ownerUid;
 
   async function reassign(uid, data) {
     await authorize(uid, [PERM.coordinate]);
@@ -788,20 +859,28 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
       toUid: ["id"],
       reason: ["str", { max: 200 }],
       expectedRevision: ["int", { min: 1 }],
+      note: ["str", { opt: true, max: 200 }],
     });
     return store.runTransaction(async (tx) => {
       const ed = await loadEdition(tx, input.editionId);
       assertOpen(ed);
       const doc = await loadReg(tx, input.editionId, input.registrationId);
       const done = await tx.get(regSub(input.registrationId, "assignments"), `r${input.expectedRevision + 1}`);
-      const members = await teamMembers(tx, input.editionId, [input.toUid]);
+      const team = await loadTeamState(tx, input.editionId, [input.toUid, doc.ownerUid]);
+      const members = team.has(input.toUid) ? [team.get(input.toUid).doc] : [];
       const dec = await tx.get(C.decisions, input.registrationId);
       if (done && done.byUid === uid && done.ownerUid === input.toUid) return { revision: doc.revision, replay: true };
       const res = dist.reassign(regFromDoc(doc), members, input.toUid, input.reason, input.expectedRevision);
       if (!res.ok) throw domainFail(res.error);
       const reg = res.value;
+      const target = team.get(input.toUid);
+      if (isOpenReg(reg) && target.count + 1 > capOf(target, ed) && !input.note) throw new HttpsError("aborted", E.conflict, { reason: "tope" });
+      const deltas = {};
+      if (isOpenReg(doc)) addDelta(deltas, doc.ownerUid, -1);
+      if (isOpenReg(reg)) addDelta(deltas, reg.ownerUid, 1);
+      writeOpenDeltas(tx, input.editionId, team, deltas);
       tx.update(C.regs, reg.id, regDoc(reg, flagsOfDoc(doc)));
-      tx.create(regSub(reg.id, "assignments"), `r${reg.revision}`, { ownerUid: reg.ownerUid, previousOwnerUid: doc.ownerUid ?? null, batchId: null, reason: input.reason, byUid: uid, revision: reg.revision, at: store.serverTimestamp() });
+      tx.create(regSub(reg.id, "assignments"), `r${reg.revision}`, clean({ ownerUid: reg.ownerUid, previousOwnerUid: doc.ownerUid ?? null, batchId: null, reason: input.reason, note: input.note ?? undefined, byUid: uid, revision: reg.revision, at: store.serverTimestamp() }));
       writeChange(tx, reg.id, reg.revision, { action: "reasignacion", fields: ["ownerUid"], reason: input.reason }, uid);
       if (dec) tx.update(C.decisions, reg.id, { assigneeUid: reg.ownerUid, editionActive: doc.editionActive === true });
       return { revision: reg.revision, replay: false };
@@ -825,7 +904,9 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
           docs.push(await tx.get(C.regs, row.id));
           decs.push(await tx.get(C.decisions, row.id));
         }
+        const team = await loadTeamState(tx, input.editionId, [input.uid]);
         const live = docs.map((d, k) => (d && d.ownerUid === input.uid && !d.handedOffAt ? { d, dec: decs[k] } : null)).filter(Boolean);
+        writeOpenDeltas(tx, input.editionId, team, { [input.uid]: -live.filter((x) => isOpenReg(x.d)).length });
         const res = dist.releaseOwner(live.map((x) => regFromDoc(x.d)), input.uid);
         const byId = new Map(res.registrations.map((r) => [r.id, r]));
         for (const { d, dec } of live) {
@@ -879,6 +960,107 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     };
   }
 
+  // ---------- revisión, candidatos y mesas (lectura de coordinación) ----------
+
+  const candidateIds = (list) => (Array.isArray(list) ? list.map((c) => (typeof c === "string" ? c : c && typeof c.id === "string" ? c.id : null)).filter(Boolean) : []);
+  const isOpenReview = (r) => r.data.kind === "review" && !r.data.resolution;
+
+  async function reviewList(uid, data) {
+    await authorize(uid, [PERM.coordinate]);
+    checkSize(data);
+    const input = parse(data, { editionId: ["id"], limit: ["int", { opt: true, def: 100, min: 1, max: 200 }] });
+    const rows = (await listAll(C.inbox, [["editionId", "==", input.editionId]])).filter(isOpenReview);
+    const items = rows
+      .map((r) => ({
+        id: r.id,
+        issue: r.data.issue,
+        externalId: r.data.externalId ?? null,
+        registrationId: r.data.registrationId ?? null,
+        candidates: candidateIds(r.data.candidates),
+        sourceRevision: r.data.sourceRevision ?? 0,
+        createdAt: toIso(r.data.at),
+      }))
+      .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id))
+      .slice(0, input.limit);
+    return { items };
+  }
+
+  async function reviewResolve(uid, data) {
+    await authorize(uid, [PERM.coordinate]);
+    checkSize(data);
+    const input = parse(data, {
+      editionId: ["id"],
+      reviewId: ["id"],
+      resolution: ["enum", { values: ["dismiss", "keep_both", "mark_duplicate"] }],
+      targetRegistrationId: ["id", { opt: true }],
+      note: ["str", { opt: true, max: 200 }],
+      requestId: ["requestId"],
+    });
+    if (input.resolution === "mark_duplicate" && !input.targetRegistrationId) throw new HttpsError("invalid-argument", E.invalidArgument, { fields: { targetRegistrationId: "required" } });
+    return store.runTransaction(async (tx) => {
+      const ed = await loadEdition(tx, input.editionId);
+      assertOpen(ed);
+      const item = await tx.get(C.inbox, input.reviewId);
+      if (!item || item.kind !== "review" || item.editionId !== input.editionId) throw new HttpsError("not-found", E.notFound);
+      if (item.resolution) {
+        if (item.resolution === input.resolution && (item.targetRegistrationId ?? null) === (input.targetRegistrationId ?? null)) return { reviewId: input.reviewId, resolution: item.resolution, replay: true };
+        throw new HttpsError("aborted", E.conflict);
+      }
+      let regDocLive = null;
+      let targetDoc = null;
+      let team = new Map();
+      if (input.resolution === "mark_duplicate") {
+        if (!item.registrationId || item.registrationId === input.targetRegistrationId) throw new HttpsError("failed-precondition", E.invalidTransition);
+        regDocLive = await loadReg(tx, input.editionId, item.registrationId);
+        targetDoc = await loadReg(tx, input.editionId, input.targetRegistrationId);
+        if (isOpenReg(regDocLive)) team = await loadTeamState(tx, input.editionId, [regDocLive.ownerUid]);
+      }
+      if (regDocLive && !(regDocLive.status === "duplicada" && regDocLive.duplicateOf === input.targetRegistrationId)) {
+        const reg = regFromDoc(regDocLive);
+        const next = { ...reg, status: "duplicada", duplicateOf: targetDoc.id, revision: reg.revision + 1 };
+        tx.update(C.regs, reg.id, regDoc(next, flagsOfDoc(regDocLive)));
+        writeChange(tx, reg.id, next.revision, { action: "duplicado", fields: ["status", "duplicateOf"], reason: input.note ?? null }, uid);
+        if (isOpenReg(regDocLive)) writeOpenDeltas(tx, input.editionId, team, { [regDocLive.ownerUid]: -1 });
+      }
+      tx.update(C.inbox, input.reviewId, clean({ resolution: input.resolution, targetRegistrationId: input.targetRegistrationId ?? undefined, resolutionNote: input.note ?? undefined, resolvedBy: uid, resolvedAt: store.serverTimestamp(), resolveRequestId: input.requestId }));
+      return { reviewId: input.reviewId, resolution: input.resolution, replay: false };
+    });
+  }
+
+  async function teamCandidates(uid, data) {
+    await authorize(uid, [PERM.coordinate]);
+    checkSize(data);
+    const input = parse(data, { editionId: ["id"] });
+    if (!(await store.get(C.editions, input.editionId))) throw new HttpsError("not-found", E.notFound);
+    const rows = await store.listUsers();
+    return {
+      candidates: rows
+        .filter((u) => u.data.active === true && (can(u.data, PERM.followup) || can(u.data, PERM.coordinate)))
+        .map((u) => ({ uid: u.id, displayName: safeName(u.data) }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.uid.localeCompare(b.uid)),
+    };
+  }
+
+  async function tablesList(uid, data) {
+    await authorize(uid, [PERM.coordinate]);
+    checkSize(data);
+    const input = parse(data, { editionId: ["id"] });
+    if (!(await store.get(C.editions, input.editionId))) throw new HttpsError("not-found", E.notFound);
+    const rows = await listAll(sub(input.editionId, "tables"), [], 200);
+    return {
+      tables: rows
+        .map(({ data: t }) => ({
+          number: t.number,
+          leaderUid: t.leaderUid ?? null,
+          leaderName: t.leaderName ?? null,
+          hasLink: Boolean(t.linkIssuedAt),
+          linkRevoked: Boolean(t.linkRevokedAt),
+          linkIssuedAt: t.linkIssuedAt ?? null,
+        }))
+        .sort((a, b) => a.number - b.number),
+    };
+  }
+
   // =====================================================================
   // SEGUIMIENTO (responsable asignado)
   // =====================================================================
@@ -914,6 +1096,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
       const doc = await loadReg(tx, input.editionId, input.registrationId);
       const optOut = input.result === "pidio_no_contacto";
       const items = optOut ? await tx.list(C.outbox, [["registrationId", "==", input.registrationId]], 50) : [];
+      const team = optOut && isOpenReg(doc) ? await loadTeamState(tx, input.editionId, [doc.ownerUid]) : new Map();
       const contact = { id: contactId, registrationId: input.registrationId, editionId: input.editionId, date: input.date, channel: input.channel, result: input.result, nextAction: input.nextAction, nextActionDate: input.nextActionDate, byUid: uid };
       // El responsable se re-verifica AQUÍ, dentro de la transacción (puede haber sido reasignado).
       const res = model.recordContact(regFromDoc(doc), { status: ed.status }, contact);
@@ -923,6 +1106,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
       if (optOut) {
         writeChange(tx, input.registrationId, res.value.revision, { action: "baja", fields: ["doNotContact"] }, uid);
         for (const item of await cancelOutbox(tx, input.registrationId, items)) tx.update(C.outbox, item.id, { status: "cancelado" });
+        if (isOpenReg(doc) && !isOpenReg(res.value)) writeOpenDeltas(tx, input.editionId, team, { [doc.ownerUid]: -1 });
       }
       return { contactId, revision: res.value.revision, replay: false, optedOut: optOut };
     });
@@ -942,6 +1126,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
       if (!coordinator && doc.ownerUid !== uid) throw new HttpsError("permission-denied", E.notAssigned);
       if ((doc.doNotContact === true) === input.value) return { revision: doc.revision, replay: true };
       const items = input.value ? await tx.list(C.outbox, [["registrationId", "==", input.registrationId]], 50) : [];
+      const team = isOpenReg(doc) || (doc.ownerUid && doc.status === "activa") ? await loadTeamState(tx, input.editionId, [doc.ownerUid]) : new Map();
       const reg = regFromDoc(doc);
       const next = {
         ...reg,
@@ -952,6 +1137,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
       tx.update(C.regs, reg.id, regDoc(next, flagsOfDoc(doc)));
       writeChange(tx, reg.id, next.revision, { action: input.value ? "baja" : "baja_revertida", fields: ["doNotContact"], reason: input.reason }, uid);
       if (input.value) for (const item of await cancelOutbox(tx, reg.id, items)) tx.update(C.outbox, item.id, { status: "cancelado" });
+      if (isOpenReg(doc) !== isOpenReg(next)) writeOpenDeltas(tx, input.editionId, team, { [doc.ownerUid]: isOpenReg(next) ? 1 : -1 });
       return { revision: next.revision, replay: false };
     });
   }
@@ -1042,7 +1228,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     const usable = tablesDomain.linkUsable(eventTable, ed.eventDate ?? null, nowLocal());
     if (!usable.ok) {
       if (usable.error === "revocado") throw new HttpsError("permission-denied", E.linkRevoked);
-      if (usable.error === "fuera_de_horario") throw new HttpsError("permission-denied", E.linkOutOfWindow);
+      if (usable.error === "fuera_de_horario") throw new HttpsError("permission-denied", E.linkOutOfWindow, { window: tablesDomain.tableLinkWindow(ed.eventDate) });
       throw new HttpsError("permission-denied", E.linkUnavailable);
     }
     const nowMs = clock.now();
@@ -1084,6 +1270,46 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
         rows.push(tablesDomain.toRow(reg, own));
       }
       return { rows };
+    });
+  }
+
+  /** Todos los sentados en ESTA mesa: sin teléfono ni correo, solo nombre y marca (o null). */
+  async function tableListMine(data) {
+    const input = parse(data, TABLE_AUTH);
+    return withTable(input, async (_tx, ctx) => {
+      const regs = await listAll(C.regs, [["editionId", "==", input.editionId], ["tableNumber", "==", ctx.eventTable.number]], 2000);
+      const items = [];
+      for (const { id, data: r } of regs) {
+        if (r.status !== "activa") continue;
+        const d = await store.get(C.decisions, id);
+        const mark = d && d.tableNumber === ctx.eventTable.number ? d.value : null;
+        items.push({ id, fullName: r.fullName, mark });
+      }
+      items.sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
+      return { items, window: tablesDomain.tableLinkWindow(ctx.ed.eventDate) };
+    });
+  }
+
+  /** «Está en mi mesa»: sienta sin decisión ni cambio de permiso; no asigna, así que no toca el equipo. */
+  async function tableSeat(data) {
+    const input = parse(data, { ...TABLE_AUTH, registrationId: ["id"], moveHere: ["bool", { opt: true, def: false }], requestId: ["requestId"] });
+    return withTable(input, async (tx, ctx) => {
+      const id = auditId(ctx, "seat", `${input.registrationId}:${input.requestId}`);
+      if (await tx.get(C.marks, id)) return { replay: true, registrationId: input.registrationId };
+      const doc = await tx.get(C.regs, input.registrationId);
+      if (!doc || doc.editionId !== input.editionId) return { fail: new HttpsError("not-found", E.notFound) };
+      const res = tablesDomain.seatAtTable(
+        { registrations: [regFromDoc(doc)], decisions: [] },
+        { table: ctx.eventTable, eventDate: ctx.ed.eventDate ?? null, registrationId: input.registrationId, moveHere: input.moveHere, now: nowLocal() },
+      );
+      if (!res.ok) {
+        if (res.error === "sin_cambio") return { replay: true, registrationId: input.registrationId };
+        return { fail: domainFail(res.error, res.otherTable != null ? { otherTable: res.otherTable } : undefined) };
+      }
+      const reg = res.value.registrations[0];
+      tx.update(C.regs, reg.id, regDoc(reg, flagsOfDoc(doc)));
+      writeMark(tx, ctx, id, "seat", reg.id);
+      return { replay: false, registrationId: reg.id };
     });
   }
 
@@ -1195,6 +1421,10 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     reassign,
     releaseAssignee,
     stats,
+    reviewList,
+    reviewResolve,
+    teamCandidates,
+    tablesList,
     contactRecord,
     doNotContactSet,
     decisionRecord,
@@ -1202,8 +1432,10 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     decisionStats,
     tableSearch,
     tableMark,
+    tableSeat,
     tableUnmark,
     tableAddWalkIn,
+    tableListMine,
   };
   const service = {};
   for (const [name, fn] of Object.entries(ops)) service[name] = guarded(name, fn);
