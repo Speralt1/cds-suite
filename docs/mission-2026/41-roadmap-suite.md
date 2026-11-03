@@ -9,7 +9,7 @@ Fecha: 03/11/2026. **Esta es la hoja de ruta vigente**; los planes de los docs 1
 | Finanzas | Movimientos, caja, diezmos, resumen, conciliación SumUp, reportes | Publicar la retirada del saldo estimado (`fundsPosition: false`); fees SumUp de Slice 3A preservados aparte | D (versión 16/10); retirada I·T |
 | Calendario | Actividades, áreas, recurrencia, permisos, enlace público, reporte | Turnos por actividad (lo cubrirá Equipos) | D |
 | Integrantes › Consolidación V1 | Personas, visitas, seguimiento, responsables, alertas, auditoría | Despliegue por fases (doc 25); alta sin visita; aislamiento por responsable | I·T, **no D** |
-| Integrantes › Ve por los tuyos | Núcleo de dominio y simulación 300/15 | Backend `outreach*`, permisos, endpoint del sitio, API del motor | I·T (lógica), P (backend) |
+| Integrantes › Ve por los tuyos | Dominio, mesas, permisos 10→14, Rules con aislamiento, 4 Functions y simulación 300/35 en emulador (doc 42) | Pantallas conectadas, importador CSV, publicación; endpoint del sitio, API del motor | I·T (H3 en emulador), no D |
 | Equipos | Áreas y usuarios/permisos como base | Equipos, turnos, disponibilidad, aceptación de asignaciones | P |
 | Accesos | Alta de usuarios con permisos | Registro de invitación (cuenta creada / correo aceptado o fallido / primer ingreso verificable) | P |
 | Identidad Alero | Tokens, tipografía, logo, login, shell, íconos, simulación del evento | Modo oscuro, «Hoy», portar Consolidación y Finanzas al nuevo lenguaje pantalla por pantalla | I·T, no D |
@@ -37,7 +37,7 @@ Fecha: 03/11/2026. **Esta es la hoja de ruta vigente**; los planes de los docs 1
 |---|---|---|---|
 | H1 | 07/11 | Revisión y CI de #33, #34 y #35; GO de F1 | No se puede publicar nada |
 | H2 | 14/11 | F1 publicada por subfases (Consolidación, Alero, dependencias), smokes y piloto admin | F2 no tiene base viva |
-| H3 | 21/11 | F2 en emulador: backend `outreach*`, permisos 10→14, aislamiento por responsable, matriz de Rules, **enlaces por mesa y marcas** (colección de decisiones con su permiso), ensayo 300/35; texto nuevo publicado en el formulario del sitio | No se abre acceso a los 35 encargados ni se marca en mesas |
+| H3 ✓ (03/11, emulador) | 21/11 | F2 en emulador: backend `outreach*`, permisos 10→14, aislamiento por responsable, matriz de Rules, **enlaces por mesa y marcas** (colección de decisiones con su permiso), ensayo 300/35; texto nuevo publicado en el formulario del sitio | No se abre acceso a los 35 encargados ni se marca en mesas |
 | H4 | 25/11 | F2 publicada con GO; importación CSV del sitio con dry-run (en lugar de F3) probada con datos ficticios | El padrón se carga a mano |
 | H5 | 27/11 | Ensayo general con la cuenta piloto; 35 mesas con su encargado y su enlace probado; **cuentas de los 35 encargados verificadas** (A1, para Mi lista desde D+1) | Mesas sin enlace (respaldo: hoja por mesa) o encargados sin acceso el D+1 |
 | D | 28/11 | Puerta en el sitio; cada encargado marca en su mesa con su enlace (16:00–02:00) | — |

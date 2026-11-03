@@ -16,6 +16,7 @@ Inicio: 2026-09-22. Coordinador con el AI Development Team (Navigator, Atlas, De
 | [39-alero-identity-design.md](39-alero-identity-design.md) | Alero: nombre, logo, color, tipografía, navegación y Design Lock |
 | [40-ve-por-los-tuyos-strategy.md](40-ve-por-los-tuyos-strategy.md) | Submódulo anual, integración con inscripciones y con mensajería |
 | [41-roadmap-suite.md](41-roadmap-suite.md) | **Hoja de ruta única vigente** de la suite |
+| [42-vplt-backend-h3.md](42-vplt-backend-h3.md) | Backend H3 de Ve por los tuyos: permisos, Rules, Functions, mesas (emulador) |
 
 ## Hallazgos clave
 
