@@ -103,7 +103,7 @@ Habrá **~35 mesas**, cada una con un encargado que **también hace el seguimien
 
 **Por qué un enlace y no cuentas para la noche del evento:** hoy 11 de 20 cuentas no han entrado nunca después del alta. Pedir contraseñas a 35 personas esa noche es el punto más frágil. Las cuentas sí hacen falta desde D+1 para Mi lista (hito H5, doc 41). Respaldo si no hay señal: una hoja por mesa que coordinación ingresa después.
 
-**Texto propuesto para el formulario del sitio** (casilla propia, distinta de las condiciones del evento; versión nueva del consentimiento):
+**Texto del formulario del sitio** (dirección aprobada el 03/11: casilla «Acepto los términos y condiciones» con enlace a la página completa `/terminos-ve-por-los-tuyos`, versión `v2-2026-11`; implementado en el PR borrador #7 del sitio, sin publicar). Propuesta original (casilla propia, distinta de las condiciones del evento; versión nueva del consentimiento):
 
 > ☐ Autorizo a Casa de Salvación a usar mis datos y los de las personas que invito **solo para este evento y para acompañarnos después** (una llamada o un mensaje de la iglesia). Si durante el evento alguien expresa una decisión de fe, la iglesia podrá anotarla, con su permiso, para acompañarlo. **Estos datos son solo para la iglesia:** no se comparten ni se venden. En cualquier momento puedes pedir que no te contactemos más.
 >
