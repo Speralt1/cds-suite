@@ -247,8 +247,20 @@ describe("tabla de rutas", () => {
     // Integrantes (doc 23): todo /integrantes exige members.consolidation.read; registrar, manage.
     expect(ROUTE_RULES.find((r) => r.path === "/integrantes")).toMatchObject({
       match: "prefix",
-      access: { anyOf: ["members.consolidation.read"] },
+      access: {
+        anyOf: [
+          "members.consolidation.read",
+          "members.outreach.coordinate",
+          "members.outreach.reception",
+          "members.outreach.followup_assigned",
+          "members.outreach.decisions",
+        ],
+      },
       module: "members",
+    });
+    expect(ROUTE_RULES.find((r) => r.path === "/integrantes/consolidacion")).toMatchObject({
+      match: "prefix",
+      access: { anyOf: ["members.consolidation.read"] },
     });
     expect(ROUTE_RULES.find((r) => r.path === "/integrantes/consolidacion/nueva")).toMatchObject({
       match: "exact",

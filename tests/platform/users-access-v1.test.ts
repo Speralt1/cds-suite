@@ -107,7 +107,7 @@ function satisfiesValidUserV1(d: Record<string, unknown>, actor: string): boolea
     typeof d.position === "string" &&
     d.position.length <= 60 &&
     Array.isArray(perms) &&
-    perms.length <= 10 &&
+    perms.length <= 14 &&
     perms.every((p) => CATALOG_NO_SETTINGS.includes(p)) &&
     new Set(perms).size === perms.length &&
     (d.baseRole === "admin") === (d.role === "admin") &&

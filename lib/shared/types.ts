@@ -27,6 +27,10 @@ export const PERMISSIONS = [
   "calendar.events.publish_assigned",
   "members.consolidation.read",
   "members.consolidation.manage",
+  "members.outreach.coordinate",
+  "members.outreach.reception",
+  "members.outreach.followup_assigned",
+  "members.outreach.decisions",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -46,7 +50,7 @@ export type HomeModule = (typeof HOME_MODULES)[number];
 export type ModuleId = "finance" | "calendar" | "members" | "reports" | "settings";
 
 /** Límites del documento v1 (iguales a las reglas). */
-export const MAX_STORED_PERMISSIONS = 10;
+export const MAX_STORED_PERMISSIONS = 14;
 export const MAX_AREA_IDS = 20;
 export const MAX_POSITION_LENGTH = 60;
 

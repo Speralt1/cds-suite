@@ -147,6 +147,74 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "outreachRegistrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "assigneeUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "editionActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "editionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "followUp.nextActionDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreachRegistrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "receptionOpen",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "editionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fullName",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreachRegistrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "editionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "attendance",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreachRegistrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "editionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tableNumber",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

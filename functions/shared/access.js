@@ -40,6 +40,8 @@ exports.IMPLIES = {
     "calendar.events.manage_assigned": ["calendar.read"],
     "calendar.events.publish_assigned": ["calendar.read"],
     "members.consolidation.manage": ["members.consolidation.read"],
+    // Ve por los tuyos (doc 40 §4): coordinar incluye recepción. `decisions` y `followup_assigned` no implican nada.
+    "members.outreach.coordinate": ["members.outreach.reception"],
 };
 /** Fallback legacy, IDÉNTICO al mapeo de la migración y a `legacyPermissions()` de las reglas. */
 exports.LEGACY_ROLE_ACCESS = {
@@ -187,6 +189,9 @@ function normalizeAccess(doc) {
     };
 }
 /** Permisos efectivos de un perfil ya normalizado. */
+// NOTA (doc 40 §4, decisión pendiente del administrador): baseRole admin recibe el catálogo COMPLETO de
+// forma implícita, lo que incluye `members.outreach.decisions` (decisiones de fe). Si se decide que el admin
+// NO las vea por defecto, habrá que excluirlo aquí y en las reglas (adminProfile en outreachDecisions).
 function profilePermissions(p) {
     if (!p || !p.active)
         return new Set();
@@ -226,8 +231,8 @@ function deriveLegacyRole(baseRole, perms) {
     return "leader";
 }
 // ---------- Módulos y módulo inicial ----------
-// Integrantes (Consolidación V1, doc 23) solo se ve con permiso EXPLÍCITO o admin:
-// el fallback legacy no lo otorga a ningún rol.
+// Integrantes (Consolidación V1, doc 23 · Ve por los tuyos, doc 40) solo se ve con permiso EXPLÍCITO
+// (consolidation.read o cualquier members.outreach.*) o admin: el fallback legacy no lo otorga a ningún rol.
 exports.MODULE_ORDER = ["finance", "calendar", "members", "reports", "settings"];
 exports.MODULE_HREF = {
     finance: "/finanzas",
@@ -240,7 +245,13 @@ exports.MODULE_HREF = {
 exports.MODULE_PERMISSIONS = {
     finance: ["finance.summary.read"],
     calendar: ["calendar.read"],
-    members: ["members.consolidation.read"],
+    members: [
+        "members.consolidation.read",
+        "members.outreach.coordinate",
+        "members.outreach.reception",
+        "members.outreach.followup_assigned",
+        "members.outreach.decisions",
+    ],
     reports: ["finance.details.read", "calendar.read"],
     settings: ["settings.manage"],
 };

@@ -35,6 +35,10 @@ service cloud.firestore {
         'calendar.events.publish_assigned': ['calendar.events.publish_assigned'],
         'members.consolidation.read': ['members.consolidation.read','members.consolidation.manage'],
         'members.consolidation.manage': ['members.consolidation.manage'],
+        'members.outreach.coordinate': ['members.outreach.coordinate'],
+        'members.outreach.reception': ['members.outreach.reception','members.outreach.coordinate'],
+        'members.outreach.followup_assigned': ['members.outreach.followup_assigned'],
+        'members.outreach.decisions': ['members.outreach.decisions'],
         'settings.manage': []
       };
     }
@@ -169,7 +173,7 @@ service cloud.firestore {
     }
 
     // ── users/{uid} (18a §C.1/§D.2) ──────────────────────────────────────────
-    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned','members.consolidation.read','members.consolidation.manage']; }
+    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned','members.consolidation.read','members.consolidation.manage','members.outreach.coordinate','members.outreach.reception','members.outreach.followup_assigned','members.outreach.decisions']; }
     function v1UserKeys() { return ['displayName','email','role','active','createdAt','baseRole','position','permissions','areaIds','homeModule','accessSchemaVersion','updatedAt','updatedBy']; }
     function validLegacyUser(d) {
       return d.keys().hasOnly(['displayName','email','role','active','createdAt'])
@@ -189,7 +193,7 @@ service cloud.firestore {
         && text(d.displayName,1,120) && text(d.email,3,160)
         && d.role in ['admin','pastor','finance','leader'] && d.active is bool && d.createdAt is timestamp
         && d.baseRole in ['admin','standard'] && text(d.position,0,60)
-        && d.permissions is list && d.permissions.size() <= 10 && d.permissions.hasOnly(permissionCatalogNoSettings())
+        && d.permissions is list && d.permissions.size() <= 14 && d.permissions.hasOnly(permissionCatalogNoSettings())
         && d.permissions.toSet().size() == d.permissions.size()
         && ((d.baseRole == 'admin') == (d.role == 'admin')) && d.role == derivedLegacyRole(d)
         && areaIdList(d.areaIds, 20)
@@ -1315,6 +1319,122 @@ service cloud.firestore {
     }
     match /membersPersonChanges/{changeId} {
       allow get, list: if membersRead();
+      allow create, update, delete: if false;
+    }
+
+    // ── Integrantes › Ve por los tuyos (doc 40 §3–§4; permisos members.outreach.*) ──────────────
+    // TODAS las escrituras del cliente son false: solo Functions / Admin SDK (validación, auditoría,
+    // idempotencia). Lectura SOLO con permiso explícito v1 o admin; ningún rol legacy (distinto de admin)
+    // ni members.consolidation.* da acceso aquí, y los permisos outreach no dan acceso a members*.
+    // Presupuesto (doc 26): estas reglas solo se evalúan en documentos outreach*, nunca en Finanzas;
+    // cada regla hace UN get(users) (más un get del padre solo en subcolecciones del responsable).
+    // Campos desnormalizados que escribe el backend en la inscripción: assigneeUid, editionActive, receptionOpen.
+    function outreachAnyOf(u) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.coordinate','members.outreach.reception','members.outreach.followup_assigned','members.outreach.decisions']))
+        : u.get('role', '') == 'admin');
+    }
+    function outreachAnyRead() { return signedIn() && exists(userPath()) && outreachAnyOf(userDoc()); }
+    function outreachCoordinateRead() { return gate(['members.outreach.coordinate'], ['admin']); }
+    function outreachDecisionsRead() { return gate(['members.outreach.decisions'], ['admin']); }
+    // Inscripción: coordinación todo; recepción solo receptionOpen; responsable solo lo suyo en edición activa.
+    function outreachRegistrationOf(u, r) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.coordinate'])
+          || (u.get('permissions', []).hasAny(['members.outreach.reception']) && r.receptionOpen == true)
+          || (u.get('permissions', []).hasAny(['members.outreach.followup_assigned']) && r.assigneeUid == request.auth.uid && r.editionActive == true))
+        : u.get('role', '') == 'admin');
+    }
+    function outreachRegistrationRead(r) { return signedIn() && exists(userPath()) && outreachRegistrationOf(userDoc(), r); }
+    // Subcolecciones de la inscripción visibles al responsable: contacts, assignments, consents.
+    function outreachAssignedTo(regId) {
+      let r = get(/databases/$(database)/documents/outreachRegistrations/$(regId)).data;
+      return r.assigneeUid == request.auth.uid && r.editionActive == true;
+    }
+    function outreachChildOf(u, regId) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.coordinate'])
+          || (u.get('permissions', []).hasAny(['members.outreach.followup_assigned']) && outreachAssignedTo(regId)))
+        : u.get('role', '') == 'admin');
+    }
+    function outreachChildRead(regId) { return signedIn() && exists(userPath()) && outreachChildOf(userDoc(), regId); }
+
+    match /outreachEditions/{editionId} {
+      allow get, list: if outreachAnyRead();
+      allow create, update, delete: if false;
+      match /team/{uid} {
+        allow get, list: if outreachAnyRead();
+        allow create, update, delete: if false;
+      }
+      // Sin el hash del enlace: este vive en tableSecrets y no lo lee ningún cliente.
+      match /tables/{n} {
+        allow get, list: if outreachAnyRead();
+        allow create, update, delete: if false;
+      }
+      match /tableSecrets/{n} {
+        allow read, write: if false;
+      }
+    }
+    match /outreachRegistrations/{regId} {
+      allow get, list: if outreachRegistrationRead(resource.data);
+      allow create, update, delete: if false;
+      match /contacts/{id} {
+        allow get, list: if outreachChildRead(regId);
+        allow create, update, delete: if false;
+      }
+      match /assignments/{id} {
+        allow get, list: if outreachChildRead(regId);
+        allow create, update, delete: if false;
+      }
+      match /consents/{id} {
+        allow get, list: if outreachChildRead(regId);
+        allow create, update, delete: if false;
+      }
+      match /changes/{id} {
+        allow get, list: if outreachCoordinateRead();
+        allow create, update, delete: if false;
+      }
+    }
+    // Decisiones de fe: members.outreach.decisions o admin (decisión pendiente, doc 40 §4) y, por decisión del
+    // administrador (03/11/2026), el encargado de la mesa que le hace seguimiento: solo si
+    // `assigneeUid` (desnormalizado por el backend en la misma transacción de cada asignación/marca) es él
+    // y la edición está activa. La consulta del cliente debe llevar esos mismos where().
+    function outreachDecisionOf(u, d) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.decisions'])
+          || (u.get('permissions', []).hasAny(['members.outreach.followup_assigned']) && d.assigneeUid == request.auth.uid && d.editionActive == true))
+        : u.get('role', '') == 'admin');
+    }
+    match /outreachDecisions/{regId} {
+      allow get, list: if signedIn() && exists(userPath()) && outreachDecisionOf(userDoc(), resource.data);
+      allow create, update, delete: if false;
+      match /history/{id} {
+        allow get, list: if outreachDecisionsRead();
+        allow create, update, delete: if false;
+      }
+    }
+    match /outreachIdentities/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
+    // Datos crudos entrantes del sitio (PII sin depurar): nadie desde el cliente; coordinación trabaja sobre las inscripciones.
+    match /outreachInbox/{id} {
+      allow read, write: if false;
+    }
+    match /outreachOutbox/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
+    match /outreachAssignmentBatches/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
+    match /outreachTableMarks/{id} {
+      allow get, list: if outreachCoordinateRead();
       allow create, update, delete: if false;
     }
   }

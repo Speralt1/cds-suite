@@ -451,6 +451,10 @@ describe("firestore.rules: tablas de acceso", () => {
       [P.publish]: [P.publish],
       [P.memRead]: [P.memRead, P.memManage],
       [P.memManage]: [P.memManage],
+      "members.outreach.coordinate": ["members.outreach.coordinate"],
+      "members.outreach.reception": ["members.outreach.reception", "members.outreach.coordinate"],
+      "members.outreach.followup_assigned": ["members.outreach.followup_assigned"],
+      "members.outreach.decisions": ["members.outreach.decisions"],
       "settings.manage": [],
     });
   });
@@ -538,6 +542,7 @@ describe("firestore.rules: tablas de acceso", () => {
     const catalog = list(body("permissionCatalogNoSettings"));
     expect(catalog).toEqual([
       P.summary, P.details, P.records, P.pastoral, P.calRead, P.manageAssigned, P.manageAll, P.publish, P.memRead, P.memManage,
+      "members.outreach.coordinate", "members.outreach.reception", "members.outreach.followup_assigned", "members.outreach.decisions",
     ]);
   });
 
