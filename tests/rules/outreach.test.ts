@@ -1,7 +1,7 @@
 // Reglas de Integrantes › Ve por los tuyos (doc 40 §3–§4). Solo emulador (demo-cds-suite).
 // Lectura: permiso explícito members.outreach.* (v1) o admin; el responsable y recepción solo ven lo
 // que las reglas les permiten Y las consultas deben llevar los mismos filtros. Escritura del cliente: nunca.
-import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
+import { assertFails, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import {
   addDoc,
   collection,
