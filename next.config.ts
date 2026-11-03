@@ -5,6 +5,7 @@ import type { NextConfig } from "next";
 // trabajo simulado se reemplaza por un módulo vacío y su bloque (con datos
 // ficticios) no llega a la build. check:no-preview lo verifica.
 const OUTREACH_SIM = process.env.NEXT_PUBLIC_CDS_OUTREACH_SIM === "1";
+const OUTREACH_LIVE = process.env.NEXT_PUBLIC_CDS_OUTREACH_LIVE === "1";
 
 const nextConfig: NextConfig = {
   output: "export",
@@ -16,6 +17,12 @@ const nextConfig: NextConfig = {
       config.resolve.alias = {
         ...config.resolve.alias,
         [path.resolve(process.cwd(), "components/outreach/sim-workspace")]: path.resolve(process.cwd(), "components/outreach/sim-disabled.tsx"),
+      };
+    }
+    if (!OUTREACH_LIVE) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        [path.resolve(process.cwd(), "components/outreach/live/live-workspace")]: path.resolve(process.cwd(), "components/outreach/live/live-disabled.tsx"),
       };
     }
     return config;

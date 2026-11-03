@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarHeart, LayoutDashboard, Plus, Inbox, Users } from "lucide-react";
 import { useAccessModel } from "@/lib/access/model";
-import { OUTREACH_FEATURES, OUTREACH_SIM } from "@/lib/outreach/features";
+import { OUTREACH_FEATURES, OUTREACH_LIVE, OUTREACH_SIM } from "@/lib/outreach/features";
 import { MembersProvider } from "@/lib/members/use-members";
 import { ModuleSubnav, type ModuleSubnavItem } from "@/components/layout/module-subnav";
 import { ModuleNotices } from "@/components/members/status";
@@ -37,7 +37,7 @@ export default function MembersLayout({ children }: { children: React.ReactNode 
   const access = useAccessModel();
   const canManage = access.can("members.consolidation.manage");
   const canConsolidation = access.can("members.consolidation.read");
-  const showOutreach = OUTREACH_FEATURES.enabled || OUTREACH_SIM || access.canAny(OUTREACH_PERMS);
+  const showOutreach = OUTREACH_FEATURES.enabled || OUTREACH_SIM || OUTREACH_LIVE || access.canAny(OUTREACH_PERMS);
   // Consolidación solo con members.consolidation.read; Ve por los tuyos según interruptor, simulación o permiso.
   const navItems = [...(canConsolidation ? ITEMS : []), ...(showOutreach ? [OUTREACH_ITEM] : [])];
   const onNewPerson = (usePathname() ?? "").replace(/\/+$/, "").endsWith("/consolidacion/nueva");

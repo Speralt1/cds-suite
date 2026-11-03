@@ -36,6 +36,7 @@ export const FORBIDDEN_TEXT = Object.freeze([
   "Ver como", // simulador de perfiles de la preview
   "+56900000", // teléfonos ficticios del seed
   "outreach-sim-fixture", // simulación local de «Ve por los tuyos» (doc 40)
+  "outreach-live-workspace", // espacio en vivo de «Ve por los tuyos»: solo con NEXT_PUBLIC_CDS_OUTREACH_LIVE=1
   "acepto_a_cristo", // decisiones voluntarias: excluidas hasta su aprobación (doc 41 §6)
 ]);
 
