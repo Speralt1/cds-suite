@@ -17,7 +17,7 @@ Nada está desplegado. Ningún dato real se leyó ni se escribió.
 ## 1. Hallazgos que cambian el plan
 
 1. **El sistema de inscripciones ya está en producción.** Vive en el repositorio privado `Speralt1/web-casa-de-salvacion` (no hay un repositorio llamado «veporlostuyos»), publicado en veporlostuyos.com desde el 01/11/2026. Hace mucho más que inscribir: revisión y aprobación de solicitudes, entradas con QR, cola de correo, **acreditación en puerta** probada (doble escaneo = un ingreso), exportación auditada y anonimización automática tras la retención. Detalle técnico en el expediente privado, no aquí.
-2. **La edición 2026 ya tiene fecha configurada en el sitio: sábado 28/11/2026, 18:00**, capacidad 300. La conversación decía «fecha no definida»: **el administrador debe confirmar** cuál vale. La simulación usa el 28/11.
+2. **Fecha del evento: sábado 28/11/2026, 18:00** (configurada en el sitio y **confirmada por el administrador el 03/11**). Capacidad configurada: 300. D = 28/11; el primer contacto vence D+2 (30/11) y el segundo intento D+7 (05/12).
 3. El sitio **no** tiene API de salida, webhook, credencial de máquina ni marca de «sincronizado». Hoy solo existe una exportación CSV con sesión humana.
 4. El sitio **anonimiza cada edición** al cumplirse la retención (90 días por defecto). Una copia en CDS sobreviviría a lo que la persona aceptó.
 5. El consentimiento web vigente es para el evento. **No consta que cubra seguimiento posterior ni el paso a Consolidación.**

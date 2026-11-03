@@ -354,13 +354,13 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - **Slice 3A preservada:** `mission/slice3a-sumup-fees` @ `6d67de5` (14 commits exclusivos).
 - **Checkout canónico histórico:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`; esta revisión usa un worktree aislado y no lo reemplaza.
 - **Evidencia vigente:** docs 38–41; lista nominal de accesos y revisiones del sitio del evento y del motor de mensajería en el expediente privado, fuera del repositorio público.
-- **Sitio del evento:** el sistema de inscripciones vive en `Speralt1/web-casa-de-salvacion` (privado), en producción desde 01/11; edición 2026 configurada para el 28/11/2026 18:00 (confirmar). Cada push a su rama de producción despliega.
+- **Sitio del evento:** el sistema de inscripciones vive en `Speralt1/web-casa-de-salvacion` (privado), en producción desde 01/11; edición 2026 el **28/11/2026 18:00, confirmada por el administrador el 03/11** (camino crítico en doc 41 §2). Cada push a su rama de producción despliega.
 - **Última verificación:** 2026-11-03. Ningún deploy ni cambio de permisos en esta revisión.
 <!-- AUTO-STATUS:END -->
 
 ## 17. Siguiente acción exacta
 
-0. Seguir la **hoja de ruta única (doc 41)**: F0 revisión de PR #33, PR #34 y la rama de rediseño; confirmar fecha del evento, nombre y logo.
+0. Seguir la **hoja de ruta única (doc 41)**: F0 revisión de PR #33, PR #34 y la rama de rediseño; fecha del evento confirmada (28/11); confirmar nombre y logo.
 1. Revisar el PR de login y simulaciones (doc 38) y su CI. Pruebas técnicas con perfiles ficticios, sin depender de titulares reales.
 2. Para publicar Consolidación, reanudar doc 25 desde C-A0 con baseline vivo y backup; C-A2.5 (merge) ya está hecho. C-A3 índices → C-A4 Rules → C-A5 seis `members*` por nombre → C-A6 Hosting → smokes/piloto admin. El doc 25 conserva filas de estado anteriores al merge: usar la evidencia viva del doc 38.
 3. Antes de abrir el evento a 15 responsables: separar inscripción de visita, asistencia por evento, consentimiento y acceso solo a asignados. V1 excluye decisiones religiosas; diseño restringido y aprobación separada antes de almacenarlas.

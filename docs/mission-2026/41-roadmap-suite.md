@@ -19,7 +19,7 @@ Fecha: 03/11/2026. **Esta es la hoja de ruta vigente**; los planes de los docs 1
 
 | Fase | Contenido | Salida verificable | Aprobación previa |
 |---|---|---|---|
-| **F0 · Revisión** (ahora) | PR #33 (simulación 300/15), PR #34 (dependencias), PR de esta rama (Alero + núcleo VPLT + docs 39–41) | CI verde; revisión de diseño en capturas y en local | Decidir nombre y logo; confirmar fecha del evento |
+| **F0 · Revisión** (ahora) | PR #33 (simulación 300/15), PR #34 (dependencias), PR de esta rama (Alero + núcleo VPLT + docs 39–41) | CI verde; revisión de diseño en capturas y en local | Decidir nombre y logo (fecha confirmada: 28/11) |
 | **F1 · Publicar lo ya construido** | Doc 25 desde C-A0: índices → Rules → seis `members*` por nombre → Hosting (incluye retirada del saldo, Alero y PR #34) → smokes y piloto admin | Baseline y backup previos; smokes; rollback probado | **GO por cada subfase**; Functions por nombre, nunca SumUp por efecto colateral |
 | **F2 · Base del evento** (antes de D) | Backend `outreach*`: ediciones, equipo, inscripciones sin visita, consentimientos, identidad sin datos, permisos 10→14, Rules con aislamiento, índices; Mi lista real | Matriz de Rules (perfiles × colecciones × consultas sin filtro); presupuesto ≥100; simulación 300/15 contra el servicio | Aprobar modelo y permisos; textos de autorización |
 | **F3 · Conexión con el sitio** | Endpoint de lectura en el sitio (rama aparte) + Function programada en CDS + bandeja de revisión | Contrato JSON compartido; pruebas de ambos lados con datos ficticios; corte y reanudación; nada escrito en el sitio | GO del sitio (su push despliega); acuerdo de retención y consentimiento |
@@ -31,7 +31,19 @@ Fecha: 03/11/2026. **Esta es la hoja de ruta vigente**; los planes de los docs 1
 | **E1 · Equipos** | Responsables y carga → turnos y disponibilidad → aceptación | Modelo mínimo aprobado | Alcance |
 | **A1 · Accesos** | Registro de invitación y primer ingreso verificable; nunca guardar enlaces de recuperación | Pruebas con cuentas ficticias | Uso de la lista privada; reenvíos autorizados uno a uno |
 
-Si la fecha del 28/11 se confirma, F2–F4 compiten con F1: lo mínimo seguro para D es **F1 + F2 (sin decisiones ni mensajería) + importación CSV con dry-run** en lugar de F3. Mensajería y decisiones no son requisito del día D.
+**Fecha confirmada: sábado 28/11/2026, 18:00 (D).** Quedan 25 días desde el 03/11. Camino crítico para D, sin decisiones ni mensajería (no son requisito del día):
+
+| Hito | Fecha límite | Contenido | Sin esto |
+|---|---|---|---|
+| H1 | 07/11 | Revisión y CI de #33, #34 y #35; GO de F1 | No se puede publicar nada |
+| H2 | 14/11 | F1 publicada por subfases (Consolidación, Alero, dependencias), smokes y piloto admin | F2 no tiene base viva |
+| H3 | 21/11 | F2 en emulador: backend `outreach*`, permisos 10→14, aislamiento por responsable, matriz de Rules, ensayo 300/15; textos de autorización aprobados | No se abre acceso a los 15 responsables |
+| H4 | 25/11 | F2 publicada con GO; importación CSV del sitio con dry-run (en lugar de F3) probada con datos ficticios | El padrón se carga a mano |
+| H5 | 27/11 | Ensayo general con la cuenta piloto; equipo de la edición cargado; cuentas de responsables verificadas (A1) | Riesgo de responsables sin acceso el D+1 |
+| D | 28/11 | Puerta en el sitio; CDS solo lee después del cierre | — |
+| D+1 | 29/11 | Importar asistencia, confirmar ausencias, proponer y confirmar distribución | El primer contacto (D+2) se atrasa |
+
+Si H3 no llega a tiempo: el seguimiento del evento se hace con la exportación del sitio y el grupo interno manual, y CDS entra después sin datos sensibles. F3 (endpoint), F5, F6 y F7 pasan a diciembre.
 
 ## 3. Dependencias y riesgos
 
@@ -48,7 +60,7 @@ Si la fecha del 28/11 se confirma, F2–F4 compiten con F1: lo mínimo seguro pa
 | Automatizable (con pruebas) | Decide el administrador o una persona autorizada |
 |---|---|
 | Gates (lint, tipos, unitarias, Rules, emuladores, build, `check:no-preview`), simulaciones 300/15 | Nombre, logo, cruz o no |
-| Lectura periódica del sitio con cursor e idempotencia | Fecha del evento; quién es coordinación y quién responsable |
+| Lectura periódica del sitio con cursor e idempotencia | Quién es coordinación y quién responsable (fecha ya confirmada) |
 | Propuesta de distribución, métricas, colas de revisión | Confirmar ausencias; confirmar cada lote; reasignaciones con motivo |
 | Cancelar pendientes y mensajes ante una baja | Fusionar o vincular identidades; resolver duplicados y conflictos |
 | Revalidar autorización antes de cada envío | Textos de autorización; plantillas; organización y número del motor |
