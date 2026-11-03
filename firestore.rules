@@ -1321,5 +1321,112 @@ service cloud.firestore {
       allow get, list: if membersRead();
       allow create, update, delete: if false;
     }
+
+    // ── Integrantes › Ve por los tuyos (doc 40 §3–§4; permisos members.outreach.*) ──────────────
+    // TODAS las escrituras del cliente son false: solo Functions / Admin SDK (validación, auditoría,
+    // idempotencia). Lectura SOLO con permiso explícito v1 o admin; ningún rol legacy (distinto de admin)
+    // ni members.consolidation.* da acceso aquí, y los permisos outreach no dan acceso a members*.
+    // Presupuesto (doc 26): estas reglas solo se evalúan en documentos outreach*, nunca en Finanzas;
+    // cada regla hace UN get(users) (más un get del padre solo en subcolecciones del responsable).
+    // Campos desnormalizados que escribe el backend en la inscripción: assigneeUid, editionActive, receptionOpen.
+    function outreachAnyOf(u) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.coordinate','members.outreach.reception','members.outreach.followup_assigned','members.outreach.decisions']))
+        : u.get('role', '') == 'admin');
+    }
+    function outreachAnyRead() { return signedIn() && exists(userPath()) && outreachAnyOf(userDoc()); }
+    function outreachCoordinateRead() { return gate(['members.outreach.coordinate'], ['admin']); }
+    function outreachDecisionsRead() { return gate(['members.outreach.decisions'], ['admin']); }
+    // Inscripción: coordinación todo; recepción solo receptionOpen; responsable solo lo suyo en edición activa.
+    function outreachRegistrationOf(u, r) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.coordinate'])
+          || (u.get('permissions', []).hasAny(['members.outreach.reception']) && r.receptionOpen == true)
+          || (u.get('permissions', []).hasAny(['members.outreach.followup_assigned']) && r.assigneeUid == request.auth.uid && r.editionActive == true))
+        : u.get('role', '') == 'admin');
+    }
+    function outreachRegistrationRead(r) { return signedIn() && exists(userPath()) && outreachRegistrationOf(userDoc(), r); }
+    // Subcolecciones de la inscripción visibles al responsable: contacts, assignments, consents.
+    function outreachAssignedTo(regId) {
+      let r = get(/databases/$(database)/documents/outreachRegistrations/$(regId)).data;
+      return r.assigneeUid == request.auth.uid && r.editionActive == true;
+    }
+    function outreachChildOf(u, regId) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.coordinate'])
+          || (u.get('permissions', []).hasAny(['members.outreach.followup_assigned']) && outreachAssignedTo(regId)))
+        : u.get('role', '') == 'admin');
+    }
+    function outreachChildRead(regId) { return signedIn() && exists(userPath()) && outreachChildOf(userDoc(), regId); }
+
+    match /outreachEditions/{editionId} {
+      allow get, list: if outreachAnyRead();
+      allow create, update, delete: if false;
+      match /team/{uid} {
+        allow get, list: if outreachAnyRead();
+        allow create, update, delete: if false;
+      }
+      // Sin el hash del enlace: este vive en tableSecrets y no lo lee ningún cliente.
+      match /tables/{n} {
+        allow get, list: if outreachAnyRead();
+        allow create, update, delete: if false;
+      }
+      match /tableSecrets/{n} {
+        allow read, write: if false;
+      }
+    }
+    match /outreachRegistrations/{regId} {
+      allow get, list: if outreachRegistrationRead(resource.data);
+      allow create, update, delete: if false;
+      match /contacts/{id} {
+        allow get, list: if outreachChildRead(regId);
+        allow create, update, delete: if false;
+      }
+      match /assignments/{id} {
+        allow get, list: if outreachChildRead(regId);
+        allow create, update, delete: if false;
+      }
+      match /consents/{id} {
+        allow get, list: if outreachChildRead(regId);
+        allow create, update, delete: if false;
+      }
+      match /changes/{id} {
+        allow get, list: if outreachCoordinateRead();
+        allow create, update, delete: if false;
+      }
+    }
+    // Decisiones de fe: solo members.outreach.decisions o admin (decisión pendiente, doc 40 §4).
+    // El responsable NO las lee: exigiría un assigneeUid desnormalizado y sincronizado en cada reasignación.
+    match /outreachDecisions/{regId} {
+      allow get, list: if outreachDecisionsRead();
+      allow create, update, delete: if false;
+      match /history/{id} {
+        allow get, list: if outreachDecisionsRead();
+        allow create, update, delete: if false;
+      }
+    }
+    match /outreachIdentities/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
+    // Datos crudos entrantes del sitio (PII sin depurar): nadie desde el cliente; coordinación trabaja sobre las inscripciones.
+    match /outreachInbox/{id} {
+      allow read, write: if false;
+    }
+    match /outreachOutbox/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
+    match /outreachAssignmentBatches/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
+    match /outreachTableMarks/{id} {
+      allow get, list: if outreachCoordinateRead();
+      allow create, update, delete: if false;
+    }
   }
 }
