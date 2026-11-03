@@ -11,15 +11,17 @@ import { useAuth } from "@/lib/auth/auth-provider";
 import * as api from "@/lib/outreach/client";
 import { EDITION_STATUS_LABEL } from "@/lib/outreach/model";
 import AbsencesView from "./absences-view";
+import DecisionsView from "./decisions-view";
 import DistributionView from "./distribution-view";
 import ImportView from "./import-view";
+import MyList from "./my-list";
 import Panorama from "./panorama";
 import ReviewView from "./review-view";
 import TablesView from "./tables-view";
 import { ErrorNote, Loading, useLoad } from "./ui";
 import "../outreach.css";
 
-type ViewId = "panorama" | "importar" | "revision" | "mesas" | "ausencias" | "distribucion";
+type ViewId = "panorama" | "importar" | "revision" | "mesas" | "ausencias" | "distribucion" | "mi-lista" | "decisiones";
 interface ViewDef {
   id: ViewId;
   label: string;
@@ -33,6 +35,8 @@ const VIEWS: ViewDef[] = [
   { id: "mesas", label: "Mesas", role: "Coordinación", perm: "coordinate" },
   { id: "ausencias", label: "Ausencias", role: "Coordinación", perm: "coordinate" },
   { id: "distribucion", label: "Distribución", role: "Coordinación", perm: "coordinate" },
+  { id: "mi-lista", label: "Mi lista", role: "Responsable", perm: "followup" },
+  { id: "decisiones", label: "Decisiones", role: "Pastoral", perm: "decisions" },
 ];
 
 const PERMS = {
@@ -107,7 +111,8 @@ export default function LiveWorkspace() {
           {current.id === "mesas" && <TablesView edition={edition} />}
           {current.id === "ausencias" && <AbsencesView edition={edition} />}
           {current.id === "distribucion" && <DistributionView edition={edition} />}
-          <span hidden data-uid={uid ?? ""} />
+          {current.id === "mi-lista" && uid && <MyList edition={edition} uid={uid} />}
+          {current.id === "decisiones" && uid && <DecisionsView edition={edition} uid={uid} />}
         </>
       )}
     </div>
