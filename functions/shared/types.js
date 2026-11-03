@@ -20,6 +20,10 @@ exports.PERMISSIONS = [
     "calendar.events.publish_assigned",
     "members.consolidation.read",
     "members.consolidation.manage",
+    "members.outreach.coordinate",
+    "members.outreach.reception",
+    "members.outreach.followup_assigned",
+    "members.outreach.decisions",
     "settings.manage",
 ];
 /** Permisos que se pueden guardar en `users/{uid}.permissions` (`settings.manage` solo vía baseRole admin). */
@@ -28,7 +32,7 @@ exports.BASE_ROLES = ["admin", "standard"];
 exports.LEGACY_ROLES = ["admin", "pastor", "finance", "leader"];
 exports.HOME_MODULES = ["finance", "calendar"];
 /** Límites del documento v1 (iguales a las reglas). */
-exports.MAX_STORED_PERMISSIONS = 10;
+exports.MAX_STORED_PERMISSIONS = 14;
 exports.MAX_AREA_IDS = 20;
 exports.MAX_POSITION_LENGTH = 60;
 // ---------- Áreas ----------

@@ -9,6 +9,7 @@
 //   · decisión voluntaria (registro aparte, acceso pastoral) · asignación
 //   (ownerUid) · seguimiento del evento (contactos) · traspaso a Consolidación.
 
+import { addDays } from "./dates";
 import type { LocalDateTime, Ymd } from "./types";
 
 export type { LocalDateTime, Ymd };
@@ -336,9 +337,7 @@ export function queueBucket(reg: Registration, today: Ymd, eventDate: Ymd | null
 }
 
 function addDaysSafe(value: Ymd, n: number): Ymd {
-  const [y, m, d] = value.split("-").map(Number);
-  const t = Date.UTC(y, m - 1, d) + n * 86_400_000;
-  return new Date(t).toISOString().slice(0, 10);
+  return addDays(value, n);
 }
 
 // ---------- Decisión voluntaria (restringida) ----------

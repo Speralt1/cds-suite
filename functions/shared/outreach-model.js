@@ -23,6 +23,7 @@ exports.pendingAttendance = pendingAttendance;
 exports.recordContact = recordContact;
 exports.queueBucket = queueBucket;
 exports.parseDecision = parseDecision;
+const dates_1 = require("./dates");
 // ---------- Edición ----------
 exports.EDITION_STATUSES = ["preparacion", "inscripcion", "evento", "seguimiento", "cerrada"];
 exports.EDITION_STATUS_LABEL = {
@@ -189,9 +190,7 @@ function queueBucket(reg, today, eventDate) {
     return "proximo";
 }
 function addDaysSafe(value, n) {
-    const [y, m, d] = value.split("-").map(Number);
-    const t = Date.UTC(y, m - 1, d) + n * 86_400_000;
-    return new Date(t).toISOString().slice(0, 10);
+    return (0, dates_1.addDays)(value, n);
 }
 // ---------- Decisión voluntaria (restringida) ----------
 /**

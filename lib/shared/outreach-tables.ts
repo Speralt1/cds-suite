@@ -10,6 +10,7 @@
 // buscar (código de entrada o ≥3 letras), marcar y deshacer lo propio; nunca
 // se ven teléfonos, correos ni el padrón completo.
 
+import { addDays } from "./dates";
 import { normalizePhone } from "./members";
 import { EMPTY_FOLLOW_UP, type DecisionRecord, type LocalDateTime, type Registration, type Ymd } from "./outreach-model";
 
@@ -36,8 +37,7 @@ export const TABLE_CONSENT_VERSION = "mesa-2026-1";
 
 /** Ventana del enlace: D 16:00 → D+1 02:00 (hora de Santiago, de pared). */
 export function tableLinkWindow(eventDate: Ymd): { opensAt: LocalDateTime; closesAt: LocalDateTime } {
-  const [y, m, d] = eventDate.split("-").map(Number);
-  const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  const next = addDays(eventDate, 1);
   return { opensAt: `${eventDate}T16:00`, closesAt: `${next}T02:00` };
 }
 

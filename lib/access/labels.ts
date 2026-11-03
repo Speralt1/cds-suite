@@ -15,6 +15,10 @@ export const PERMISSION_LABEL: Readonly<Record<Permission, string>> = {
   "calendar.events.manage_all": "Gestionar todas las actividades y el enlace público",
   "members.consolidation.read": "Ver Consolidación",
   "members.consolidation.manage": "Gestionar Consolidación",
+  "members.outreach.coordinate": "Coordinar Ve por los tuyos",
+  "members.outreach.reception": "Recepción de Ve por los tuyos",
+  "members.outreach.followup_assigned": "Seguimiento asignado (Ve por los tuyos)",
+  "members.outreach.decisions": "Ver decisiones de fe",
   "settings.manage": "Administrar configuración",
 };
 
@@ -32,6 +36,14 @@ export const PERMISSION_DESCRIPTION: Readonly<Record<Permission, string>> = {
     "Ver personas nuevas, sus visitas, seguimientos y alertas (nombres y teléfonos). Solo con autorización expresa.",
   "members.consolidation.manage":
     "Registrar personas, visitas y seguimientos, cambiar estados y responsables. Puede ser responsable de seguimiento.",
+  "members.outreach.coordinate":
+    "Ver y gestionar registros, mesas, asignaciones y mensajes del evento. Incluye Recepción. Datos personales: solo con autorización expresa.",
+  "members.outreach.reception":
+    "Ver a los invitados habilitados para recepción y marcar su llegada y su mesa.",
+  "members.outreach.followup_assigned":
+    "Ver y registrar el seguimiento solo de las personas que se le asignan.",
+  "members.outreach.decisions":
+    "Ver las decisiones de fe registradas. Dato sensible: otórgalo solo con autorización expresa.",
   "settings.manage": "Solo usuarios con rol Administrador.",
 };
 
@@ -62,6 +74,16 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     label: "Integrantes",
     permissions: ["members.consolidation.read", "members.consolidation.manage"],
     note: "Datos personales: otórgalo solo a quienes acompañan a las personas nuevas.",
+  },
+  {
+    label: "Ve por los tuyos",
+    permissions: [
+      "members.outreach.coordinate",
+      "members.outreach.reception",
+      "members.outreach.followup_assigned",
+      "members.outreach.decisions",
+    ],
+    note: "Datos personales y decisiones de fe: otórgalo solo con autorización expresa.",
   },
   { label: "Sistema", permissions: ["settings.manage"] },
 ];

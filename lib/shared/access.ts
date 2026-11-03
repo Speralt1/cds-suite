@@ -35,6 +35,8 @@ export const IMPLIES: Readonly<Partial<Record<Permission, readonly Permission[]>
   "calendar.events.manage_assigned": ["calendar.read"],
   "calendar.events.publish_assigned": ["calendar.read"],
   "members.consolidation.manage": ["members.consolidation.read"],
+  // Ve por los tuyos (doc 40 §4): coordinar incluye recepción. `decisions` y `followup_assigned` no implican nada.
+  "members.outreach.coordinate": ["members.outreach.reception"],
 };
 
 export interface LegacyRoleAccess {
@@ -194,6 +196,9 @@ export function normalizeAccess(doc: UserAccessDoc | null | undefined): AccessPr
 }
 
 /** Permisos efectivos de un perfil ya normalizado. */
+// NOTA (doc 40 §4, decisión pendiente del administrador): baseRole admin recibe el catálogo COMPLETO de
+// forma implícita, lo que incluye `members.outreach.decisions` (decisiones de fe). Si se decide que el admin
+// NO las vea por defecto, habrá que excluirlo aquí y en las reglas (adminProfile en outreachDecisions).
 export function profilePermissions(p: AccessProfile | null | undefined): Set<Permission> {
   if (!p || !p.active) return new Set();
   if (p.baseRole === "admin") return new Set(ALL);
@@ -234,8 +239,8 @@ export function deriveLegacyRole(baseRole: BaseRole, perms: readonly Permission[
 
 // ---------- Módulos y módulo inicial ----------
 
-// Integrantes (Consolidación V1, doc 23) solo se ve con permiso EXPLÍCITO o admin:
-// el fallback legacy no lo otorga a ningún rol.
+// Integrantes (Consolidación V1, doc 23 · Ve por los tuyos, doc 40) solo se ve con permiso EXPLÍCITO
+// (consolidation.read o cualquier members.outreach.*) o admin: el fallback legacy no lo otorga a ningún rol.
 export const MODULE_ORDER: readonly ModuleId[] = ["finance", "calendar", "members", "reports", "settings"];
 
 export const MODULE_HREF: Readonly<Record<ModuleId, string>> = {
@@ -250,7 +255,13 @@ export const MODULE_HREF: Readonly<Record<ModuleId, string>> = {
 export const MODULE_PERMISSIONS: Readonly<Record<ModuleId, readonly Permission[]>> = {
   finance: ["finance.summary.read"],
   calendar: ["calendar.read"],
-  members: ["members.consolidation.read"],
+  members: [
+    "members.consolidation.read",
+    "members.outreach.coordinate",
+    "members.outreach.reception",
+    "members.outreach.followup_assigned",
+    "members.outreach.decisions",
+  ],
   reports: ["finance.details.read", "calendar.read"],
   settings: ["settings.manage"],
 };

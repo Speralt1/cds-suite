@@ -40,7 +40,8 @@ const v1 = (over: Partial<Record<keyof UserAccessDoc, unknown>> = {}): UserAcces
 
 /** Todos los subconjuntos de los permisos guardables (2^8). */
 function subsets(): Permission[][] {
-  const all = [...STORABLE_PERMISSIONS];
+  // 12 de los 14 guardables (sin reception ni decisions, que no cambian el cierre ni los módulos): 2^12.
+  const all = STORABLE_PERMISSIONS.filter((p) => p !== "members.outreach.reception" && p !== "members.outreach.decisions");
   const out: Permission[][] = [];
   for (let mask = 0; mask < 1 << all.length; mask++) out.push(all.filter((_, i) => mask & (1 << i)));
   return out;
@@ -48,8 +49,8 @@ function subsets(): Permission[][] {
 
 describe("catálogo y cierre", () => {
   it("el catálogo tiene 11 permisos y settings.manage no es guardable", () => {
-    expect(PERMISSIONS).toHaveLength(11);
-    expect(STORABLE_PERMISSIONS).toHaveLength(10);
+    expect(PERMISSIONS).toHaveLength(15);
+    expect(STORABLE_PERMISSIONS).toHaveLength(14);
     expect(STORABLE_PERMISSIONS).not.toContain("settings.manage");
   });
 
@@ -87,8 +88,16 @@ describe("catálogo y cierre", () => {
       "members.consolidation.manage",
     ]);
     expect(sortPermissions(closure(["members.consolidation.read"]))).toEqual(["members.consolidation.read"]);
+    // Ve por los tuyos (doc 40 §4): coordinar incluye recepción; decisiones y seguimiento no implican nada.
+    expect(sortPermissions(closure(["members.outreach.coordinate"]))).toEqual([
+      "members.outreach.coordinate",
+      "members.outreach.reception",
+    ]);
+    for (const p of ["members.outreach.reception", "members.outreach.followup_assigned", "members.outreach.decisions"] as const)
+      expect(sortPermissions(closure([p]))).toEqual([p]);
     expect(Object.keys(IMPLIES).sort()).toEqual(
       [
+        "members.outreach.coordinate",
         "members.consolidation.manage",
         "calendar.events.manage_all",
         "calendar.events.manage_assigned",
@@ -332,7 +341,7 @@ describe("resolveHome (módulo inicial)", () => {
     expect(resolveHome(null)).toEqual({ kind: "inactive" });
   });
 
-  it("propiedad: para todo perfil el aterrizaje es un módulo visible (o no-modules si no hay)", () => {
+  it("propiedad: para todo perfil el aterrizaje es un módulo visible (o no-modules si no hay)", { timeout: 60_000 }, () => {
     for (const baseRole of ["admin", "standard"] as BaseRole[]) {
       for (const homeModule of ["finance", "calendar", null] as (HomeModule | null)[]) {
         for (const perms of subsets()) {

@@ -35,6 +35,10 @@ service cloud.firestore {
         'calendar.events.publish_assigned': ['calendar.events.publish_assigned'],
         'members.consolidation.read': ['members.consolidation.read','members.consolidation.manage'],
         'members.consolidation.manage': ['members.consolidation.manage'],
+        'members.outreach.coordinate': ['members.outreach.coordinate'],
+        'members.outreach.reception': ['members.outreach.reception','members.outreach.coordinate'],
+        'members.outreach.followup_assigned': ['members.outreach.followup_assigned'],
+        'members.outreach.decisions': ['members.outreach.decisions'],
         'settings.manage': []
       };
     }
@@ -169,7 +173,7 @@ service cloud.firestore {
     }
 
     // ── users/{uid} (18a §C.1/§D.2) ──────────────────────────────────────────
-    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned','members.consolidation.read','members.consolidation.manage']; }
+    function permissionCatalogNoSettings() { return ['finance.summary.read','finance.details.read','finance.records.manage','finance.pastoral.manage','calendar.read','calendar.events.manage_assigned','calendar.events.manage_all','calendar.events.publish_assigned','members.consolidation.read','members.consolidation.manage','members.outreach.coordinate','members.outreach.reception','members.outreach.followup_assigned','members.outreach.decisions']; }
     function v1UserKeys() { return ['displayName','email','role','active','createdAt','baseRole','position','permissions','areaIds','homeModule','accessSchemaVersion','updatedAt','updatedBy']; }
     function validLegacyUser(d) {
       return d.keys().hasOnly(['displayName','email','role','active','createdAt'])
@@ -189,7 +193,7 @@ service cloud.firestore {
         && text(d.displayName,1,120) && text(d.email,3,160)
         && d.role in ['admin','pastor','finance','leader'] && d.active is bool && d.createdAt is timestamp
         && d.baseRole in ['admin','standard'] && text(d.position,0,60)
-        && d.permissions is list && d.permissions.size() <= 10 && d.permissions.hasOnly(permissionCatalogNoSettings())
+        && d.permissions is list && d.permissions.size() <= 14 && d.permissions.hasOnly(permissionCatalogNoSettings())
         && d.permissions.toSet().size() == d.permissions.size()
         && ((d.baseRole == 'admin') == (d.role == 'admin')) && d.role == derivedLegacyRole(d)
         && areaIdList(d.areaIds, 20)

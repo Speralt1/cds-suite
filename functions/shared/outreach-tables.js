@@ -23,6 +23,7 @@ exports.unmarkAtTable = unmarkAtTable;
 exports.addAtTable = addAtTable;
 exports.tableAffinity = tableAffinity;
 exports.tableSummaries = tableSummaries;
+const dates_1 = require("./dates");
 const members_1 = require("./members");
 const outreach_model_1 = require("./outreach-model");
 /** Marcas posibles en la mesa: sin marca = «No registrada». */
@@ -35,8 +36,7 @@ exports.TABLE_MARK_LABEL = {
 exports.TABLE_CONSENT_VERSION = "mesa-2026-1";
 /** Ventana del enlace: D 16:00 → D+1 02:00 (hora de Santiago, de pared). */
 function tableLinkWindow(eventDate) {
-    const [y, m, d] = eventDate.split("-").map(Number);
-    const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+    const next = (0, dates_1.addDays)(eventDate, 1);
     return { opensAt: `${eventDate}T16:00`, closesAt: `${next}T02:00` };
 }
 function linkUsable(table, eventDate, now) {
