@@ -97,13 +97,14 @@ export function copyTeamStructure(previous: readonly TeamMember[]): TeamMember[]
 
 // ---------- Inscripción (padrón de la edición) ----------
 
-export const REGISTRATION_SOURCES = ["web", "recepcion", "coordinacion"] as const;
+export const REGISTRATION_SOURCES = ["web", "recepcion", "coordinacion", "mesa"] as const;
 export type RegistrationSource = (typeof REGISTRATION_SOURCES)[number];
 
 export const REGISTRATION_SOURCE_LABEL: Readonly<Record<RegistrationSource, string>> = {
   web: "Inscripción web",
   recepcion: "Llegó sin inscripción",
   coordinacion: "Agregada por coordinación",
+  mesa: "Agregada en su mesa",
 };
 
 export const REGISTRATION_STATUSES = ["activa", "cancelada", "duplicada"] as const;
@@ -127,7 +128,7 @@ export const CONSENT_PURPOSE_LABEL: Readonly<Record<ConsentPurpose, string>> = {
   traspaso_consolidacion: "Acompañamiento habitual de la iglesia",
 };
 
-export const CONSENT_SOURCES = ["formulario_web", "verbal_recepcion", "verbal_responsable"] as const;
+export const CONSENT_SOURCES = ["formulario_web", "verbal_recepcion", "verbal_responsable", "verbal_mesa"] as const;
 export type ConsentSource = (typeof CONSENT_SOURCES)[number];
 
 /** Autorización con propósito, fuente y revocación. Sin registro = sin autorización. */
@@ -184,6 +185,10 @@ export interface Registration {
   followUp: EventFollowUpProjection;
   memberPersonId: string | null;
   handedOffAt: LocalDateTime | null;
+  /** Mesa del evento donde quedó (doc 40 §6b); su encargado la acompaña después. */
+  tableNumber?: number | null;
+  /** Código corto de la entrada del sitio (el mismo del QR), para identificarla en la mesa. */
+  ticketCode?: string | null;
   createdAt: LocalDateTime;
   revision: number;
 }
@@ -364,6 +369,8 @@ export interface DecisionRecord {
   consentTextVersion: string;
   recordedAt: LocalDateTime;
   recordedBy: string;
+  /** Mesa que la marcó, si se registró en el evento. */
+  tableNumber?: number | null;
 }
 
 export function parseDecision(raw: Partial<DecisionRecord>): { ok: true; value: DecisionRecord } | { ok: false; error: string } {

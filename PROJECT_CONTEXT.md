@@ -354,7 +354,7 @@ No leer toda la carpeta por defecto si la tarea es pequeña.
 - **Slice 3A preservada:** `mission/slice3a-sumup-fees` @ `6d67de5` (14 commits exclusivos).
 - **Checkout canónico histórico:** `~/Documents/Proyectos Desarrollo/Proyects/CDS/cds-suite`; esta revisión usa un worktree aislado y no lo reemplaza.
 - **Evidencia vigente:** docs 38–41; lista nominal de accesos y revisiones del sitio del evento y del motor de mensajería en el expediente privado, fuera del repositorio público.
-- **Sitio del evento:** el sistema de inscripciones vive en `Speralt1/web-casa-de-salvacion` (privado), en producción desde 01/11; edición 2026 el **28/11/2026 18:00, confirmada por el administrador el 03/11** (camino crítico en doc 41 §2). Cada push a su rama de producción despliega.
+- **Sitio del evento:** el sistema de inscripciones vive en `Speralt1/web-casa-de-salvacion` (privado), en producción desde 01/11; edición 2026 el **28/11/2026 18:00, confirmada por el administrador el 03/11** (camino crítico en doc 41 §2). ~35 mesas; cada encargado marca decisiones en su mesa con un enlace propio y hace el seguimiento de su mesa (doc 40 §6b). Cada push a su rama de producción despliega.
 - **Última verificación:** 2026-11-03. Ningún deploy ni cambio de permisos en esta revisión.
 <!-- AUTO-STATUS:END -->
 

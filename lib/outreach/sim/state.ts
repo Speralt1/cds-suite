@@ -4,11 +4,15 @@
 import { confirmBatch, moveInProposal, proposeDistribution, type BatchResult, type DistributionProposal } from "../distribution";
 import { changeAttendance, pendingAttendance, recordContact, type Edition, type EventContact, type Registration, type TeamMember } from "../model";
 import { applyInbound, type InboundRegistration, type ReviewItem, type SyncReport, type SyncState } from "../sync";
-import { OUTREACH_SIM_MARKER, SIM_EDITION, simRegistrations, simTeam, withAttendance } from "./fixtures";
+import { addAtTable, markAtTable, tableAffinity, unmarkAtTable, type EventTable, type TableMark } from "../tables";
+import type { DecisionRecord } from "../model";
+import { OUTREACH_SIM_MARKER, SIM_EDITION, simDecisions, simRegistrations, simTables, simTeam, withAttendance, withTables } from "./fixtures";
 
 export { OUTREACH_SIM_MARKER };
 
 export const SIM_TODAY = "2026-11-30";
+/** Reloj de la vista Mesa: la noche del evento. */
+export const SIM_TABLE_NOW = "2026-11-28T21:00";
 
 export interface PastEdition {
   edition: Edition;
@@ -23,6 +27,8 @@ export interface SimState {
   proposal: DistributionProposal | null;
   lastBatch: BatchResult | null;
   contacts: EventContact[];
+  tables: EventTable[];
+  decisions: DecisionRecord[];
   past: PastEdition[];
   /** Último error de una acción (texto corto para la interfaz). */
   error: string | null;
@@ -36,20 +42,27 @@ export type SimAction =
   | { type: "confirm-batch" }
   | { type: "discard-proposal" }
   | { type: "contact"; contact: EventContact }
+  | { type: "table-mark"; table: number; registrationId: string; mark: TableMark; moveHere?: boolean }
+  | { type: "table-unmark"; table: number; registrationId: string }
+  | { type: "table-add"; table: number; fullName: string; phone: string; requestId: string }
   | { type: "clear-error" };
 
 export function initialSimState(): SimState {
-  const registrations = withAttendance(simRegistrations());
+  const team = simTeam(35);
+  const tables = simTables(team);
+  const registrations = withTables(withAttendance(simRegistrations()), tables);
   const seen: Record<string, number> = {};
   for (const r of registrations) if (r.externalRef) seen[r.externalRef.id] = r.externalRef.sourceRevision;
   return {
     edition: { ...SIM_EDITION },
-    team: simTeam(),
+    team,
     sync: { editionId: SIM_EDITION.id, editionClosed: false, registrations, seen, cursor: registrations.length, review: [] },
     lastSync: null,
     proposal: null,
     lastBatch: null,
     contacts: [],
+    tables,
+    decisions: simDecisions(registrations),
     past: [
       {
         edition: { ...SIM_EDITION, id: "vplt-2025", year: 2025, title: "Ve por los tuyos 2025", eventDate: "2025-11-29", status: "cerrada", teamCopiedFrom: null },
@@ -109,6 +122,8 @@ export function simReducer(state: SimState, action: SimAction): SimState {
           editionId: state.edition.id,
           batchId: `lote-${state.contacts.length}-${state.sync.cursor}`,
           defaultMax: state.edition.maxPerOwner,
+          // Cada persona va con el encargado de su mesa; el resto lo reparte el equilibrio.
+          affinity: tableAffinity(state.sync.registrations, state.tables),
         }),
         lastBatch: null,
       };
@@ -135,6 +150,39 @@ export function simReducer(state: SimState, action: SimAction): SimState {
       return error
         ? { ...state, error }
         : { ...state, error: null, contacts: [...state.contacts, action.contact], sync: { ...state.sync, registrations: regs } };
+    }
+    case "table-mark": {
+      const table = state.tables.find((t) => t.number === action.table);
+      if (!table) return state;
+      const res = markAtTable(
+        { registrations: state.sync.registrations, decisions: state.decisions },
+        { table, eventDate: state.edition.eventDate, registrationId: action.registrationId, mark: action.mark, personAgreed: true, moveHere: action.moveHere, now: SIM_TABLE_NOW },
+      );
+      if (!res.ok) return { ...state, error: res.error === "otra_mesa" ? `está en la mesa ${res.otherTable}` : res.error };
+      return { ...state, error: null, decisions: res.value.decisions, sync: { ...state.sync, registrations: res.value.registrations } };
+    }
+    case "table-unmark": {
+      const table = state.tables.find((t) => t.number === action.table);
+      if (!table) return state;
+      const res = unmarkAtTable(
+        { registrations: state.sync.registrations, decisions: state.decisions },
+        { table, eventDate: state.edition.eventDate, registrationId: action.registrationId, now: SIM_TABLE_NOW },
+      );
+      return res.ok ? { ...state, error: null, decisions: res.value.decisions } : { ...state, error: res.error };
+    }
+    case "table-add": {
+      const table = state.tables.find((t) => t.number === action.table);
+      if (!table) return state;
+      const res = addAtTable(state.sync.registrations, {
+        table,
+        eventDate: state.edition.eventDate,
+        editionId: state.edition.id,
+        fullName: action.fullName,
+        phone: action.phone,
+        requestId: action.requestId,
+        now: SIM_TABLE_NOW,
+      });
+      return res.ok ? { ...state, error: null, sync: { ...state.sync, registrations: res.value } } : { ...state, error: res.error };
     }
     case "clear-error":
       return { ...state, error: null };

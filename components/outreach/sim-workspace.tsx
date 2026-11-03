@@ -33,12 +33,15 @@ import {
   type QueueBucket,
   type Registration,
 } from "@/lib/outreach/model";
-import { initialSimState, SIM_TODAY, simReducer, unconfirmed, type SimState } from "@/lib/outreach/sim/state";
+import { initialSimState, SIM_TABLE_NOW, SIM_TODAY, simReducer, unconfirmed, type SimState } from "@/lib/outreach/sim/state";
+import { searchForTable, TABLE_MARK_LABEL, TABLE_MARKS, tableLinkWindow, tableSummaries, toRow, type TableMark } from "@/lib/outreach/tables";
+import { decisionSummary } from "@/lib/outreach/metrics";
 import "./outreach.css";
 
-type View = "panorama" | "distribucion" | "mi-lista";
+type View = "mesa" | "panorama" | "distribucion" | "mi-lista";
 
 const VIEWS: { id: View; label: string; role: string }[] = [
+  { id: "mesa", label: "Mesa", role: "Noche del evento" },
   { id: "panorama", label: "Panorama", role: "Coordinación" },
   { id: "distribucion", label: "Distribución", role: "Coordinación" },
   { id: "mi-lista", label: "Mi lista", role: "Responsable" },
@@ -136,6 +139,7 @@ export default function SimWorkspace() {
               </button>
             </p>
           )}
+          {view === "mesa" && <TableView state={state} dispatch={dispatch} />}
           {view === "panorama" && <Panorama state={state} dispatch={dispatch} goTo={setView} />}
           {view === "distribucion" && <Distribution state={state} dispatch={dispatch} />}
           {view === "mi-lista" && <MyList state={state} dispatch={dispatch} />}
@@ -277,6 +281,8 @@ function Panorama({ state, dispatch, goTo }: { state: SimState; dispatch: Dispat
         </div>
       </section>
 
+      <TablesCard state={state} />
+
       <section className="vp-card vp-span-2" aria-labelledby="vp-load">
         <div className="vp-card-head">
           <h3 id="vp-load">Carga por responsable</h3>
@@ -349,7 +355,7 @@ function Distribution({ state, dispatch }: { state: SimState; dispatch: Dispatch
           </p>
         )}
         <ol className="vp-steps">
-          <li>Generas una propuesta equilibrada (hasta {state.edition.maxPerOwner} por responsable).</li>
+          <li>Cada persona queda con el encargado de su mesa; quien no tenga mesa se reparte por equilibrio (hasta {state.edition.maxPerOwner} por responsable).</li>
           <li>Ajustas lo necesario; superar el tope exige un motivo.</li>
           <li>Confirmas el lote. Repetir la confirmación no duplica nada.</li>
         </ol>
@@ -366,7 +372,9 @@ function Distribution({ state, dispatch }: { state: SimState; dispatch: Dispatch
         <div className="vp-card-head">
           <h3 id="vp-prop">Propuesta · {p.assignments.length} personas</h3>
           <p>
-            {p.unassigned.length} sin cupo · {p.excluded.length} no entran al reparto
+            {p.assignments.filter((a) => a.reason === "vinculo_previo").length} con el encargado de su mesa ·{" "}
+            {p.assignments.filter((a) => a.reason !== "vinculo_previo").length} por equilibrio · {p.unassigned.length} sin cupo ·{" "}
+            {p.excluded.length} no entran al reparto
           </p>
         </div>
         <ul className="vp-loads">
@@ -626,5 +634,221 @@ function PastEditionView({ past, onBack }: { past: SimState["past"][number]; onB
         Volver a la edición vigente
       </button>
     </section>
+  );
+}
+
+function TablesCard({ state }: { state: SimState }) {
+  const summaries = tableSummaries(state.sync.registrations, state.decisions, state.tables);
+  const totals = decisionSummary(state.sync.registrations.filter((r) => r.tableNumber != null), state.decisions);
+  const withPeople = summaries.filter((t) => t.people > 0);
+  return (
+    <section className="vp-card vp-span-2" aria-labelledby="vp-tables">
+      <div className="vp-card-head">
+        <h3 id="vp-tables">Mesas · {state.tables.length}</h3>
+        <p>Marcas de la noche del evento. Solo conteos: los nombres los ve cada encargado y coordinación pastoral.</p>
+      </div>
+      <dl className="vp-figures is-row">
+        <div className="is-attention">
+          <dt>{TABLE_MARK_LABEL.acepto_a_cristo}</dt>
+          <dd className="tabular">{totals.acepto_a_cristo}</dd>
+        </div>
+        <div>
+          <dt>{TABLE_MARK_LABEL.desea_conversar}</dt>
+          <dd className="tabular">{totals.desea_conversar}</dd>
+        </div>
+        <div>
+          <dt>Sin marca</dt>
+          <dd className="tabular">{totals.no_registrada}</dd>
+        </div>
+      </dl>
+      <ul className="vp-table-grid" aria-label="Por mesa">
+        {withPeople.map((t) => (
+          <li key={t.number}>
+            <strong className="tabular">Mesa {t.number}</strong>
+            <span>{t.leaderName}</span>
+            <small className="tabular">
+              {t.people} personas · {t.accepted} aceptaron · {t.wantsToTalk} conversar
+            </small>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function TableView({ state, dispatch }: { state: SimState; dispatch: Dispatch }) {
+  const [tableNo, setTableNo] = useState(12);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const table = state.tables.find((t) => t.number === tableNo);
+  const closes = state.edition.eventDate ? tableLinkWindow(state.edition.eventDate).closesAt.slice(11) : "";
+  const results = useMemo(() => searchForTable(state.sync.registrations, state.decisions, query), [state.sync.registrations, state.decisions, query]);
+  const mine = state.sync.registrations.filter((r) => r.status === "activa" && r.tableNumber === tableNo).map((r) => toRow(r, state.decisions));
+  const marked = mine.filter((r) => r.mark);
+  const pick = (id: string) => {
+    setSelected(id);
+    setAgreed(false);
+  };
+  const mark = (m: TableMark, moveHere = false) => {
+    if (!selected) return;
+    dispatch({ type: "table-mark", table: tableNo, registrationId: selected, mark: m, moveHere });
+    setSelected(null);
+    setQuery("");
+    setAgreed(false);
+  };
+  const selectedRow = selected ? results.find((r) => r.id === selected) ?? mine.find((r) => r.id === selected) : null;
+
+  return (
+    <div className="vp-list-wrap vp-table-view">
+      <label className="vp-as">
+        <span>Enlace de mesa (simulación)</span>
+        <select value={tableNo} onChange={(e) => setTableNo(Number(e.target.value))}>
+          {state.tables.map((t) => (
+            <option key={t.number} value={t.number}>
+              Mesa {t.number} · {t.leaderName}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="vp-table-head">
+        <p className="vp-title is-small">Mesa {tableNo}</p>
+        <p className="vp-small">
+          {table?.leaderName} · sin usuario ni contraseña · el enlace vence a las {closes} de la madrugada · reloj simulado {SIM_TABLE_NOW.slice(11)}
+        </p>
+      </div>
+
+      <label className="vp-search">
+        <span>Busca por el código de la entrada o por el nombre</span>
+        <input
+          className="form-input"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSelected(null);
+          }}
+          placeholder="VP042 o «Marta Ro…»"
+          autoComplete="off"
+          inputMode="search"
+        />
+      </label>
+      {query.trim().length > 0 && results.length === 0 && <p className="vp-small">Sin resultados. Escribe al menos 3 letras o el código completo.</p>}
+      {results.length > 0 && !selected && (
+        <ul className="vp-people" aria-label="Resultados">
+          {results.map((r) => (
+            <li key={r.id}>
+              <div className="vp-person">
+                <p className="vp-person-name">{r.fullName}</p>
+                <p className="vp-person-meta">
+                  {r.tableNumber ? `Mesa ${r.tableNumber}` : "Sin mesa"}
+                  {r.mark && ` · ${TABLE_MARK_LABEL[r.mark]}`}
+                </p>
+              </div>
+              <button type="button" className="button-secondary vp-row-cta" onClick={() => pick(r.id)}>
+                Elegir
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {selectedRow && (
+        <section className="vp-card vp-mark" aria-labelledby="vp-mark-title">
+          <h3 id="vp-mark-title" className="vp-person-name">
+            {selectedRow.fullName}
+          </h3>
+          {selectedRow.tableNumber != null && selectedRow.tableNumber !== tableNo && (
+            <p className="vp-small">Figura en la mesa {selectedRow.tableNumber}. Si está sentada aquí, márcala igual y quedará en esta mesa.</p>
+          )}
+          <label className={`vp-agree${agreed ? " is-on" : ""}`}>
+            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+            ¿Te podemos anotar para acompañarte? · Dijo que sí
+          </label>
+          <div className="vp-mark-actions">
+            {TABLE_MARKS.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={m === "acepto_a_cristo" ? "button-primary" : "button-secondary"}
+                disabled={!agreed}
+                onClick={() => mark(m, selectedRow.tableNumber != null && selectedRow.tableNumber !== tableNo)}
+              >
+                {TABLE_MARK_LABEL[m]}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="vp-link" onClick={() => setSelected(null)}>
+            Cancelar
+          </button>
+        </section>
+      )}
+
+      <section className="vp-group" aria-labelledby="vp-marked">
+        <h3 id="vp-marked" className="vp-group-title is-brand">
+          Marcadas en esta mesa <span className="tabular">{marked.length}</span>
+        </h3>
+        {marked.length === 0 ? (
+          <p className="vp-small">Aún no hay marcas. Busca a la persona y elige lo que expresó.</p>
+        ) : (
+          <ul className="vp-people">
+            {marked.map((r) => (
+              <li key={r.id}>
+                <div className="vp-person">
+                  <p className="vp-person-name">{r.fullName}</p>
+                  <p className="vp-person-meta">{r.mark && TABLE_MARK_LABEL[r.mark]}</p>
+                </div>
+                <button type="button" className="vp-link" onClick={() => dispatch({ type: "table-unmark", table: tableNo, registrationId: r.id })}>
+                  Deshacer
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {adding ? (
+        <section className="vp-card" aria-labelledby="vp-add">
+          <h3 id="vp-add" className="vp-person-name">
+            Llegó sin inscripción
+          </h3>
+          <div className="vp-next">
+            <label>
+              Nombre y apellido
+              <input className="form-input" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            </label>
+            <label>
+              Teléfono
+              <input className="form-input" inputMode="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="9 1234 5678" />
+            </label>
+          </div>
+          <div className="vp-actions">
+            <button
+              type="button"
+              className="button-primary"
+              onClick={() => {
+                dispatch({ type: "table-add", table: tableNo, fullName: newName, phone: newPhone, requestId: `sim-${tableNo}-${newName}-${newPhone}` });
+                setQuery(newName);
+                setAdding(false);
+                setNewName("");
+                setNewPhone("");
+              }}
+            >
+              Agregar a esta mesa
+            </button>
+            <button type="button" className="button-secondary" onClick={() => setAdding(false)}>
+              Cancelar
+            </button>
+          </div>
+        </section>
+      ) : (
+        <button type="button" className="button-secondary vp-cta" onClick={() => setAdding(true)}>
+          Agregar a alguien sin inscripción
+        </button>
+      )}
+      <p className="vp-small">Desde aquí no se ven teléfonos ni la lista completa. Cada marca queda con el número de mesa y la hora.</p>
+    </div>
   );
 }

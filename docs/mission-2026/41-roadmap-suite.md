@@ -37,13 +37,13 @@ Fecha: 03/11/2026. **Esta es la hoja de ruta vigente**; los planes de los docs 1
 |---|---|---|---|
 | H1 | 07/11 | Revisión y CI de #33, #34 y #35; GO de F1 | No se puede publicar nada |
 | H2 | 14/11 | F1 publicada por subfases (Consolidación, Alero, dependencias), smokes y piloto admin | F2 no tiene base viva |
-| H3 | 21/11 | F2 en emulador: backend `outreach*`, permisos 10→14, aislamiento por responsable, matriz de Rules, ensayo 300/15; textos de autorización aprobados | No se abre acceso a los 15 responsables |
+| H3 | 21/11 | F2 en emulador: backend `outreach*`, permisos 10→14, aislamiento por responsable, matriz de Rules, **enlaces por mesa y marcas** (colección de decisiones con su permiso), ensayo 300/35; texto nuevo publicado en el formulario del sitio | No se abre acceso a los 35 encargados ni se marca en mesas |
 | H4 | 25/11 | F2 publicada con GO; importación CSV del sitio con dry-run (en lugar de F3) probada con datos ficticios | El padrón se carga a mano |
-| H5 | 27/11 | Ensayo general con la cuenta piloto; equipo de la edición cargado; cuentas de responsables verificadas (A1) | Riesgo de responsables sin acceso el D+1 |
-| D | 28/11 | Puerta en el sitio; CDS solo lee después del cierre | — |
-| D+1 | 29/11 | Importar asistencia, confirmar ausencias, proponer y confirmar distribución | El primer contacto (D+2) se atrasa |
+| H5 | 27/11 | Ensayo general con la cuenta piloto; 35 mesas con su encargado y su enlace probado; **cuentas de los 35 encargados verificadas** (A1, para Mi lista desde D+1) | Mesas sin enlace (respaldo: hoja por mesa) o encargados sin acceso el D+1 |
+| D | 28/11 | Puerta en el sitio; cada encargado marca en su mesa con su enlace (16:00–02:00) | — |
+| D+1 | 29/11 | Importar asistencia de la puerta, confirmar ausencias, confirmar la distribución por mesa | El primer contacto (D+2) se atrasa |
 
-Si H3 no llega a tiempo: el seguimiento del evento se hace con la exportación del sitio y el grupo interno manual, y CDS entra después sin datos sensibles. F3 (endpoint), F5, F6 y F7 pasan a diciembre.
+Si H3 no llega a tiempo: el seguimiento del evento se hace con la exportación del sitio y el grupo interno manual, y CDS entra después sin datos sensibles. F3 (endpoint automático), F5 (WhatsApp) y F7 (traspaso) se usan después del evento y quedan para diciembre; las marcas de mesa (parte de F6) entran en H3 por decisión del administrador.
 
 ## 3. Dependencias y riesgos
 

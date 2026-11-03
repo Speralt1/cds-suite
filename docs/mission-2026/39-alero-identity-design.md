@@ -101,4 +101,4 @@ Propuesto para fases siguientes (doc 41):
 
 ## 9. Evidencia visual
 
-Capturas con datos ficticios del emulador y la simulación local en [`screens-r39/`](screens-r39/): login escritorio y móvil, Finanzas, Calendario, Ve por los tuyos (panorama, propuesta de distribución, Mi lista móvil, registro de contacto móvil).
+Capturas con datos ficticios del emulador y la simulación local en [`screens-r39/`](screens-r39/): login escritorio y móvil, Finanzas, Calendario, Ve por los tuyos (panorama, propuesta de distribución, Mi lista móvil, registro de contacto móvil, marca en la mesa móvil).

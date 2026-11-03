@@ -4,13 +4,14 @@ Fecha: 03/11/2026. Corrige y amplía doc 38 §7–§8. Estado por pieza: **P** p
 
 | Pieza | Estado |
 |---|---|
-| Núcleo de dominio puro `lib/outreach/*` (edición, asistencia, consentimiento, distribución, sincronización, bandeja, métricas, traspaso) | I · T (119 pruebas) |
+| Núcleo de dominio puro `lib/outreach/*` (edición, asistencia, consentimiento, distribución, sincronización, bandeja, métricas, traspaso) | I · T (154 pruebas) |
 | Espacio de trabajo simulado (Panorama, Distribución, Mi lista) con 300/15 ficticios | I · T (solo local, excluido de la build) |
 | Ruta `/integrantes/ve-por-los-tuyos` en producción | I: muestra «en preparación»; `OUTREACH_FEATURES.enabled = false` |
 | Colecciones `outreach*`, Rules, Functions, índices, permisos `members.outreach.*` | P |
 | Endpoint de lectura en el sitio del evento | P (no existe) |
 | API autenticada del motor de mensajería | P (no existe) |
-| Decisiones voluntarias | P, bloqueado por aprobación |
+| Mesas del evento: enlace por mesa, búsqueda, marca con un toque, llegadas sin inscripción, distribución por mesa (`tables.ts`) | I · T (lógica y simulación) |
+| Decisiones voluntarias | Dirección aprobada por el administrador (03/11); backend P |
 
 Nada está desplegado. Ningún dato real se leyó ni se escribió.
 
@@ -86,6 +87,30 @@ Revisado por Atlas sobre las Rules y Functions reales. Prefijo `outreach*`, edic
 
 Ensayo con 300/15: 240 asistentes → 16 por responsable; repetir la confirmación no cambia nada; ver `tests/outreach/`.
 
+## 6b. Mesas y marca de decisiones (decisión del administrador, 03/11)
+
+Habrá **~35 mesas**, cada una con un encargado que **también hace el seguimiento de su mesa** (~8–9 personas). El permiso se pide **una vez, al solicitar la entrada**; en la mesa solo se confirma con un toque.
+
+**Cómo marca el encargado** (implementado en `tables.ts` y en la vista «Mesa» de la simulación):
+1. Abre el **enlace de su mesa** en el teléfono: sin usuario ni contraseña, válido de D 16:00 a D+1 02:00, revocable por coordinación. El backend guarda solo el hash del token (mismo patrón que el calendario público).
+2. Busca a la persona por el **código de su entrada** o por **≥3 letras del nombre**; nunca ve teléfonos, correos ni el padrón completo.
+3. Toca **«¿Te podemos anotar para acompañarte? · Dijo que sí»** y luego **«Aceptó a Cristo»** o **«Quiere conversar»**. Sin marca = no registrada.
+4. La persona queda en esa mesa, con «Asistió» (está presente) y con la autorización de seguimiento confirmada en la mesa. Puede deshacer sus propias marcas mientras el enlace esté vigente.
+5. Si llegó sin inscripción: nombre y teléfono, y queda en la mesa. Los posibles duplicados van a coordinación; nunca se fusionan.
+6. Si figura en otra mesa, la marca la trae a esta solo con confirmación explícita.
+
+**Después:** la distribución propone a cada persona con el encargado de su mesa («vínculo previo»); quienes no tengan mesa, o cuyo encargado no esté activo, se reparten por equilibrio. Coordinación ve conteos por mesa sin nombres; cada encargado ve solo a su mesa en Mi lista.
+
+**Por qué un enlace y no cuentas para la noche del evento:** hoy 11 de 20 cuentas no han entrado nunca después del alta. Pedir contraseñas a 35 personas esa noche es el punto más frágil. Las cuentas sí hacen falta desde D+1 para Mi lista (hito H5, doc 41). Respaldo si no hay señal: una hoja por mesa que coordinación ingresa después.
+
+**Texto propuesto para el formulario del sitio** (casilla propia, distinta de las condiciones del evento; versión nueva del consentimiento):
+
+> ☐ Autorizo a Casa de Salvación a usar mis datos y los de las personas que invito **solo para este evento y para acompañarnos después** (una llamada o un mensaje de la iglesia). Si durante el evento alguien expresa una decisión de fe, la iglesia podrá anotarla, con su permiso, para acompañarlo. **Estos datos son solo para la iglesia:** no se comparten ni se venden. En cualquier momento puedes pedir que no te contactemos más.
+>
+> ☐ Les conté a mis invitados que la iglesia los podrá contactar después del evento.
+
+En la mesa: «¿Te podemos anotar para acompañarte?». El toque cubre a quien no llenó el formulario (invitados y llegadas sin inscripción) y a quien aceptó la versión anterior del texto. Desde el 01/12 rige la Ley 21.719 y una decisión de fe es un dato sensible: conviene que alguien con criterio legal lea este texto una vez antes de publicarlo. El cambio va en el repositorio del sitio, en una rama aparte, porque un push a su rama de producción despliega.
+
 ## 7. Integración con el sistema de inscripciones (propuesta)
 
 1. **Responsables:** el sitio es dueño de la inscripción pública y la acreditación; CDS es dueño de la operación posterior (§2).
@@ -116,7 +141,9 @@ Propuesta:
 3. Coordinación de responsables: grupo interno manual, creado por una persona, para avisos y conteos; nunca teléfonos, fichas ni decisiones en grupos.
 4. Pruebas: `SimulatedTransport` (aceptado, rechazado, sin respuesta, reenvío con la misma clave) en `tests/outreach/outbox.test.ts`; luego, organización del motor en modo de prueba con números ficticios autorizados; nunca destinatarios reales sin aprobación.
 
-## 9. Decisión voluntaria (propuesta, bloqueada)
+## 9. Decisión voluntaria (dirección aprobada; backend propuesto)
+
+Actualizado el 03/11: el administrador aprobó marcar en la mesa «Aceptó a Cristo» y «Quiere conversar», con el permiso pedido al solicitar la entrada (§6b). Siguen pendientes: quién ve los nombres además del encargado de la mesa y coordinación pastoral, cuánto tiempo se conservan, y si admin las ve de forma implícita. `check:no-preview` sigue prohibiendo los valores en la build hasta que exista el backend con su colección y permiso propios.
 
 - Eje independiente de asistencia, asignación y Consolidación; jamás se deduce de asistir, responder o callar.
 - Valores propuestos: no registrada (sin documento), «Aceptó a Cristo», «Desea conversar», «No por ahora»; solo `declaredBy: la_persona`, con texto de autorización versionado (`parseDecision`).
@@ -126,7 +153,7 @@ Propuesta:
 
 ## 10. Pruebas y simulaciones disponibles
 
-`npx vitest run tests/outreach` (119): modelo, distribución 300/15, sincronización con cortes, bandeja con transporte simulado, métricas con denominadores, traspaso, ensayo general de punta a punta (310 inscripciones con 10 llegadas sin inscripción, 40 ausencias confirmadas, 20 sin confirmar, 15 responsables, 40 bajas, 5 traspasos) y recorrido de la interfaz simulada. Revisar la interfaz localmente:
+`npx vitest run tests/outreach` (154): modelo, distribución 300/15, sincronización con cortes, bandeja con transporte simulado, métricas con denominadores, traspaso, ensayo general de punta a punta (310 inscripciones con 10 llegadas sin inscripción, 40 ausencias confirmadas, 20 sin confirmar, 15 responsables, 40 bajas, 5 traspasos) y recorrido de la interfaz simulada. Revisar la interfaz localmente:
 
 ```bash
 NEXT_PUBLIC_CDS_OUTREACH_SIM=1 npm run dev:platform
