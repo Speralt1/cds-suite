@@ -15,3 +15,14 @@ export const OUTREACH_FEATURES = {
  * la build productiva no contenga el código de la simulación.
  */
 export const OUTREACH_SIM = process.env.NEXT_PUBLIC_CDS_OUTREACH_SIM === "1";
+
+/**
+ * Espacio de trabajo en vivo (callables + Firestore reales). Solo con
+ * NEXT_PUBLIC_CDS_OUTREACH_LIVE=1 (desarrollo/emulador) o con `enabled`
+ * encendido. Sin la variable, next.config lo reemplaza por un módulo vacío.
+ */
+export const OUTREACH_LIVE = process.env.NEXT_PUBLIC_CDS_OUTREACH_LIVE === "1";
+
+/** Único criterio de empaquetado del espacio en vivo: lo leen la página y next.config.ts. */
+export const outreachLiveBundled = (enabled: boolean, live: boolean): boolean => enabled || live;
+export const OUTREACH_LIVE_BUNDLED = outreachLiveBundled(OUTREACH_FEATURES.enabled, OUTREACH_LIVE);
