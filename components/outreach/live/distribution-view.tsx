@@ -23,6 +23,7 @@ const CONFLICT_LABEL: Record<string, string> = {
   no_activa: "ya no está activa",
   responsable_invalido: "el responsable ya no está disponible",
   sin_capacidad: "el responsable llegó a su tope",
+  tope: "Superaría el tope de 20",
 };
 
 export default function DistributionView({ edition }: { edition: api.EditionSummary }) {
@@ -40,9 +41,9 @@ export default function DistributionView({ edition }: { edition: api.EditionSumm
     const p = await act.run(() => api.distributionPropose(edition.id, requestId.current!));
     if (p) setProposal(p);
   };
-  const confirm = async () => {
+  const confirm = async (notes?: { registrationId: string; note: string }[]) => {
     if (!proposal) return;
-    const o = await act.run(() => api.distributionConfirm(edition.id, proposal.batchId));
+    const o = await act.run(() => (notes ? api.distributionConfirm(edition.id, proposal.batchId, notes) : api.distributionConfirm(edition.id, proposal.batchId)));
     if (o) {
       setOutcome(o);
       setProposal(null);
@@ -69,6 +70,17 @@ export default function DistributionView({ edition }: { edition: api.EditionSumm
               {outcome.conflicts.length > 0 && `, ${outcome.conflicts.length} con conflicto y sin cambios`}.
             </Done>
             {outcome.conflicts.length > 0 && <ConflictList conflicts={outcome.conflicts} />}
+            {!closed && outcome.conflicts.some((c) => c.reason === "tope") && (
+              <OverflowNotes
+                key={outcome.batchId}
+                ids={outcome.conflicts.filter((c) => c.reason === "tope").map((c) => c.registrationId)}
+                busy={act.busy}
+                onSubmit={async (notes) => {
+                  const o = await act.run(() => api.distributionConfirm(edition.id, outcome.batchId, notes));
+                  if (o) setOutcome(o);
+                }}
+              />
+            )}
           </>
         )}
         <ol className="vp-steps">
@@ -161,5 +173,30 @@ function ConflictList({ conflicts }: { conflicts: api.BatchOutcome["conflicts"] 
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Excedente justificado: una nota por persona permite superar el tope de 20 (el servidor la exige). */
+function OverflowNotes({ ids, busy, onSubmit }: { ids: string[]; busy: boolean; onSubmit: (notes: { registrationId: string; note: string }[]) => void }) {
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const ready = ids.filter((id) => (notes[id] ?? "").trim());
+  return (
+    <fieldset className="vp-sheet-list">
+      <legend>Justificar el excedente</legend>
+      {ids.map((id, i) => (
+        <label key={id} className="vp-field">
+          <span>Persona {i + 1} sobre el tope: motivo</span>
+          <input type="text" maxLength={200} value={notes[id] ?? ""} onChange={(e) => setNotes({ ...notes, [id]: e.target.value })} />
+        </label>
+      ))}
+      <button
+        type="button"
+        className="button-secondary"
+        disabled={busy || ready.length === 0}
+        onClick={() => onSubmit(ready.map((id) => ({ registrationId: id, note: notes[id].trim() })))}
+      >
+        Confirmar con justificación
+      </button>
+    </fieldset>
   );
 }

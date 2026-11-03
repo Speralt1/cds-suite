@@ -59,3 +59,22 @@ describe("Distribución", () => {
     expect(m.distributionConfirm).not.toHaveBeenCalled();
   });
 });
+
+describe("Distribución · excedente sobre el tope", () => {
+  it("etiqueta «tope» y reenvía el lote con notas de justificación", async () => {
+    const user = userEvent.setup();
+    m.distributionPropose.mockResolvedValue({ batchId: "batch-123456789", assignments: [], unassigned: [], summary: { assignments: 2, unassigned: 0, excluded: {}, loads: { u1: 21 }, caps: { u1: 20 } } });
+    m.distributionConfirm
+      .mockResolvedValueOnce({ batchId: "batch-123456789", applied: 1, alreadyApplied: 0, conflicts: [{ registrationId: "r1", reason: "tope" }] })
+      .mockResolvedValueOnce({ batchId: "batch-123456789", applied: 1, alreadyApplied: 1, conflicts: [] });
+    render(<DistributionView edition={EDITION} />);
+    await user.click(screen.getByRole("button", { name: /Generar propuesta/ }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar distribución" }));
+    expect(await screen.findByLabelText("Conflictos")).toHaveTextContent("Superaría el tope de 20");
+    const send = screen.getByRole("button", { name: "Confirmar con justificación" });
+    expect(send).toBeDisabled();
+    await user.type(screen.getByLabelText(/motivo/), "Es su familiar");
+    await user.click(send);
+    expect(m.distributionConfirm).toHaveBeenLastCalledWith("vplt-2026", "batch-123456789", [{ registrationId: "r1", note: "Es su familiar" }]);
+  });
+});

@@ -539,7 +539,10 @@ const { FieldPath } = require("firebase-admin/firestore");
 const { createOutreachStore } = require("./outreach/firestore-store");
 const { createOutreachService, createOutreachCallableHandler } = require("./outreach/service");
 
-const outreachService = createOutreachService({ store: createOutreachStore({ db, FieldValue, FieldPath }), clock });
+const { createOutreachClock } = require("./outreach/dev-clock");
+
+// Anulación de reloj SOLO bajo el emulador (OUTREACH_DEV_NOW); en producción es el reloj real.
+const outreachService = createOutreachService({ store: createOutreachStore({ db, FieldValue, FieldPath }), clock: createOutreachClock(clock) });
 
 exports.outreachCoordinatorOp = onCall(
   { region: REGION, timeoutSeconds: 20, memory: "256MiB", maxInstances: 5 },

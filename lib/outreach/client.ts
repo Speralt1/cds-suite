@@ -43,6 +43,7 @@ export const OUTREACH_ERROR_TEXT: Readonly<Record<string, string>> = {
   "outreach/payload-too-large": "El archivo es demasiado grande. Divídelo e inténtalo de nuevo.",
   "outreach/not-found": "No encontramos lo que buscabas. Recarga la página.",
   "outreach/conflict": "Alguien cambió esto mientras trabajabas. Recarga para ver el estado actual.",
+  "outreach/conflict:tope": "Superaría el tope de 20. Agrega una nota que lo justifique.",
   "outreach/request-reused": "Esta solicitud ya se usó con otros datos. Vuelve a abrir el formulario.",
   "outreach/edition-closed": "La edición está cerrada: solo se puede consultar.",
   "outreach/invalid-transition": "Ese cambio de etapa ya no es posible. Recarga para ver el estado actual.",
@@ -88,7 +89,9 @@ export function toOutreachError(error: unknown): OutreachApiError {
             : msg === "outreach/edition-closed"
               ? "closed"
               : "other";
-    return new OutreachApiError(msg, kind, OUTREACH_ERROR_TEXT[msg] ?? OUTREACH_UNEXPECTED_TEXT);
+    const details = (error as { details?: { reason?: unknown } } | null)?.details;
+    const text = msg === "outreach/conflict" && details?.reason === "tope" ? OUTREACH_ERROR_TEXT["outreach/conflict:tope"] : OUTREACH_ERROR_TEXT[msg];
+    return new OutreachApiError(msg, kind, text ?? OUTREACH_UNEXPECTED_TEXT);
   }
   if (NETWORK_CODES.has(code) || /network|offline/i.test(msg)) return new OutreachApiError("", "network", OUTREACH_NETWORK_TEXT);
   if (code === "permission-denied" || code === "unauthenticated")
@@ -225,7 +228,7 @@ export interface TeamCandidate {
 }
 export async function teamCandidates(editionId: string): Promise<TeamCandidate[]> {
   const raw = await coord<Raw>("teamCandidates", { editionId });
-  return arr(raw.items).flatMap((i) => {
+  return arr(raw.candidates).flatMap((i) => {
     const uid = s(i.uid);
     return uid ? [{ uid, displayName: s(i.displayName) ?? "Usuario sin nombre" }] : [];
   });
@@ -241,7 +244,7 @@ export interface TableInfo {
 }
 export async function tablesList(editionId: string): Promise<TableInfo[]> {
   const raw = await coord<Raw>("tablesList", { editionId });
-  return arr(raw.items)
+  return arr(raw.tables)
     .map((i) => ({
       number: num(i.number),
       leaderUid: s(i.leaderUid),
@@ -298,8 +301,13 @@ export interface BatchOutcome {
   alreadyApplied: number;
   conflicts: { registrationId: string; reason: string }[];
 }
-export async function distributionConfirm(editionId: string, batchId: string): Promise<BatchOutcome> {
-  const raw = await coord<Raw>("distributionConfirm", { editionId, batchId });
+/** `notes`: justificación de coordinación (≤200 car.) por persona para superar el tope de 20. */
+export async function distributionConfirm(
+  editionId: string,
+  batchId: string,
+  notes?: { registrationId: string; note: string }[],
+): Promise<BatchOutcome> {
+  const raw = await coord<Raw>("distributionConfirm", { editionId, batchId, ...(notes && notes.length ? { notes } : {}) });
   const count = (v: unknown) => (Array.isArray(v) ? v.length : num(v));
   return {
     batchId: s(raw.batchId) ?? batchId,
