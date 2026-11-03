@@ -18,6 +18,7 @@ import {
   tableLinkFromLocation,
   tableListMine,
   tableMark,
+  tableSeat,
   tableSearch,
   tableUnmark,
   type TableLink,
@@ -30,12 +31,13 @@ export const SEARCH_DEBOUNCE_MS = 300;
 type Fatal = "unavailable" | "revoked" | "outside-window";
 type Action =
   | { type: "mark"; requestId: string; row: TableRow; mark: TableMark; moveHere: boolean }
+  | { type: "seat"; requestId: string; row: TableRow; moveHere: boolean }
   | { type: "unmark"; requestId: string; id: string; fullName: string }
   | { type: "add"; requestId: string; fullName: string; phone: string };
-interface Marked {
+interface Seated {
   id: string;
   fullName: string;
-  mark: TableMark;
+  mark: TableMark | null;
 }
 
 export const FATAL_TEXT: Record<Fatal, { title: string; body: string }> = {
@@ -82,7 +84,7 @@ export function PublicTable() {
   const [selected, setSelected] = useState<TableRow | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [moveOk, setMoveOk] = useState(false);
-  const [marked, setMarked] = useState<Marked[]>([]);
+  const [marked, setMarked] = useState<Seated[]>([]);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
@@ -141,7 +143,7 @@ export function PublicTable() {
         setNotice("Demasiadas acciones seguidas. Espera un minuto y reintenta.");
         break;
       case "other-table":
-        if (action?.type === "mark") {
+        if (action?.type === "mark" || action?.type === "seat") {
           setSelected({ ...action.row, tableNumber: e.otherTable ?? action.row.tableNumber });
           setMoveOk(false);
           setNotice(null);
@@ -229,9 +231,14 @@ export function PublicTable() {
           setMarked((list) => [{ id: action.row.id, fullName: action.row.fullName, mark: action.mark }, ...list.filter((m) => m.id !== action.row.id)]);
           resetSelection();
           void loadMarked(link);
+        } else if (action.type === "seat") {
+          await tableSeat(link, { registrationId: action.row.id, moveHere: action.moveHere, requestId: action.requestId });
+          setMarked((list) => [...list.filter((m) => m.id !== action.row.id), { id: action.row.id, fullName: action.row.fullName, mark: null }].sort((a, b) => a.fullName.localeCompare(b.fullName)));
+          resetSelection();
+          void loadMarked(link);
         } else if (action.type === "unmark") {
           await tableUnmark(link, { registrationId: action.id, requestId: action.requestId });
-          setMarked((list) => list.filter((m) => m.id !== action.id));
+          setMarked((list) => list.map((m) => (m.id === action.id ? { ...m, mark: null } : m)));
           void loadMarked(link);
         } else {
           const out = await tableAddWalkIn(link, { fullName: action.fullName, phone: action.phone, requestId: action.requestId });
@@ -239,7 +246,7 @@ export function PublicTable() {
           setNewName("");
           setNewPhone("");
           if (out.row) pick(out.row);
-          setNotice(`${action.fullName} quedó agregada a esta mesa. Ahora puedes marcarla.`);
+          setNotice(`${action.fullName} quedó agregada a esta mesa. Ahora puedes marcar lo que expresó.`);
         }
         setPending(null);
       } catch (e) {
@@ -309,7 +316,7 @@ export function PublicTable() {
       )}
 
       <label className="pt-search">
-        <span>Busca por el código de la entrada o por el nombre</span>
+        <span>Busca por nombre o apellido</span>
         <input
           className="pt-input"
           value={query}
@@ -317,7 +324,7 @@ export function PublicTable() {
             setQuery(e.target.value);
             setSelected(null);
           }}
-          placeholder="VP042 o «Marta Ro…»"
+          placeholder="Marta Ro…"
           autoComplete="off"
           inputMode="search"
           aria-label="Buscar persona"
@@ -329,7 +336,7 @@ export function PublicTable() {
         </p>
       )}
       {shown && !searching && searched && results.length === 0 && (
-        <p className="pt-small">Sin resultados. Escribe al menos 3 letras o el código completo.</p>
+        <p className="pt-small">Sin resultados. Escribe al menos 3 letras del nombre o apellido.</p>
       )}
       {shown && results.length > 0 && !selected && (
         <ul className="pt-people" aria-label="Resultados">
@@ -366,7 +373,7 @@ export function PublicTable() {
             </div>
           )}
           <label className={`pt-agree${agreed ? " is-on" : ""}`}>
-            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+            <input type="checkbox" checked={agreed} aria-label="¿Te podemos anotar para acompañarte? · Dijo que sí" onChange={(e) => setAgreed(e.target.checked)} />
             ¿Te podemos anotar para acompañarte? · Dijo que sí
           </label>
           <div className="pt-actions">
@@ -382,6 +389,14 @@ export function PublicTable() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="pt-btn pt-btn-secondary"
+            disabled={(other && !moveOk) || busy}
+            onClick={() => run({ type: "seat", requestId: newRequestId(), row: selected, moveHere: !!other })}
+          >
+            Está en mi mesa (sin decisión)
+          </button>
           <button type="button" className="pt-link" onClick={() => setSelected(null)}>
             Cancelar
           </button>
@@ -390,27 +405,29 @@ export function PublicTable() {
 
       <section aria-labelledby="pt-marked">
         <h2 id="pt-marked" className="pt-group">
-          Marcadas en esta mesa <span>{marked.length}</span>
+          En esta mesa {link.table} <span>{marked.length}</span>
         </h2>
         {marked.length === 0 ? (
-          <p className="pt-small">Aún no hay marcas. Busca a la persona y elige lo que expresó.</p>
+          <p className="pt-small">Aún no hay nadie anotado. Busca a cada persona de tu mesa y toca «Está en mi mesa»; si expresó algo, elige además su decisión.</p>
         ) : (
           <ul className="pt-people">
             {marked.map((m) => (
               <li key={m.id}>
                 <div>
                   <p className="pt-name">{m.fullName}</p>
-                  <p className="pt-meta">{TABLE_MARK_LABEL[m.mark]}</p>
+                  <p className="pt-meta">{m.mark ? TABLE_MARK_LABEL[m.mark] : "Sin marca"}</p>
                 </div>
-                <button
-                  type="button"
-                  className="pt-link"
-                  disabled={busy}
-                  aria-label={`Deshacer marca de ${m.fullName}`}
-                  onClick={() => run({ type: "unmark", requestId: newRequestId(), id: m.id, fullName: m.fullName })}
-                >
-                  Deshacer
-                </button>
+                {m.mark && (
+                  <button
+                    type="button"
+                    className="pt-link"
+                    disabled={busy}
+                    aria-label={`Deshacer marca de ${m.fullName}`}
+                    onClick={() => run({ type: "unmark", requestId: newRequestId(), id: m.id, fullName: m.fullName })}
+                  >
+                    Deshacer
+                  </button>
+                )}
               </li>
             ))}
           </ul>

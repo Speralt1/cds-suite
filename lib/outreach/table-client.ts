@@ -93,10 +93,11 @@ export interface TableWindow {
   closesAt: string;
 }
 
-export interface MarkedRow {
+/** Una persona sentada en esta mesa; `mark` es null si no expresó decisión. */
+export interface SeatedRow {
   id: string;
   fullName: string;
-  mark: TableMark;
+  mark: TableMark | null;
 }
 
 function toWindow(v: unknown): TableWindow | undefined {
@@ -181,6 +182,15 @@ export async function tableMark(
   await call(link, "mark", input, options);
 }
 
+/** «Está en mi mesa»: la sienta sin decisión (el permiso viene del sitio). */
+export async function tableSeat(
+  link: TableLink,
+  input: { registrationId: string; moveHere: boolean; requestId: string },
+  options: TableOpOptions = {},
+): Promise<void> {
+  await call(link, "seat", input, options);
+}
+
 export async function tableUnmark(
   link: TableLink,
   input: { registrationId: string; requestId: string },
@@ -198,14 +208,14 @@ export async function tableAddWalkIn(
   return { row: out && out.row ? out.row : null };
 }
 
-/** «Marcadas en esta mesa»: lo que ya quedó registrado, para no perderlo al recargar. */
-export async function tableListMine(link: TableLink, options: TableOpOptions = {}): Promise<{ items: MarkedRow[]; window: TableWindow | null }> {
+/** «En esta mesa N»: todos los sentados, con su marca o sin ella, para no perderlos al recargar. */
+export async function tableListMine(link: TableLink, options: TableOpOptions = {}): Promise<{ items: SeatedRow[]; window: TableWindow | null }> {
   const out = (await call(link, "listMine", {}, options)) as { items?: unknown; window?: unknown };
   if (!out || !Array.isArray(out.items)) throw new TableOpError("server");
-  const items = (out.items as Partial<MarkedRow>[]).flatMap((i) =>
-    typeof i.id === "string" && typeof i.fullName === "string" && (TABLE_MARKS as readonly string[]).includes(i.mark as string)
-      ? [{ id: i.id, fullName: i.fullName, mark: i.mark as TableMark }]
-      : [],
-  );
+  const items = (out.items as Partial<SeatedRow>[]).flatMap((i) => {
+    if (typeof i.id !== "string" || typeof i.fullName !== "string") return [];
+    if (i.mark == null) return [{ id: i.id, fullName: i.fullName, mark: null }];
+    return (TABLE_MARKS as readonly string[]).includes(i.mark) ? [{ id: i.id, fullName: i.fullName, mark: i.mark }] : [];
+  });
   return { items, window: toWindow(out.window) ?? null };
 }

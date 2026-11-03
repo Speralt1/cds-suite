@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/outreach/table-client", async (orig) => {
   const actual = await orig<typeof import("@/lib/outreach/table-client")>();
-  return { ...actual, tableSearch: vi.fn(), tableMark: vi.fn(), tableUnmark: vi.fn(), tableAddWalkIn: vi.fn(), tableListMine: vi.fn() };
+  return { ...actual, tableSearch: vi.fn(), tableMark: vi.fn(), tableUnmark: vi.fn(), tableSeat: vi.fn(), tableAddWalkIn: vi.fn(), tableListMine: vi.fn() };
 });
 
 import * as client from "@/lib/outreach/table-client";
@@ -29,14 +29,17 @@ async function search(text: string) {
 beforeEach(() => {
   window.sessionStorage.clear();
   api.tableSearch.mockResolvedValue([ROW]);
-  const store: { id: string; fullName: string; mark: "acepto_a_cristo" | "desea_conversar" }[] = [];
+  const store: { id: string; fullName: string; mark: "acepto_a_cristo" | "desea_conversar" | null }[] = [];
   api.tableListMine.mockImplementation(async () => ({ items: [...store], window: null }));
   api.tableMark.mockImplementation(async (_l, i) => {
     store.push({ id: i.registrationId, fullName: i.registrationId === "reg1" ? "Marta Rojas" : "Luis Pérez", mark: i.mark });
   });
+  api.tableSeat.mockImplementation(async (_l, i) => {
+    store.push({ id: i.registrationId, fullName: i.registrationId === "reg1" ? "Marta Rojas" : "Luis Pérez", mark: null });
+  });
   api.tableUnmark.mockImplementation(async (_l, i) => {
     const k = store.findIndex((s) => s.id === i.registrationId);
-    if (k >= 0) store.splice(k, 1);
+    if (k >= 0) store[k].mark = null;
   });
   api.tableAddWalkIn.mockResolvedValue({ row: { id: "new1", fullName: "Ana Soto", tableNumber: 12, mark: null } });
 });
@@ -122,7 +125,29 @@ describe("PublicTable", () => {
     expect(await screen.findByText("Aceptó a Cristo")).toBeInTheDocument();
   });
 
-  it("deshacer una marca la quita de la lista", async () => {
+  it("«Está en mi mesa» no exige el checkbox, no marca y deja a la persona en «En esta mesa N»", async () => {
+    open();
+    await search("marta");
+    fireEvent.click(await screen.findByRole("button", { name: "Elegir" }));
+    const box = screen.getByRole("checkbox", { name: "¿Te podemos anotar para acompañarte? · Dijo que sí" });
+    expect(box).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Está en mi mesa (sin decisión)" }));
+    await waitFor(() => expect(api.tableSeat).toHaveBeenCalledTimes(1));
+    expect(api.tableSeat.mock.calls[0][1]).toMatchObject({ registrationId: "reg1", moveHere: false });
+    expect(api.tableMark).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: /En esta mesa 12/ })).toBeInTheDocument();
+    expect(await screen.findByText("Sin marca")).toBeInTheDocument();
+  });
+
+  it("la búsqueda se anuncia solo por nombre", async () => {
+    open();
+    const input = await screen.findByLabelText("Buscar persona");
+    expect(input).toHaveAttribute("placeholder", "Marta Ro…");
+    expect(screen.getByText("Busca por nombre o apellido")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/código/i);
+  });
+
+  it("deshacer una marca deja a la persona en la lista como «Sin marca»", async () => {
     open();
     await search("marta");
     fireEvent.click(await screen.findByRole("button", { name: "Elegir" }));
@@ -131,7 +156,21 @@ describe("PublicTable", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Deshacer marca de Marta/ }));
     await waitFor(() => expect(api.tableUnmark).toHaveBeenCalledTimes(1));
     expect(api.tableUnmark.mock.calls[0][1]).toMatchObject({ registrationId: "reg1" });
-    await screen.findByText(/Aún no hay marcas/);
+    expect(await screen.findByText("Sin marca")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Deshacer marca/ })).toBeNull();
+  });
+
+  it("otra mesa: «Está en mi mesa» también pide confirmar y envía moveHere", async () => {
+    api.tableSearch.mockResolvedValue([OTHER]);
+    open();
+    await search("luis");
+    fireEvent.click(await screen.findByRole("button", { name: "Elegir" }));
+    const seat = screen.getByRole("button", { name: "Está en mi mesa (sin decisión)" });
+    expect(seat).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Sí, está aquí" }));
+    fireEvent.click(seat);
+    await waitFor(() => expect(api.tableSeat).toHaveBeenCalled());
+    expect(api.tableSeat.mock.calls[0][1]).toMatchObject({ registrationId: "reg2", moveHere: true });
   });
 
   it("otra mesa: pide confirmar y envía moveHere", async () => {
@@ -205,7 +244,7 @@ describe("PublicTable", () => {
     expect(alert).toHaveTextContent("Abre 28-11-2026 a las 16:00 y vence 29-11-2026 a las 02:00.");
   });
 
-  it("carga «Marcadas en esta mesa» al abrir y la refresca tras marcar", async () => {
+  it("carga «En esta mesa» al abrir y la refresca tras marcar", async () => {
     api.tableListMine.mockResolvedValueOnce({ items: [{ id: "x1", fullName: "Rosa Díaz", mark: "desea_conversar" }], window: null });
     open();
     expect(await screen.findByText("Rosa Díaz")).toBeInTheDocument();
@@ -220,10 +259,10 @@ describe("PublicTable", () => {
 
   it("tableListMine envía la operación listMine y descarta ítems mal formados", async () => {
     const actual = await vi.importActual<typeof import("@/lib/outreach/table-client")>("@/lib/outreach/table-client");
-    const f = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ result: { items: [{ id: "a", fullName: "Ana", mark: "desea_conversar" }, { id: 1 }], window: { opensAt: "a", closesAt: "b" } } }) });
+    const f = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ result: { items: [{ id: "a", fullName: "Ana", mark: "desea_conversar" }, { id: "b", fullName: "Beto", mark: null }, { id: "c", fullName: "Cata", mark: "xx" }, { id: 1 }], window: { opensAt: "a", closesAt: "b" } } }) });
     const out = await actual.tableListMine({ editionId: "e", table: 1, token: TOKEN }, { fetch: f, env: {} });
     expect(JSON.parse(f.mock.calls[0][1].body).data.op).toBe("listMine");
-    expect(out.items).toEqual([{ id: "a", fullName: "Ana", mark: "desea_conversar" }]);
+    expect(out.items).toEqual([{ id: "a", fullName: "Ana", mark: "desea_conversar" }, { id: "b", fullName: "Beto", mark: null }]);
     expect(out.window).toEqual({ opensAt: "a", closesAt: "b" });
   });
 });
