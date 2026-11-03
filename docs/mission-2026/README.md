@@ -12,6 +12,10 @@ Inicio: 2026-09-22. Coordinador con el AI Development Team (Navigator, Atlas, De
 | [08-designer-ux-audit-design-lock.md](08-designer-ux-audit-design-lock.md) | UX audit, Reference Matrix, Experiencia 2026, Design Lock (borrador) |
 | [10-implementation-plan.md](10-implementation-plan.md) | Arquitectura, slices, test matrix, checklist de deploy, checkpoints |
 | [11-human-decisions.md](11-human-decisions.md) | Gates y preguntas para decidir |
+| [38-project-review-event-20261103.md](38-project-review-event-20261103.md) | Estado verificado al 03/11 y primer planteamiento del evento |
+| [39-alero-identity-design.md](39-alero-identity-design.md) | Alero: nombre, logo, color, tipografía, navegación y Design Lock |
+| [40-ve-por-los-tuyos-strategy.md](40-ve-por-los-tuyos-strategy.md) | Submódulo anual, integración con inscripciones y con mensajería |
+| [41-roadmap-suite.md](41-roadmap-suite.md) | **Hoja de ruta única vigente** de la suite |
 
 ## Hallazgos clave
 

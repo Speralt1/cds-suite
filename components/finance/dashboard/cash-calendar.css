@@ -138,7 +138,7 @@
 }
 .fin-cal-legend-sample.is-empty {
   border-style: dashed;
-  border-color: #98a39b;
+  border-color: #9a8f82;
   background: var(--color-canvas);
   color: var(--color-muted-strong);
 }
@@ -225,7 +225,7 @@
     border-color 120ms;
 }
 .fin-cal-cell:hover {
-  border-color: #b9c4b8;
+  border-color: #cfc6b8;
 }
 /* Con el gap de 0,25rem el offset global de 4px quedaría bajo la celda vecina. */
 .fin-cal-cell:focus-visible {
@@ -320,7 +320,7 @@
 }
 .fin-cal-cell.has-empty {
   border-style: dashed;
-  border-color: #98a39b;
+  border-color: #9a8f82;
   background: var(--color-canvas);
   color: var(--color-muted-strong);
 }
@@ -499,7 +499,7 @@
   outline: none;
 }
 .fin-day-title:focus-visible {
-  outline: 3px solid #7b9d56;
+  outline: 3px solid #a8432a;
   outline-offset: 4px;
 }
 .fin-day-today {

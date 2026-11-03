@@ -53,6 +53,7 @@ import {
   useTextSize,
 } from "@/lib/ui/preferences";
 import type { ModuleId } from "@/lib/shared/types";
+import { AleroMark } from "./alero-mark";
 import { NavDrawer } from "./nav-drawer";
 import { NoModulesScreen } from "./no-modules";
 import { NoticeProvider, NoticeRegion } from "./notice";
@@ -90,15 +91,15 @@ export function SuiteBrand({ compact = false }: { compact?: boolean }) {
   return (
     <Link
       href="/inicio"
-      aria-label="Casa de Salvación · CDS Suite"
+      aria-label="Alero · Casa de Salvación"
       className={`app-brand${compact ? " is-compact" : ""}`}
     >
       <span className="app-brand-mark" aria-hidden="true">
-        CS
+        <AleroMark />
       </span>
       <span className="app-brand-text" aria-hidden="true">
-        <span className="app-brand-name">Casa de Salvación</span>
-        <span className="app-brand-sub">CDS Suite</span>
+        <span className="app-brand-name">Alero</span>
+        <span className="app-brand-sub">Casa de Salvación</span>
       </span>
     </Link>
   );
@@ -193,7 +194,7 @@ function ShellFrame({ children, modules, activeModule, account }: FrameProps) {
     if (wide) setDrawerPath(null);
   }
   const drawerOpen = drawerPath === pathname && !wide;
-  const activeLabel = modules.find((m) => m.id === activeModule)?.label ?? "CDS Suite";
+  const activeLabel = modules.find((m) => m.id === activeModule)?.label ?? "Alero";
   const collapsed = sidebar === "collapsed";
 
   // El script previo al pintado ya fijó los atributos; se re-aplican antes de

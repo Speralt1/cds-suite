@@ -48,8 +48,8 @@
   transition: border-color 150ms, background-color 150ms;
 }
 .cal-rep-hub-card:hover {
-  border-color: #c9d6c9;
-  background: #fbfcfa;
+  border-color: #d6cdbf;
+  background: #fbf8f3;
 }
 .cal-rep-hub-icon {
   display: grid;
@@ -288,8 +288,8 @@
   gap: 4px;
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
-  background: #eef0ee;
-  color: #4d5a52;
+  background: #eee9e1;
+  color: #4a423b;
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
@@ -311,7 +311,7 @@
 .cal-rep-table th {
   padding: 0.625rem 0.75rem;
   border-bottom: 1px solid var(--color-line);
-  background: #fbfbf9;
+  background: #fbf8f3;
   color: var(--color-muted);
   font-size: 0.75rem;
   font-weight: 600;
@@ -461,7 +461,7 @@ tr.is-cancelled .cal-rep-title-text,
 .cal-rep-skel {
   height: 44px;
   border-radius: 8px;
-  background: linear-gradient(90deg, #eef1ec 0%, #f6f7f4 50%, #eef1ec 100%);
+  background: linear-gradient(90deg, #eee9e1 0%, #f3efe8 50%, #eee9e1 100%);
   background-size: 200% 100%;
   animation: cal-rep-shimmer 1.4s ease-in-out infinite;
 }

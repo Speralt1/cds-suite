@@ -10,26 +10,26 @@
 /* ---------- Tokens ---------- */
 .cds-members {
   --mem-surface: #ffffff;
-  --mem-surface-2: #f6f8f4;
+  --mem-surface-2: #f3efe8;
   --mem-ink: var(--color-ink);
-  --mem-ink-strong: #14231d;
-  --mem-muted: #5f6d65;
+  --mem-ink-strong: #1c1916;
+  --mem-muted: #5e554c;
   --mem-line: var(--color-line);
-  --mem-control-border: #7f8c84;
+  --mem-control-border: #7a6f63;
   --mem-primary: var(--color-primary);
   --mem-primary-soft: var(--color-primary-soft);
-  --mem-success: #1f6b45;
-  --mem-success-bg: #e3f1e8;
+  --mem-success: #1e7a4c;
+  --mem-success-bg: #e6f2ea;
   --mem-warning: #8a5a00;
   --mem-warning-bg: #fbf0d9;
   --mem-danger: var(--color-danger);
-  --mem-danger-bg: #fff0ed;
-  --mem-info: var(--color-info, #245a86);
-  --mem-info-bg: var(--color-info-soft, #e5eef6);
+  --mem-danger-bg: #fbe8ec;
+  --mem-info: var(--color-info, #3f5b78);
+  --mem-info-bg: var(--color-info-soft, #e8eef4);
   --mem-review: #9a4a12;
   --mem-review-bg: #fbeadc;
-  --mem-neutral: #4a5750;
-  --mem-neutral-bg: #eef0ec;
+  --mem-neutral: #4a423b;
+  --mem-neutral-bg: #eee9e1;
   --mem-radius: 12px;
   font-size: 14px;
   line-height: 20px;
@@ -479,7 +479,7 @@
 .cds-members .cal-skeleton {
   display: block;
   border-radius: 6px;
-  background: linear-gradient(90deg, #eef0ec 0%, #f6f8f4 50%, #eef0ec 100%);
+  background: linear-gradient(90deg, #eee9e1 0%, #f3efe8 50%, #eee9e1 100%);
   background-size: 200% 100%;
   animation: mem-shimmer 1.2s linear infinite;
 }
@@ -1283,7 +1283,7 @@
 .cds-members .mem-suggest {
   margin-top: 16px;
   padding: 12px 14px;
-  border: 1px solid #cfe0d3;
+  border: 1px solid #c5e0cf;
   border-radius: 10px;
   background: var(--mem-primary-soft);
 }
@@ -1692,7 +1692,7 @@
 .cds-members .mem-dup {
   margin-top: 12px;
   padding: 12px 14px;
-  border: 1px solid #ecd9ae;
+  border: 1px solid #ebd49c;
   border-radius: 10px;
   background: var(--mem-warning-bg);
 }

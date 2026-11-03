@@ -348,7 +348,7 @@ describe("cajón: animación de salida y cambios de breakpoint", () => {
 describe("CSS del shell (revisión Atlas)", () => {
   const css = fs.readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
   it("anillo de foco normal en las superficies claras de la barra; hacia adentro en el rail", () => {
-    expect(css).toMatch(/\.app-topbar :is\(\.text-size-popover, dialog\) :focus-visible \{\s*outline-color: #7b9d56;/);
+    expect(css).toMatch(/\.app-topbar :is\(\.text-size-popover, dialog\) :focus-visible \{\s*outline-color: #a8432a;/);
     expect(css).toMatch(/\.app-sidebar :focus-visible \{[^}]*outline-offset: -3px;/);
   });
   it("enlaces del sidebar expandido ≥44px; KPIs de Reportes refluyen al 110–125 %; backdrop sin movimiento", () => {

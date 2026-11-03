@@ -20,27 +20,27 @@ import { useRemPx } from "@/lib/ui/preferences";
 import { combineSummaries, evolution } from "@/lib/finance/calculations";
 import type { MonthlySummary, PeriodSelection } from "@/lib/finance/types";
 const colors = [
-  "#285b45",
-  "#7b9866",
-  "#b2bd97",
-  "#60746b",
+  "#1f1b17",
+  "#8f8478",
+  "#c9bfb1",
+  "#7a6f63",
   "#ad9373",
-  "#d2d8cb",
+  "#d6cdbf",
 ];
 // Serie colors from the Design Lock tokens (28 §B: --color-chart-income,
 // --color-chart-expense, --color-chart-result). Recharts needs literal
 // values for SVG attributes, so they are mirrored here with the same hex.
 const SERIES = {
-  income: "#285b45",
-  expense: "#c0694c",
-  result: "#60746b",
+  income: "#1f1b17",
+  expense: "#c26b80",
+  result: "#7a6f63",
 } as const;
 // Value labels are text: they use the AA text tokens (--color-income
-// #256b47, --color-expense #a4482f), not the bar fills (#c0694c is 3.91:1).
+// #1e7a4c, --color-expense #9e3b55), not the bar fills (#c26b80 is 3.91:1).
 // Their font size comes from CSS (B1: .chart-box .recharts-label-list text).
 const LABEL_INK = {
-  income: "#256b47",
-  expense: "#a4482f",
+  income: "#1e7a4c",
+  expense: "#9e3b55",
 } as const;
 // Legend order is Ingresos, Gastos, Resultado (Recharts sorts by name by
 // default, which put Gastos first).
@@ -86,7 +86,7 @@ export function EvolutionChart({
           data={data}
           margin={{ top: 12, right: 10, left: 0, bottom: 0 }}
         >
-          <CartesianGrid vertical={false} stroke="#e2e7df" />
+          <CartesianGrid vertical={false} stroke="#e3dcd1" />
           <XAxis dataKey="label" className="chart-axis-compact" minTickGap={15} />
           <YAxis tickFormatter={axis} width={yAxisWidth} />
           <Tooltip formatter={tooltip} />
@@ -208,7 +208,7 @@ export function FinanceCharts({
                 },
               ]}
             >
-              <CartesianGrid vertical={false} stroke="#e2e7df" />
+              <CartesianGrid vertical={false} stroke="#e3dcd1" />
               <XAxis dataKey="label" />
               <YAxis width={yAxisWidth} tickFormatter={axis} />
               <Tooltip formatter={tooltip} />

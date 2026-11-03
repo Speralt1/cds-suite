@@ -69,7 +69,7 @@ export function Switch({
       <span
         aria-hidden="true"
         className={`relative inline-block h-6 w-10 rounded-full border transition-colors motion-reduce:transition-none ${
-          checked ? "border-primary bg-primary" : "border-[#cbd4ca] bg-[#e7ece5]"
+          checked ? "border-primary bg-primary" : "border-[#c9bfb1] bg-[#e8e1d6]"
         }`}
       >
         <span
@@ -85,7 +85,7 @@ export function Switch({
 /** Aviso en tono advertencia: siempre ícono + texto visible. */
 export function WarningNote({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
-    <p id={id} className="flex items-start gap-2 rounded-[10px] bg-warning-soft px-3 py-2.5 text-[0.8125rem] leading-5 text-[#6f4c14]">
+    <p id={id} className="flex items-start gap-2 rounded-[10px] bg-warning-soft px-3 py-2.5 text-[0.8125rem] leading-5 text-[#6e4800]">
       <TriangleAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>{children}</span>
     </p>
@@ -104,7 +104,7 @@ export function InfoNote({ children, id }: { children: React.ReactNode; id?: str
 /** Insignia corta de aviso (lista): ícono + texto, nunca solo el ícono. */
 export function WarningBadge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[0.6875rem] font-medium text-[#6f4c14]">
+    <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[0.6875rem] font-medium text-[#6e4800]">
       <TriangleAlert size={12} aria-hidden="true" />
       {children}
     </span>

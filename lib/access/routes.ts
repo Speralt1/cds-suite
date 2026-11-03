@@ -124,6 +124,7 @@ export const PRIVATE_ROUTES: readonly string[] = [
   "/integrantes/consolidacion/personas",
   "/integrantes/consolidacion/nueva",
   "/integrantes/consolidacion/persona",
+  "/integrantes/ve-por-los-tuyos",
   "/reportes",
   "/reportes/calendario",
   "/configuracion",

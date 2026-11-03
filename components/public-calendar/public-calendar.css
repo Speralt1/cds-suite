@@ -183,7 +183,7 @@
   min-height: 40px;
   max-width: 280px;
   padding: 0 14px;
-  border: 1px solid #cbd4ca;
+  border: 1px solid #c9bfb1;
   border-radius: 999px;
   background: white;
   font-size: 14px;
@@ -301,7 +301,7 @@
   text-align: left;
 }
 .pub-agenda-row:hover {
-  background: #fbfbf9;
+  background: #fbf8f3;
 }
 .pub-agenda-row:focus-visible {
   outline-offset: -3px;
@@ -360,8 +360,8 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #eef0ee;
-  color: #4d5a52;
+  background: #eee9e1;
+  color: #4a423b;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -401,7 +401,7 @@
 .pub-skel {
   height: 56px;
   border-radius: 10px;
-  background: linear-gradient(90deg, #eef1ec 0%, #f6f7f4 50%, #eef1ec 100%);
+  background: linear-gradient(90deg, #eee9e1 0%, #f3efe8 50%, #eee9e1 100%);
   background-size: 200% 100%;
   animation: pub-shimmer 1.4s ease-in-out infinite;
 }
@@ -474,7 +474,7 @@
   text-align: left;
 }
 .pub-day:hover {
-  background: #fbfbf9;
+  background: #fbf8f3;
 }
 .pub-day-num {
   display: grid;
@@ -523,7 +523,7 @@
   white-space: nowrap;
 }
 .pub-day-ev.is-cancelled {
-  background: #f1f2ef;
+  background: #efe9e0;
   color: var(--color-muted);
   text-decoration: line-through;
 }
@@ -618,8 +618,8 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #eef0ee;
-  color: #4d5a52;
+  background: #eee9e1;
+  color: #4a423b;
   font-size: 13px;
   line-height: 18px;
 }

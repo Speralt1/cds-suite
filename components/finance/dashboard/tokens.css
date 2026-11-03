@@ -11,22 +11,22 @@
 .fin-cal-skeleton,
 .fin-day-panel,
 .fin-day-dialog {
-  --color-income: #256b47;
-  --color-income-soft: #e8f2ec;
-  --color-expense: #a4482f;
-  --color-expense-soft: #f8ece6;
-  --color-chart-income: #285b45;
-  --color-chart-expense: #c0694c;
-  --color-chart-result: #60746b;
-  --color-result-ink: #233c33;
-  --color-result-surface: #f0ece2;
-  --color-result-line: #ddd5c3;
-  --color-warning: #9a6a1f;
-  --color-warning-ink: #7a5216;
-  --color-warning-soft: #fbf1de;
-  --color-info: #245a86;
-  --color-info-soft: #e5eef6;
-  --color-muted-strong: #5f6d65;
+  --color-income: #1e7a4c;
+  --color-income-soft: #e6f2ea;
+  --color-expense: #9e3b55;
+  --color-expense-soft: #f8e8ec;
+  --color-chart-income: #1f1b17;
+  --color-chart-expense: #c26b80;
+  --color-chart-result: #7a6f63;
+  --color-result-ink: #1f1b17;
+  --color-result-surface: #f1ebe1;
+  --color-result-line: #ddd3c4;
+  --color-warning: #8a5a00;
+  --color-warning-ink: #6e4800;
+  --color-warning-soft: #fbf0d9;
+  --color-info: #3f5b78;
+  --color-info-soft: #e8eef4;
+  --color-muted-strong: #5e554c;
   --tap-min: 2.75rem;
   --tap-touch: 3rem;
 }
@@ -35,7 +35,7 @@
 .fin-skeleton {
   display: block;
   border-radius: 6px;
-  background: #e9ede6;
+  background: #e8e1d6;
   animation: fin-skeleton-pulse 1.4s ease-in-out infinite;
 }
 @keyframes fin-skeleton-pulse {

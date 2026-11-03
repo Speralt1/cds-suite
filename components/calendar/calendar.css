@@ -7,18 +7,18 @@
 /* ---------- Tokens y primitivas ---------- */
 .cds-calendar {
   --cal-surface: #ffffff;
-  --cal-surface-2: #f6f8f4;
-  --cal-ink-strong: #14231d;
-  --cal-danger-bg: #fff0ed;
-  --cal-neutral: #4a5750;
-  --cal-neutral-bg: #eef0ec;
-  --cal-control-border: #7f8c84;
-  --cal-success: #1f6b45;
-  --cal-success-bg: #e3f1e8;
+  --cal-surface-2: #f3efe8;
+  --cal-ink-strong: #1c1916;
+  --cal-danger-bg: #fbe8ec;
+  --cal-neutral: #4a423b;
+  --cal-neutral-bg: #eee9e1;
+  --cal-control-border: #7a6f63;
+  --cal-success: #1e7a4c;
+  --cal-success-bg: #e6f2ea;
   --cal-warning: #8a5a00;
   --cal-warning-bg: #fbf0d9;
-  --cal-info: var(--color-info, #245a86);
-  --cal-info-bg: var(--color-info-soft, #e5eef6);
+  --cal-info: var(--color-info, #3f5b78);
+  --cal-info-bg: var(--color-info-soft, #e8eef4);
   --cal-radius: 12px;
   font-size: 0.875rem;
   line-height: 1.25rem;
@@ -271,7 +271,7 @@
 .cds-calendar .cal-skeleton {
   display: block;
   border-radius: 6px;
-  background: linear-gradient(90deg, #eef0ec 0%, #f6f8f4 50%, #eef0ec 100%);
+  background: linear-gradient(90deg, #eee9e1 0%, #f3efe8 50%, #eee9e1 100%);
   background-size: 200% 100%;
   animation: cal-shimmer 1.2s linear infinite;
 }
@@ -739,7 +739,7 @@
   height: 20px;
   margin: 0;
   border-radius: 999px;
-  background: #b9c2bb;
+  background: #cfc6b8;
   cursor: pointer;
   transition: background-color 120ms linear;
 }
@@ -1729,8 +1729,8 @@
 .cds-calendar .cal-lock-help {
   padding: 0.5rem 0.625rem;
   border-radius: 8px;
-  background: var(--color-info-soft, #e5eef6);
-  color: var(--color-info, #245a86);
+  background: var(--color-info-soft, #e8eef4);
+  color: var(--color-info, #3f5b78);
 }
 .cds-calendar .cal-fixed-area {
   display: inline-flex;

@@ -6,7 +6,7 @@
 }
 
 .panel {
-  border: 1px solid var(--color-line, #e2e7df);
+  border: 1px solid var(--color-line, #e3dcd1);
   border-radius: 14px;
   background: #fff;
   padding: 18px;
@@ -20,14 +20,14 @@
   font-size: 16px;
   line-height: 24px;
   font-weight: 600;
-  color: var(--color-ink, #233c33);
+  color: var(--color-ink, #1f1b17);
 }
 
 .lead {
   margin-top: 4px;
   font-size: 13px;
   line-height: 20px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .summary {
@@ -39,7 +39,7 @@
 
 .summary dt {
   font-size: 12px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .summary dd {
@@ -74,7 +74,7 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-ink, #233c33);
+  color: var(--color-ink, #1f1b17);
 }
 
 .field input,
@@ -83,11 +83,11 @@
   width: 100%;
   min-width: 0;
   min-height: 44px;
-  border: 1px solid #cbd4ca;
+  border: 1px solid #c9bfb1;
   border-radius: 9px;
   background: #fff;
   padding: 10px 12px;
-  color: var(--color-ink, #233c33);
+  color: var(--color-ink, #1f1b17);
   font-size: 16px;
   font-weight: 400;
 }
@@ -99,7 +99,7 @@
 .field input:focus-visible,
 .field select:focus-visible,
 .field textarea:focus-visible {
-  outline: 2px solid var(--color-primary, #285b45);
+  outline: 2px solid var(--color-primary, #1f1b17);
   outline-offset: 1px;
 }
 
@@ -107,7 +107,7 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 18px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .check {
@@ -157,9 +157,9 @@
 
 .confirm {
   margin-top: 16px;
-  border: 1px solid var(--color-warning, #9a6a1f);
+  border: 1px solid var(--color-warning, #8a5a00);
   border-radius: 12px;
-  background: var(--color-warning-soft, #fbf1de);
+  background: var(--color-warning-soft, #fbf0d9);
   padding: 14px 16px;
   font-size: 14px;
   line-height: 22px;
@@ -171,7 +171,7 @@
 
 .list {
   margin-top: 14px;
-  border: 1px solid var(--color-line, #e2e7df);
+  border: 1px solid var(--color-line, #e3dcd1);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -187,7 +187,7 @@
 }
 
 .row + .row {
-  border-top: 1px solid var(--color-line, #e2e7df);
+  border-top: 1px solid var(--color-line, #e3dcd1);
 }
 
 .rowMain {
@@ -198,7 +198,7 @@
 .rowMeta {
   margin-top: 2px;
   font-size: 12px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
   overflow-wrap: anywhere;
 }
 
@@ -208,7 +208,7 @@
 }
 
 .negative {
-  color: var(--color-danger, #a02e2e);
+  color: var(--color-danger, #b4234a);
 }
 
 .pill,
@@ -222,12 +222,12 @@
 }
 
 .pill {
-  background: var(--color-primary-soft, #eaf1e9);
-  color: var(--color-primary, #285b45);
+  background: var(--color-primary-soft, #f3e7df);
+  color: var(--color-primary, #1f1b17);
 }
 
 .pillVoided {
-  background: #eee4df;
+  background: #f2e1e6;
   color: #864b3a;
 }
 
@@ -249,13 +249,13 @@
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   border-radius: 12px;
-  background: var(--color-canvas, #f8f9f6);
+  background: var(--color-canvas, #f6f3ee);
   padding: 12px 14px;
 }
 
 .result dt {
   font-size: 12px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .result dd {
@@ -268,7 +268,7 @@
 .empty {
   margin-top: 12px;
   font-size: 13px;
-  color: var(--color-muted-strong, #5f6d65);
+  color: var(--color-muted-strong, #5e554c);
 }
 
 .warn {
@@ -276,11 +276,11 @@
   align-items: flex-start;
   gap: 8px;
   border-radius: 10px;
-  background: var(--color-warning-soft, #fbf1de);
+  background: var(--color-warning-soft, #fbf0d9);
   padding: 10px 12px;
   font-size: 13px;
   line-height: 20px;
-  color: var(--color-warning-ink, #6f4c14);
+  color: var(--color-warning-ink, #6e4800);
 }
 
 .warn svg {

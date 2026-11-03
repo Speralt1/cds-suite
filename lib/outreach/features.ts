@@ -1,0 +1,17 @@
+// «Ve por los tuyos» (doc 40/41): interruptores del submódulo. Con `enabled`
+// apagado la ruta solo muestra «en preparación»: no hay Rules, Functions ni
+// colecciones `outreach*` desplegadas. Encender exige el GO del doc 41 §6.
+export const OUTREACH_FEATURES = {
+  enabled: false,
+  /** Decisiones voluntarias: requiere aprobación de valores, acceso y conservación (Ley 21.719). */
+  decisions: false,
+  /** Envíos por el motor de mensajería: requiere aprobación de org, número, texto y canario. */
+  messaging: false,
+} as const;
+
+/**
+ * Simulación local para revisar la interfaz con datos ficticios. Solo con
+ * NEXT_PUBLIC_CDS_OUTREACH_SIM=1 en desarrollo; check:no-preview verifica que
+ * la build productiva no contenga el código de la simulación.
+ */
+export const OUTREACH_SIM = process.env.NEXT_PUBLIC_CDS_OUTREACH_SIM === "1";
