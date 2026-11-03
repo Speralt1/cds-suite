@@ -49,6 +49,10 @@ export class OutreachMemoryStore {
     return this.doc("users", uid) ?? null;
   }
 
+  async listUsers() {
+    return this.all("users").filter(({ data }) => data.active === true);
+  }
+
   async get(collection: string, id: string): Promise<Doc | null> {
     return this.doc(collection, id) ?? null;
   }
