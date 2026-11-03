@@ -53,7 +53,22 @@ function walk(dir, out = []) {
   return out;
 }
 
-export function checkOut(outDir) {
+/**
+ * ¿La build empaqueta el espacio en vivo? Mismo criterio que lib/outreach/features.ts
+ * (`enabled` encendido o NEXT_PUBLIC_CDS_OUTREACH_LIVE=1). Con false, la build no
+ * puede llevar NADA del espacio en vivo.
+ */
+export function liveBundled(env = process.env, featuresText) {
+  if (env.NEXT_PUBLIC_CDS_OUTREACH_LIVE === "1") return true;
+  const text = featuresText ?? fs.readFileSync(path.join(ROOT, "lib/outreach/features.ts"), "utf8");
+  return /\benabled:\s*true\b/.test(text);
+}
+
+/** Solo el chunk del espacio en vivo (el que habla con la callable de coordinación) puede llevar estos textos, y solo si va empaquetado. */
+export const LIVE_ONLY_TEXT = Object.freeze(["acepto_a_cristo", "outreach-live-workspace"]);
+export const LIVE_CHUNK_MARKER = "outreachCoordinatorOp";
+
+export function checkOut(outDir, { live = liveBundled() } = {}) {
   const problems = [];
   if (!fs.existsSync(outDir)) return [`no existe ${path.relative(ROOT, outDir) || outDir}: corre npm run build`];
   const files = walk(outDir);
@@ -67,7 +82,13 @@ export function checkOut(outDir) {
     const text = fs.readFileSync(files[i], "utf8");
     // La mesa pública (doc 40 · H4) envía el valor de marca por la callable: solo su chunk puede llevarlo.
     const isMesa = /(^|\/)app\/mesa\/page-[^/]*\.js$/.test(rel[i]);
-    for (const needle of FORBIDDEN_TEXT) if (text.includes(needle) && !(isMesa && needle === "acepto_a_cristo")) problems.push(`"${needle}" en ${rel[i]}`);
+    const isLive = live && /\.js$/.test(rel[i]) && text.includes(LIVE_CHUNK_MARKER);
+    for (const needle of FORBIDDEN_TEXT) {
+      if (!text.includes(needle)) continue;
+      if (isMesa && needle === "acepto_a_cristo") continue;
+      if (isLive && LIVE_ONLY_TEXT.includes(needle)) continue;
+      problems.push(`"${needle}" en ${rel[i]}`);
+    }
     for (const field of FORBIDDEN_FIELDS) if (new RegExp(`\\b${field}\\b`).test(text)) problems.push(`campo excluido "${field}" en ${rel[i]}`);
   }
   return problems;

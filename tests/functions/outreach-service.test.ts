@@ -442,6 +442,11 @@ describe("simulación completa: 300 personas, 35 mesas", () => {
     expect(store.commits.length).toBe(commitsAfterImport); // ningún cambio
     expect(store.all("outreachRegistrations")).toHaveLength(300);
     expect(store.all("outreachRegistrations").every((r) => r.data.editionActive === true && r.data.receptionOpen === false)).toBe(true);
+    // Las filas no traen `source` en los consentimientos: el servidor fija «formulario_web».
+    expect(rows[0].consents.every((c) => !("source" in c))).toBe(true);
+    const cs = store.all("outreachRegistrations").flatMap((r) => r.data.consents as { source: string }[]);
+    expect(cs.length).toBeGreaterThan(0);
+    expect(cs.every((c) => c.source === "formulario_web")).toBe(true);
 
     // Día del evento
     await service.editionTransition("sim-coord", { editionId: "vplt-2026", to: "evento", expectedRevision: 2 });
