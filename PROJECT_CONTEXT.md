@@ -18,6 +18,7 @@
 - **Revisión en curso:** `review/consolidation-event-ux-20261103`, desde `531e42e`; login visual y simulación ficticia 300/15, sin producción (doc 38).
 - **Rediseño y evento:** `design/suite-redesign-vplt-20261103`, apilada sobre la anterior: identidad Alero, núcleo de dominio de «Ve por los tuyos» con simulación, docs 39–41. Sin producción.
 - **Backend del evento (H3):** `feature/vplt-backend-h3`, apilada sobre la anterior: permisos 10→14, Rules con aislamiento por responsable, 4 Functions `outreach*`, mesas con enlace; probado en emuladores (doc 42). Sin deploy.
+- **Pantallas y mesa (H4):** `feature/vplt-h4`, apilada sobre H3: coordinación, Mi lista, importador CSV y página pública `/mesa`; probado en emuladores (doc 43). Producción sigue «en preparación».
 - **Dependencias:** `chore/deps-security-20261103` (PR #34) desde integración; audit productivo 9→0. Sin deploy.
 - **Trabajo posterior preservado:** `mission/slice3a-sumup-fees`
 - **Trello:** pendiente de enlazar.
