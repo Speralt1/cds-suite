@@ -10,18 +10,24 @@ import { useAccessModel } from "@/lib/access/model";
 import { useAuth } from "@/lib/auth/auth-provider";
 import * as api from "@/lib/outreach/client";
 import { EDITION_STATUS_LABEL } from "@/lib/outreach/model";
+import ImportView from "./import-view";
 import Panorama from "./panorama";
+import ReviewView from "./review-view";
 import { ErrorNote, Loading, useLoad } from "./ui";
 import "../outreach.css";
 
-type ViewId = "panorama";
+type ViewId = "panorama" | "importar" | "revision";
 interface ViewDef {
   id: ViewId;
   label: string;
   role: string;
   perm: "coordinate" | "followup" | "decisions";
 }
-const VIEWS: ViewDef[] = [{ id: "panorama", label: "Panorama", role: "Coordinación", perm: "coordinate" }];
+const VIEWS: ViewDef[] = [
+  { id: "panorama", label: "Panorama", role: "Coordinación", perm: "coordinate" },
+  { id: "importar", label: "Importar", role: "Coordinación", perm: "coordinate" },
+  { id: "revision", label: "Revisión", role: "Coordinación", perm: "coordinate" },
+];
 
 const PERMS = {
   coordinate: "members.outreach.coordinate",
@@ -90,6 +96,8 @@ export default function LiveWorkspace() {
             </div>
           )}
           {current.id === "panorama" && <Panorama edition={edition} onChanged={editions.reload} />}
+          {current.id === "importar" && <ImportView edition={edition} />}
+          {current.id === "revision" && <ReviewView edition={edition} />}
           <span hidden data-uid={uid ?? ""} />
         </>
       )}

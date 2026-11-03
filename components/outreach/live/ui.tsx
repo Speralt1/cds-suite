@@ -83,3 +83,26 @@ export function useAction() {
   }, []);
   return { busy, error, run, clear: () => setError(null) };
 }
+
+export const ISSUE_LABEL: Record<string, string> = {
+  posible_duplicado: "Posible duplicado: confirmar si es la misma persona",
+  telefono_invalido: "Teléfono no válido en la inscripción",
+  correo_invalido: "Correo no válido en la inscripción",
+  nombre_requerido: "Inscripción sin nombre",
+  conflicto_edicion_local: "La web cambió un dato que coordinación ya corrigió",
+  cancelada_con_asistencia: "Cancelada en la web, pero asistió",
+  edicion_no_coincide: "La inscripción es de otra edición",
+  edicion_cerrada: "Llegó después del cierre de la edición",
+  asistencia_revertida_en_origen: "La puerta deshizo un ingreso",
+};
+
+/** Texto de un archivo elegido (File.text, o FileReader donde no exista). */
+export function readFileText(file: File): Promise<string> {
+  if (typeof file.text === "function") return file.text();
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result ?? ""));
+    r.onerror = () => reject(r.error);
+    r.readAsText(file);
+  });
+}
