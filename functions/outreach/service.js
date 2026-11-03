@@ -98,7 +98,7 @@ const COORDINATOR_OPS = Object.freeze([
 ]);
 const FOLLOWUP_OPS = Object.freeze(["contactRecord", "doNotContactSet"]);
 /** op público → método del servicio. */
-const TABLE_OPS = Object.freeze({ search: "tableSearch", mark: "tableMark", unmark: "tableUnmark", addWalkIn: "tableAddWalkIn" });
+const TABLE_OPS = Object.freeze({ search: "tableSearch", mark: "tableMark", unmark: "tableUnmark", addWalkIn: "tableAddWalkIn", listMine: "tableListMine" });
 const DECISION_OPS = Object.freeze(["decisionRecord", "decisionList", "decisionStats"]);
 
 const EDITION_ACTIVE = new Set(["inscripcion", "evento", "seguimiento"]);
@@ -1228,7 +1228,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     const usable = tablesDomain.linkUsable(eventTable, ed.eventDate ?? null, nowLocal());
     if (!usable.ok) {
       if (usable.error === "revocado") throw new HttpsError("permission-denied", E.linkRevoked);
-      if (usable.error === "fuera_de_horario") throw new HttpsError("permission-denied", E.linkOutOfWindow);
+      if (usable.error === "fuera_de_horario") throw new HttpsError("permission-denied", E.linkOutOfWindow, { window: tablesDomain.tableLinkWindow(ed.eventDate) });
       throw new HttpsError("permission-denied", E.linkUnavailable);
     }
     const nowMs = clock.now();
@@ -1270,6 +1270,22 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
         rows.push(tablesDomain.toRow(reg, own));
       }
       return { rows };
+    });
+  }
+
+  /** Lo que ESTA mesa tiene marcado ahora: sin teléfono ni correo, solo nombre y marca. */
+  async function tableListMine(data) {
+    const input = parse(data, TABLE_AUTH);
+    return withTable(input, async (_tx, ctx) => {
+      const decs = await listAll(C.decisions, [["editionId", "==", input.editionId], ["tableNumber", "==", ctx.eventTable.number]], 2000);
+      const items = [];
+      for (const { id, data: d } of decs) {
+        const reg = await store.get(C.regs, id);
+        if (!reg || reg.editionId !== input.editionId) continue;
+        items.push({ id, fullName: reg.fullName, mark: d.value });
+      }
+      items.sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
+      return { items, window: tablesDomain.tableLinkWindow(ctx.ed.eventDate) };
     });
   }
 
@@ -1394,6 +1410,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     tableMark,
     tableUnmark,
     tableAddWalkIn,
+    tableListMine,
   };
   const service = {};
   for (const [name, fn] of Object.entries(ops)) service[name] = guarded(name, fn);

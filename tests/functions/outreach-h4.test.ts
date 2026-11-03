@@ -43,7 +43,7 @@ async function setup(maxPerOwner = 3) {
   for (const r of regs) store.put("outreachRegistrations", r.id, { ...r, assigneeUid: null, editionActive: true, receptionOpen: true });
   const batch = (id: string, owner: string, ids: string[]) =>
     store.put("outreachAssignmentBatches", id, { editionId: ED, status: "propuesto", createdBy: "sim-coord", assignments: ids.map((rid) => ({ registrationId: rid, ownerUid: owner, baseRevision: 1 })), unassigned: [] });
-  return { store, service, owners, regs: regs.map((r) => r.id), batch };
+  return { clock, store, service, owners, regs: regs.map((r) => r.id), batch };
 }
 const openCount = (store: OutreachMemoryStore, uid: string) => store.doc(`outreachEditions/${ED}/team`, uid)?.openCount;
 
@@ -189,5 +189,47 @@ describe("candidatos y mesas", () => {
     expect(tables[0]).toMatchObject({ leaderUid: owners[0] });
     expect(Object.keys(tables[0]).sort()).toEqual(["hasLink", "leaderName", "leaderUid", "linkIssuedAt", "linkRevoked", "number"]);
     expect(JSON.stringify(tables)).not.toContain(token);
+  });
+});
+
+describe("listMine (mesa)", () => {
+  async function tables() {
+    const ctx = await setup();
+    await ctx.service.tablesSet("sim-coord", { editionId: ED, tables: [{ number: 1, leaderUid: ctx.owners[0] }, { number: 2, leaderUid: ctx.owners[1] }] });
+    const t1 = (await ctx.service.tableLinkIssue("sim-coord", { editionId: ED, number: 1 })).token as string;
+    const t2 = (await ctx.service.tableLinkIssue("sim-coord", { editionId: ED, number: 2 })).token as string;
+    const auth = (n: number) => ({ editionId: ED, table: n, token: n === 1 ? t1 : t2 });
+    return { ...ctx, auth };
+  }
+  const mark = (service: Svc, a: Doc, id: string, value: string) => service.tableMark({ ...a, registrationId: id, mark: value, personAgreed: true, requestId: `req-${id}-${value}`.slice(0, 40) });
+
+  it("cada mesa ve solo lo suyo, ordenado, sin teléfono ni correo", async () => {
+    const { service, regs, auth } = await tables();
+    await mark(service, auth(1), regs[1], "acepto_a_cristo");
+    await mark(service, auth(1), regs[0], "desea_conversar");
+    await mark(service, auth(2), regs[2], "acepto_a_cristo");
+    const mine = await service.tableListMine(auth(1));
+    expect(mine.items.map((i: { id: string }) => i.id).sort()).toEqual([regs[0], regs[1]].sort());
+    expect(mine.items.every((i: Doc) => Object.keys(i).sort().join() === "fullName,id,mark")).toBe(true);
+    expect(mine.window).toEqual({ opensAt: "2026-11-28T16:00", closesAt: "2026-11-29T02:00" });
+    expect((await service.tableListMine(auth(2))).items.map((i: { id: string }) => i.id)).toEqual([regs[2]]);
+    await service.tableUnmark({ ...auth(1), registrationId: regs[0], requestId: "req-unmark-0001" });
+    expect((await service.tableListMine(auth(1))).items.map((i: { id: string }) => i.id)).toEqual([regs[1]]);
+  });
+  it("token incorrecto, revocado y fuera de ventana se niegan; fuera de ventana trae window", async () => {
+    const { service, clock, auth } = await tables();
+    expect((await fails(service.tableListMine({ ...auth(1), token: "A".repeat(43) }))).message).toBe("outreach/link-unavailable");
+    expect((await fails(service.tableListMine({ ...auth(1), table: 2 }))).message).toBe("outreach/link-unavailable");
+    clock.set("2026-11-28T15:00:00-03:00");
+    const early = await fails(service.tableListMine(auth(1)));
+    expect(early).toMatchObject({ message: "outreach/link-out-of-window", details: { window: { opensAt: "2026-11-28T16:00", closesAt: "2026-11-29T02:00" } } });
+    clock.set("2026-11-28T21:00:00-03:00");
+    await service.tableLinkRevoke("sim-coord", { editionId: ED, number: 1 });
+    expect((await fails(service.tableListMine(auth(1)))).message).toBe("outreach/link-revoked");
+  });
+  it("cobra la misma cuota por mesa", async () => {
+    const { service, auth } = await tables();
+    for (let i = 0; i < 120; i += 1) await service.tableListMine(auth(1));
+    expect((await fails(service.tableListMine(auth(1)))).message).toBe("outreach/rate-limited");
   });
 });

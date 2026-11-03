@@ -37,7 +37,7 @@ describe("grupos de operaciones", () => {
       "reviewList", "reviewResolve", "teamCandidates", "tablesList",
     ]);
     expect(FOLLOWUP_OPS).toEqual(["contactRecord", "doNotContactSet"]);
-    expect(Object.keys(TABLE_OPS)).toEqual(["search", "mark", "unmark", "addWalkIn"]);
+    expect(Object.keys(TABLE_OPS)).toEqual(["search", "mark", "unmark", "addWalkIn", "listMine"]);
     expect(DECISION_OPS).toEqual(["decisionRecord", "decisionList", "decisionStats"]);
   });
   it("la mesa no exige sesión pero sí token; los demás grupos exigen sesión", async () => {
