@@ -165,8 +165,19 @@ export function PublicTable() {
     [fail],
   );
   useEffect(() => {
-    if (link && !fatal) void loadMarked(link);
-  }, [link, fatal, loadMarked]);
+    if (!link || fatal) return;
+    let live = true;
+    tableListMine(link)
+      .then((out) => {
+        if (live) setMarked(out.items);
+      })
+      .catch((e) => {
+        if (live) fail(e);
+      });
+    return () => {
+      live = false;
+    };
+  }, [link, fatal, fail]);
 
   // Búsqueda con debounce.
   useEffect(() => {
