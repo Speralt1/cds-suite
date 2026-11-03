@@ -212,7 +212,7 @@ export async function tableAddWalkIn(
 export async function tableListMine(link: TableLink, options: TableOpOptions = {}): Promise<{ items: SeatedRow[]; window: TableWindow | null }> {
   const out = (await call(link, "listMine", {}, options)) as { items?: unknown; window?: unknown };
   if (!out || !Array.isArray(out.items)) throw new TableOpError("server");
-  const items = (out.items as Partial<SeatedRow>[]).flatMap((i) => {
+  const items = (out.items as Partial<SeatedRow>[]).flatMap((i): SeatedRow[] => {
     if (typeof i.id !== "string" || typeof i.fullName !== "string") return [];
     if (i.mark == null) return [{ id: i.id, fullName: i.fullName, mark: null }];
     return (TABLE_MARKS as readonly string[]).includes(i.mark) ? [{ id: i.id, fullName: i.fullName, mark: i.mark }] : [];
