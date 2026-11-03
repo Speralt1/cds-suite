@@ -35,6 +35,8 @@ export const FORBIDDEN_TEXT = Object.freeze([
   "Simulación: se abriría WhatsApp", // WhatsApp simulado de la preview
   "Ver como", // simulador de perfiles de la preview
   "+56900000", // teléfonos ficticios del seed
+  "outreach-sim-fixture", // simulación local de «Ve por los tuyos» (doc 40)
+  "acepto_a_cristo", // decisiones voluntarias: excluidas hasta su aprobación (doc 41 §6)
 ]);
 
 /** Campos sensibles excluidos de V1 (doc 23 §1/§3): no pueden viajar en el bundle. */

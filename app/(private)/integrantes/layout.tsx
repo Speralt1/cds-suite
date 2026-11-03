@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Plus, Inbox, Users } from "lucide-react";
+import { CalendarHeart, LayoutDashboard, Plus, Inbox, Users } from "lucide-react";
 import { useAccessModel } from "@/lib/access/model";
+import { OUTREACH_FEATURES, OUTREACH_SIM } from "@/lib/outreach/features";
 import { MembersProvider } from "@/lib/members/use-members";
 import { ModuleSubnav, type ModuleSubnavItem } from "@/components/layout/module-subnav";
 import { ModuleNotices } from "@/components/members/status";
@@ -22,6 +23,11 @@ const ITEMS: ModuleSubnavItem[] = [
   },
 ];
 
+// «Ve por los tuyos» (doc 40): pestaña visible solo con el submódulo habilitado
+// o en la simulación local; la build productiva actual no la muestra.
+const OUTREACH_ITEM: ModuleSubnavItem = { href: "/integrantes/ve-por-los-tuyos", label: "Ve por los tuyos", icon: CalendarHeart };
+const NAV_ITEMS = OUTREACH_FEATURES.enabled || OUTREACH_SIM ? [...ITEMS, OUTREACH_ITEM] : ITEMS;
+
 export default function MembersLayout({ children }: { children: React.ReactNode }) {
   const access = useAccessModel();
   const canManage = access.can("members.consolidation.manage");
@@ -36,7 +42,7 @@ export default function MembersLayout({ children }: { children: React.ReactNode 
           </Link>
         )}
       </div>
-      <ModuleSubnav label="Integrantes" items={ITEMS} />
+      <ModuleSubnav label="Integrantes" items={NAV_ITEMS} />
       <MembersProvider>
         <ModuleNotices />
         <div className="mt-6">{children}</div>
