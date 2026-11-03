@@ -26,6 +26,13 @@ export const SHARED_FILES = Object.freeze([
   "names",
   "sumup-payouts",
   "members",
+  "outreach-model",
+  "outreach-distribution",
+  "outreach-sync",
+  "outreach-outbox",
+  "outreach-metrics",
+  "outreach-handoff",
+  "outreach-tables",
 ]);
 
 export const generatedHeader = (name) =>

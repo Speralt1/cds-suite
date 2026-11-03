@@ -1,0 +1,198 @@
+// GENERADO por scripts/build-shared.mjs desde lib/shared/outreach-distribution.ts — NO EDITAR.
+"use strict";
+// Distribución posterior al evento (doc 40 §6). Pertenece a la EDICIÓN: nunca
+// toca `membersPeople.followUpOwnerUid` ni los seguimientos habituales.
+//
+// 1. proposeDistribution: propuesta determinista y equilibrada (≤ tope por
+//    responsable), respetando bajas, vínculo previo y responsables activos.
+// 2. Coordinación revisa y ajusta (moveInProposal, con motivo si excede el tope).
+// 3. confirmBatch: aplica el lote. Idempotente por batchId y por revisión: si
+//    una inscripción cambió desde la propuesta, se informa como conflicto y no
+//    se sobreescribe.
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.proposeDistribution = proposeDistribution;
+exports.moveInProposal = moveInProposal;
+exports.confirmBatch = confirmBatch;
+exports.reassign = reassign;
+exports.releaseOwner = releaseOwner;
+const outreach_model_1 = require("./outreach-model");
+function eligibility(reg, includeUnconfirmed) {
+    if (reg.status !== "activa")
+        return "no_activa";
+    if (reg.handedOffAt)
+        return "traspasada";
+    if (reg.ownerUid)
+        return "ya_asignada";
+    if (reg.doNotContact)
+        return "baja";
+    if (!(0, outreach_model_1.hasConsent)(reg, "seguimiento_evento"))
+        return "sin_autorizacion";
+    if (reg.attendance === "no_asistio")
+        return "no_asistio";
+    if (reg.attendance === "sin_confirmar" && !includeUnconfirmed)
+        return "sin_confirmar";
+    return null;
+}
+/** Responsables activos con su tope y la carga que ya tienen en ESTA edición. */
+function ownersOf(team, regs, defaultMax) {
+    const caps = {};
+    const loads = {};
+    for (const m of team) {
+        if (!m.active || !m.roles.includes("responsable"))
+            continue;
+        caps[m.uid] = m.maxAssigned ?? defaultMax;
+        loads[m.uid] = 0;
+    }
+    for (const r of regs)
+        if (r.ownerUid && r.ownerUid in loads && r.status === "activa" && !r.doNotContact)
+            loads[r.ownerUid]++;
+    return { caps, loads };
+}
+function proposeDistribution(regs, team, opts) {
+    const { caps, loads } = ownersOf(team, regs, opts.defaultMax);
+    const owners = Object.keys(caps).sort();
+    const proposal = {
+        editionId: opts.editionId,
+        batchId: opts.batchId,
+        assignments: [],
+        unassigned: [],
+        excluded: [],
+        loads,
+        caps,
+    };
+    // Orden estable: llegada y luego id, para que dos corridas den lo mismo.
+    const pool = [...regs].sort((a, b) => (a.createdAt === b.createdAt ? a.id.localeCompare(b.id) : a.createdAt.localeCompare(b.createdAt)));
+    const waiting = [];
+    for (const reg of pool) {
+        const ex = eligibility(reg, !!opts.includeUnconfirmed);
+        if (ex) {
+            proposal.excluded.push({ registrationId: reg.id, reason: ex });
+            continue;
+        }
+        const preferred = opts.affinity?.[reg.id];
+        if (preferred && preferred in caps && loads[preferred] < caps[preferred]) {
+            loads[preferred]++;
+            proposal.assignments.push({ registrationId: reg.id, ownerUid: preferred, reason: "vinculo_previo", baseRevision: reg.revision, note: null });
+        }
+        else {
+            waiting.push(reg);
+        }
+    }
+    for (const reg of waiting) {
+        if (owners.length === 0) {
+            proposal.unassigned.push({ registrationId: reg.id, reason: "sin_responsables", baseRevision: reg.revision });
+            continue;
+        }
+        // Menor carga relativa primero; empate por uid.
+        let best = null;
+        for (const uid of owners) {
+            if (loads[uid] >= caps[uid])
+                continue;
+            if (best === null || loads[uid] / caps[uid] < loads[best] / caps[best])
+                best = uid;
+        }
+        if (best === null) {
+            proposal.unassigned.push({ registrationId: reg.id, reason: "sin_capacidad", baseRevision: reg.revision });
+            continue;
+        }
+        loads[best]++;
+        proposal.assignments.push({ registrationId: reg.id, ownerUid: best, reason: "equilibrio", baseRevision: reg.revision, note: null });
+    }
+    return proposal;
+}
+/** Ajuste de coordinación dentro de la propuesta; superar el tope exige motivo. */
+function moveInProposal(proposal, registrationId, toUid, note) {
+    if (!(toUid in proposal.caps))
+        return { ok: false, error: "responsable_invalido" };
+    const fromUnassigned = proposal.unassigned.find((u) => u.registrationId === registrationId);
+    const current = proposal.assignments.find((a) => a.registrationId === registrationId);
+    if (!current && !fromUnassigned)
+        return { ok: false, error: "no_en_propuesta" };
+    if (current?.ownerUid === toUid)
+        return { ok: true, value: proposal };
+    const over = proposal.loads[toUid] + 1 > proposal.caps[toUid];
+    if (over && !note?.trim())
+        return { ok: false, error: "motivo_requerido" };
+    const loads = { ...proposal.loads, [toUid]: proposal.loads[toUid] + 1 };
+    if (current)
+        loads[current.ownerUid]--;
+    const baseRevision = current?.baseRevision ?? fromUnassigned.baseRevision;
+    const moved = {
+        registrationId,
+        ownerUid: toUid,
+        reason: "ajuste_coordinacion",
+        baseRevision,
+        note: note?.trim() || null,
+    };
+    return {
+        ok: true,
+        value: {
+            ...proposal,
+            loads,
+            assignments: current
+                ? proposal.assignments.map((a) => (a.registrationId === registrationId ? moved : a))
+                : [...proposal.assignments, moved],
+            unassigned: proposal.unassigned.filter((u) => u.registrationId !== registrationId),
+        },
+    };
+}
+/**
+ * Aplica un lote confirmado sobre el estado actual. Pura: devuelve el estado
+ * nuevo y el informe; el backend hará lo mismo dentro de una transacción por
+ * grupo de inscripciones con el batchId como clave de idempotencia.
+ */
+function confirmBatch(regs, proposal) {
+    const byId = new Map(regs.map((r) => [r.id, r]));
+    const result = { batchId: proposal.batchId, applied: [], conflicts: [], alreadyApplied: [] };
+    for (const a of proposal.assignments) {
+        const reg = byId.get(a.registrationId);
+        if (!reg)
+            continue;
+        if (reg.assignmentBatchId === proposal.batchId && reg.ownerUid === a.ownerUid) {
+            result.alreadyApplied.push(reg.id);
+            continue;
+        }
+        if (reg.status !== "activa")
+            result.conflicts.push({ registrationId: reg.id, reason: "no_activa" });
+        else if (reg.doNotContact)
+            result.conflicts.push({ registrationId: reg.id, reason: "baja" });
+        else if (reg.ownerUid)
+            result.conflicts.push({ registrationId: reg.id, reason: "ya_asignada" });
+        else if (reg.revision !== a.baseRevision)
+            result.conflicts.push({ registrationId: reg.id, reason: "revision" });
+        else {
+            byId.set(reg.id, { ...reg, ownerUid: a.ownerUid, assignmentBatchId: proposal.batchId, revision: reg.revision + 1 });
+            result.applied.push(reg.id);
+        }
+    }
+    return { registrations: regs.map((r) => byId.get(r.id)), result };
+}
+/** Reasignación individual después de confirmar: siempre con motivo y revisión esperada. */
+function reassign(reg, team, toUid, reason, expectedRevision) {
+    if (!reason.trim())
+        return { ok: false, error: "motivo_requerido" };
+    if (reg.revision !== expectedRevision)
+        return { ok: false, error: "revision" };
+    if (reg.doNotContact)
+        return { ok: false, error: "baja" };
+    if (reg.ownerUid === toUid)
+        return { ok: false, error: "sin_cambio" };
+    const owner = team.find((m) => m.uid === toUid);
+    if (!owner || !owner.active || !owner.roles.includes("responsable"))
+        return { ok: false, error: "responsable_invalido" };
+    return { ok: true, value: { ...reg, ownerUid: toUid, assignmentBatchId: null, revision: reg.revision + 1 } };
+}
+/**
+ * Responsable desactivado: sus pendientes vuelven a la cola de coordinación
+ * (sin responsable), con su historial intacto. No se reparten solos.
+ */
+function releaseOwner(regs, uid) {
+    const released = [];
+    const registrations = regs.map((r) => {
+        if (r.ownerUid !== uid || r.handedOffAt)
+            return r;
+        released.push(r.id);
+        return { ...r, ownerUid: null, assignmentBatchId: null, revision: r.revision + 1 };
+    });
+    return { registrations, released };
+}
