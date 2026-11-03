@@ -77,7 +77,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "outreachEditions", "vplt-2026", "team", "out-a"), { role: "responsable" });
     await setDoc(doc(db, "outreachEditions", "vplt-2026", "tables", "1"), { number: 1, linkActive: true });
     await setDoc(doc(db, "outreachEditions", "vplt-2026", "tableSecrets", "1"), { linkHash: "secreto" });
-    await setDoc(doc(db, "outreachDecisions", REG_IDS.A), { value: "decision_ficticia", assigneeUid: "out-a" });
+    await setDoc(doc(db, "outreachDecisions", REG_IDS.A), { value: "decision_ficticia", assigneeUid: "out-a", editionActive: true });
     await setDoc(doc(db, "outreachDecisions", REG_IDS.A, "history", "h1"), { at });
     for (const c of ["outreachIdentities", "outreachInbox", "outreachOutbox", "outreachAssignmentBatches", "outreachTableMarks"])
       await setDoc(doc(db, c, "x1"), { at });
@@ -192,14 +192,42 @@ describe("subcolecciones de la inscripción", () => {
 });
 
 describe("decisiones", () => {
-  it("solo members.outreach.decisions o admin (coordinación y responsable NO)", async () => {
+  it("get: decisions, admin y el responsable asignado (coordinación y otros responsables NO)", async () => {
+    const expected = only("out-decisions", "out-a", ...ADMINS);
+    for (const uid of ALL) expect(await get(uid, "outreachDecisions", REG_IDS.A), `${uid} get`).toBe(expected[uid]);
+  });
+  it("list sin filtros: solo decisions y admin; el responsable necesita sus where()", async () => {
+    const expected = only("out-decisions", ...ADMINS);
+    for (const uid of ALL) expect(await list(uid, "outreachDecisions"), `${uid} list`).toBe(expected[uid]);
+  });
+  it("historial: solo decisions o admin (el responsable NO)", async () => {
     const expected = only("out-decisions", ...ADMINS);
     for (const uid of ALL) {
-      expect(await get(uid, "outreachDecisions", REG_IDS.A), `${uid} get`).toBe(expected[uid]);
-      expect(await list(uid, "outreachDecisions"), `${uid} list`).toBe(expected[uid]);
       expect(await get(uid, "outreachDecisions", REG_IDS.A, "history", "h1"), `${uid} history`).toBe(expected[uid]);
       expect(await list(uid, "outreachDecisions", REG_IDS.A, "history"), `${uid} history list`).toBe(expected[uid]);
     }
+  });
+  describe("responsable con consulta filtrada", () => {
+    const q = (uid: string, ...w: ReturnType<typeof where>[]) =>
+      allowed(() => getDocs(query(collection(dbOf(env, uid), "outreachDecisions"), ...w)));
+    const mine = (uid: string) => [where("assigneeUid", "==", uid), where("editionActive", "==", true)] as const;
+    it("A lee la decisión de su mesa; B no lee la de A; sin filtros se deniega", async () => {
+      expect(await q("out-a", ...mine("out-a"))).toBe(true);
+      expect(await q("out-b", ...mine("out-a"))).toBe(false);
+      expect(await q("out-b", ...mine("out-b"))).toBe(true);
+      expect(await q("out-a", where("assigneeUid", "==", "out-a"))).toBe(false);
+      expect(await q("out-a", where("editionActive", "==", true))).toBe(false);
+    });
+    it("con la edición inactiva se deniega; usuario inactivo tampoco", async () => {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, "outreachDecisions", "dArch"), { value: "x", assigneeUid: "out-a", editionActive: false });
+        await setDoc(doc(db, "outreachDecisions", "dIA"), { value: "x", assigneeUid: "out-a-inactive", editionActive: true });
+      });
+      expect(await get("out-a", "outreachDecisions", "dArch")).toBe(false);
+      expect(await q("out-a", where("assigneeUid", "==", "out-a"), where("editionActive", "==", false))).toBe(false);
+      expect(await get("out-a-inactive", "outreachDecisions", "dIA")).toBe(false);
+    });
   });
 });
 

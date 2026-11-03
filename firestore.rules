@@ -1398,10 +1398,19 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
     }
-    // Decisiones de fe: solo members.outreach.decisions o admin (decisión pendiente, doc 40 §4).
-    // El responsable NO las lee: exigiría un assigneeUid desnormalizado y sincronizado en cada reasignación.
+    // Decisiones de fe: members.outreach.decisions o admin (decisión pendiente, doc 40 §4) y, por decisión del
+    // administrador (03/11/2026), el encargado de la mesa que le hace seguimiento: solo si
+    // `assigneeUid` (desnormalizado por el backend en la misma transacción de cada asignación/marca) es él
+    // y la edición está activa. La consulta del cliente debe llevar esos mismos where().
+    function outreachDecisionOf(u, d) {
+      return u.active == true && (u.get('accessSchemaVersion', 0) == 1
+        ? (u.get('baseRole', '') == 'admin'
+          || u.get('permissions', []).hasAny(['members.outreach.decisions'])
+          || (u.get('permissions', []).hasAny(['members.outreach.followup_assigned']) && d.assigneeUid == request.auth.uid && d.editionActive == true))
+        : u.get('role', '') == 'admin');
+    }
     match /outreachDecisions/{regId} {
-      allow get, list: if outreachDecisionsRead();
+      allow get, list: if signedIn() && exists(userPath()) && outreachDecisionOf(userDoc(), resource.data);
       allow create, update, delete: if false;
       match /history/{id} {
         allow get, list: if outreachDecisionsRead();
