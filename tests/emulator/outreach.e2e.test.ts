@@ -137,6 +137,23 @@ describe("Ve por los tuyos vía Firestore emulado", () => {
     expect(again.replay).toBe(true);
   });
 
+  it("«está en mi mesa»: sienta sin decisión, listMine lo muestra con mark null y otra mesa recibe otra-mesa", async () => {
+    const f = await fixture(5);
+    await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });
+    await f.toEvento();
+    const t = await f.tokens();
+    const id = f.ids[1];
+    const seat = (table: number, extra: Record<string, unknown> = {}) => service.tableSeat({ editionId: f.editionId, table, token: t[table], registrationId: id, requestId: rid(), ...extra });
+    expect((await seat(1)).replay).toBe(false);
+    const mine = await service.tableListMine({ editionId: f.editionId, table: 1, token: t[1] });
+    expect(mine.items).toEqual([{ id, fullName: expect.any(String), mark: null }]);
+    await expect(seat(2)).rejects.toMatchObject({ message: "outreach/otra-mesa" });
+    expect((await db.collection("outreachDecisions").doc(id).get()).exists).toBe(false);
+    expect((await db.collection("outreachRegistrations").doc(id).get()).data()).toMatchObject({ tableNumber: 1, attendance: "asistio" });
+    expect((await seat(2, { moveHere: true })).replay).toBe(false);
+    expect((await service.tableListMine({ editionId: f.editionId, table: 1, token: t[1] })).items).toEqual([]);
+  });
+
   it("dos coordinaciones confirman el mismo lote en paralelo: sin doble asignación", async () => {
     const f = await fixture(40);
     await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });

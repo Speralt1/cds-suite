@@ -203,7 +203,7 @@ describe("listMine (mesa)", () => {
   }
   const mark = (service: Svc, a: Doc, id: string, value: string) => service.tableMark({ ...a, registrationId: id, mark: value, personAgreed: true, requestId: `req-${id}-${value}`.slice(0, 40) });
 
-  it("cada mesa ve solo lo suyo, ordenado, sin teléfono ni correo", async () => {
+  it("cada mesa ve a todos sus sentados (con o sin marca), ordenados, sin teléfono ni correo", async () => {
     const { service, regs, auth } = await tables();
     await mark(service, auth(1), regs[1], "acepto_a_cristo");
     await mark(service, auth(1), regs[0], "desea_conversar");
@@ -214,7 +214,29 @@ describe("listMine (mesa)", () => {
     expect(mine.window).toEqual({ opensAt: "2026-11-28T16:00", closesAt: "2026-11-29T02:00" });
     expect((await service.tableListMine(auth(2))).items.map((i: { id: string }) => i.id)).toEqual([regs[2]]);
     await service.tableUnmark({ ...auth(1), registrationId: regs[0], requestId: "req-unmark-0001" });
-    expect((await service.tableListMine(auth(1))).items.map((i: { id: string }) => i.id)).toEqual([regs[1]]);
+    const after = (await service.tableListMine(auth(1))).items as { id: string; mark: string | null }[];
+    expect(after.map((i) => [i.id, i.mark]).sort()).toEqual([[regs[0], null], [regs[1], "acepto_a_cristo"]].sort());
+  });
+  it("seat: sienta sin decisión, aparece con mark null, no cambia el equipo y audita 'seat'", async () => {
+    const { store, service, regs, auth } = await tables();
+    const r = await service.tableSeat({ ...auth(1), registrationId: regs[3], requestId: "req-seat-0001" });
+    expect(r).toEqual({ replay: false, registrationId: regs[3] });
+    expect(await service.tableSeat({ ...auth(1), registrationId: regs[3], requestId: "req-seat-0001" })).toMatchObject({ replay: true });
+    expect(await service.tableSeat({ ...auth(1), registrationId: regs[3], requestId: "req-seat-0002" })).toMatchObject({ replay: true });
+    const mine = await service.tableListMine(auth(1));
+    expect(mine.items).toEqual([{ id: regs[3], fullName: expect.any(String), mark: null }]);
+    expect((await service.tableListMine(auth(2))).items).toEqual([]);
+    expect(await store.get("outreachDecisions", regs[3])).toBeNull();
+    expect(await store.get("outreachRegistrations", regs[3])).toMatchObject({ tableNumber: 1, attendance: "asistio", assigneeUid: null });
+  });
+  it("seat en otra mesa responde otra-mesa con la mesa; moveHere la traslada", async () => {
+    const { service, regs, auth } = await tables();
+    await service.tableSeat({ ...auth(1), registrationId: regs[3], requestId: "req-seat-0003" });
+    const e = await fails(service.tableSeat({ ...auth(2), registrationId: regs[3], requestId: "req-seat-0004" }));
+    expect(e).toMatchObject({ message: "outreach/otra-mesa", details: { otherTable: 1 } });
+    await service.tableSeat({ ...auth(2), registrationId: regs[3], moveHere: true, requestId: "req-seat-0005" });
+    expect((await service.tableListMine(auth(2))).items.map((i: { id: string }) => i.id)).toEqual([regs[3]]);
+    expect((await service.tableListMine(auth(1))).items).toEqual([]);
   });
   it("token incorrecto, revocado y fuera de ventana se niegan; fuera de ventana trae window", async () => {
     const { service, clock, auth } = await tables();

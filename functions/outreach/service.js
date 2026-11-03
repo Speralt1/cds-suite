@@ -98,7 +98,7 @@ const COORDINATOR_OPS = Object.freeze([
 ]);
 const FOLLOWUP_OPS = Object.freeze(["contactRecord", "doNotContactSet"]);
 /** op público → método del servicio. */
-const TABLE_OPS = Object.freeze({ search: "tableSearch", mark: "tableMark", unmark: "tableUnmark", addWalkIn: "tableAddWalkIn", listMine: "tableListMine" });
+const TABLE_OPS = Object.freeze({ search: "tableSearch", mark: "tableMark", seat: "tableSeat", unmark: "tableUnmark", addWalkIn: "tableAddWalkIn", listMine: "tableListMine" });
 const DECISION_OPS = Object.freeze(["decisionRecord", "decisionList", "decisionStats"]);
 
 const EDITION_ACTIVE = new Set(["inscripcion", "evento", "seguimiento"]);
@@ -1273,19 +1273,43 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     });
   }
 
-  /** Lo que ESTA mesa tiene marcado ahora: sin teléfono ni correo, solo nombre y marca. */
+  /** Todos los sentados en ESTA mesa: sin teléfono ni correo, solo nombre y marca (o null). */
   async function tableListMine(data) {
     const input = parse(data, TABLE_AUTH);
     return withTable(input, async (_tx, ctx) => {
-      const decs = await listAll(C.decisions, [["editionId", "==", input.editionId], ["tableNumber", "==", ctx.eventTable.number]], 2000);
+      const regs = await listAll(C.regs, [["editionId", "==", input.editionId], ["tableNumber", "==", ctx.eventTable.number]], 2000);
       const items = [];
-      for (const { id, data: d } of decs) {
-        const reg = await store.get(C.regs, id);
-        if (!reg || reg.editionId !== input.editionId) continue;
-        items.push({ id, fullName: reg.fullName, mark: d.value });
+      for (const { id, data: r } of regs) {
+        if (r.status !== "activa") continue;
+        const d = await store.get(C.decisions, id);
+        const mark = d && d.tableNumber === ctx.eventTable.number ? d.value : null;
+        items.push({ id, fullName: r.fullName, mark });
       }
       items.sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id));
       return { items, window: tablesDomain.tableLinkWindow(ctx.ed.eventDate) };
+    });
+  }
+
+  /** «Está en mi mesa»: sienta sin decisión ni cambio de permiso; no asigna, así que no toca el equipo. */
+  async function tableSeat(data) {
+    const input = parse(data, { ...TABLE_AUTH, registrationId: ["id"], moveHere: ["bool", { opt: true, def: false }], requestId: ["requestId"] });
+    return withTable(input, async (tx, ctx) => {
+      const id = auditId(ctx, "seat", `${input.registrationId}:${input.requestId}`);
+      if (await tx.get(C.marks, id)) return { replay: true, registrationId: input.registrationId };
+      const doc = await tx.get(C.regs, input.registrationId);
+      if (!doc || doc.editionId !== input.editionId) return { fail: new HttpsError("not-found", E.notFound) };
+      const res = tablesDomain.seatAtTable(
+        { registrations: [regFromDoc(doc)], decisions: [] },
+        { table: ctx.eventTable, eventDate: ctx.ed.eventDate ?? null, registrationId: input.registrationId, moveHere: input.moveHere, now: nowLocal() },
+      );
+      if (!res.ok) {
+        if (res.error === "sin_cambio") return { replay: true, registrationId: input.registrationId };
+        return { fail: domainFail(res.error, res.otherTable != null ? { otherTable: res.otherTable } : undefined) };
+      }
+      const reg = res.value.registrations[0];
+      tx.update(C.regs, reg.id, regDoc(reg, flagsOfDoc(doc)));
+      writeMark(tx, ctx, id, "seat", reg.id);
+      return { replay: false, registrationId: reg.id };
     });
   }
 
@@ -1408,6 +1432,7 @@ function createOutreachService({ store, clock, logger = console, randomBytes }) 
     decisionStats,
     tableSearch,
     tableMark,
+    tableSeat,
     tableUnmark,
     tableAddWalkIn,
     tableListMine,

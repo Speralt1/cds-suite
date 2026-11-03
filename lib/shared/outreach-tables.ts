@@ -169,6 +169,43 @@ export function markAtTable(state: TableState, input: MarkInput): { ok: true; va
   return { ok: true, value: { registrations, decisions: [...state.decisions, decision] } };
 }
 
+export interface SeatInput {
+  table: EventTable;
+  eventDate: Ymd | null;
+  registrationId: string;
+  /** Confirmación explícita para traer a alguien que figura en otra mesa. */
+  moveHere?: boolean;
+  now: LocalDateTime;
+}
+
+export type SeatError = LinkError | "no_encontrada" | "inscripcion_inactiva" | "otra_mesa" | "sin_cambio";
+
+/**
+ * «Está en mi mesa»: la persona queda sentada aquí y presente (mesa-N), sin
+ * decisión y sin tocar el permiso (viene del sitio). El encargado de la mesa
+ * la acompaña después aunque no exprese ninguna decisión.
+ */
+export function seatAtTable(state: TableState, input: SeatInput): { ok: true; value: TableState } | { ok: false; error: SeatError; otherTable?: number } {
+  const link = linkUsable(input.table, input.eventDate, input.now);
+  if (!link.ok) return link;
+  const idx = state.registrations.findIndex((r) => r.id === input.registrationId);
+  if (idx < 0) return { ok: false, error: "no_encontrada" };
+  const reg = state.registrations[idx];
+  if (reg.status !== "activa") return { ok: false, error: "inscripcion_inactiva" };
+  const here = input.table.number;
+  if (reg.tableNumber != null && reg.tableNumber !== here && !input.moveHere) return { ok: false, error: "otra_mesa", otherTable: reg.tableNumber };
+  if (reg.tableNumber === here) return { ok: false, error: "sin_cambio" };
+  const next: Registration = {
+    ...reg,
+    tableNumber: here,
+    ...(reg.attendance !== "asistio" ? { attendance: "asistio" as const, attendanceAt: input.now, attendanceBy: `mesa-${here}` } : {}),
+    revision: reg.revision + 1,
+  };
+  const registrations = [...state.registrations];
+  registrations[idx] = next;
+  return { ok: true, value: { ...state, registrations } };
+}
+
 /** Deshacer: solo la mesa que marcó y dentro de la ventana. La historia queda en el backend. */
 export function unmarkAtTable(
   state: TableState,
