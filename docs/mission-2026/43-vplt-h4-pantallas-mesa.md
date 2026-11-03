@@ -44,7 +44,7 @@ Lint, tipos, `build:shared --check`, build y `check:no-preview` en verde; una bu
 
 ## 5. Antes del 28/11 (lo que falta fuera del código)
 
-- **Texto de términos aprobado por el administrador (03/11):** casilla «Acepto los términos y condiciones» + página `/terminos-ve-por-los-tuyos`, versión `v2-2026-11`, en el PR borrador #7 del repositorio del sitio (sin fusionar; fusionar publica). Falta: lectura legal, confirmar el correo de privacidad, fusionar y activar v2 en el panel en la misma ventana. Al importar en CDS, declarar la versión `v2-2026-11` (y `v1-2026-10` para las solicitudes anteriores, que quedan cubiertas por la confirmación en la mesa).
+- **Texto de términos aprobado por el administrador (03/11):** casilla «Acepto los términos y condiciones» + página `/terminos-ve-por-los-tuyos`, versión `v2-2026-11`, en el PR borrador #7 del repositorio del sitio (sin fusionar; fusionar publica). Correo de privacidad confirmado (invitacionescds@gmail.com). Falta: lectura legal, fusionar y activar v2 en el panel en la misma ventana. Al importar en CDS, declarar la versión `v2-2026-11` (y `v1-2026-10` para las solicitudes anteriores, que quedan cubiertas por la confirmación en la mesa).
 - Cuentas de los 35 encargados verificadas (para Mi lista desde el 29/11).
 - GO de publicación por subfases y ensayo con la cuenta piloto (H4/H5 del doc 41).
 - Hoja de papel por mesa como respaldo.
