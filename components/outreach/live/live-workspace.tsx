@@ -10,6 +10,8 @@ import { useAccessModel } from "@/lib/access/model";
 import { useAuth } from "@/lib/auth/auth-provider";
 import * as api from "@/lib/outreach/client";
 import { EDITION_STATUS_LABEL } from "@/lib/outreach/model";
+import AbsencesView from "./absences-view";
+import DistributionView from "./distribution-view";
 import ImportView from "./import-view";
 import Panorama from "./panorama";
 import ReviewView from "./review-view";
@@ -17,7 +19,7 @@ import TablesView from "./tables-view";
 import { ErrorNote, Loading, useLoad } from "./ui";
 import "../outreach.css";
 
-type ViewId = "panorama" | "importar" | "revision" | "mesas";
+type ViewId = "panorama" | "importar" | "revision" | "mesas" | "ausencias" | "distribucion";
 interface ViewDef {
   id: ViewId;
   label: string;
@@ -29,6 +31,8 @@ const VIEWS: ViewDef[] = [
   { id: "importar", label: "Importar", role: "Coordinación", perm: "coordinate" },
   { id: "revision", label: "Revisión", role: "Coordinación", perm: "coordinate" },
   { id: "mesas", label: "Mesas", role: "Coordinación", perm: "coordinate" },
+  { id: "ausencias", label: "Ausencias", role: "Coordinación", perm: "coordinate" },
+  { id: "distribucion", label: "Distribución", role: "Coordinación", perm: "coordinate" },
 ];
 
 const PERMS = {
@@ -101,6 +105,8 @@ export default function LiveWorkspace() {
           {current.id === "importar" && <ImportView edition={edition} />}
           {current.id === "revision" && <ReviewView edition={edition} />}
           {current.id === "mesas" && <TablesView edition={edition} />}
+          {current.id === "ausencias" && <AbsencesView edition={edition} />}
+          {current.id === "distribucion" && <DistributionView edition={edition} />}
           <span hidden data-uid={uid ?? ""} />
         </>
       )}
