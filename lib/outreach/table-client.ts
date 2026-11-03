@@ -11,7 +11,7 @@
 //   reintentar sin duplicar (la callable es idempotente por requestId).
 
 import { isWellFormedShareToken } from "@/lib/shared/share-token-format";
-import type { TableMark, TableRow } from "@/lib/shared/outreach-tables";
+import { TABLE_MARKS, type TableMark, type TableRow } from "@/lib/shared/outreach-tables";
 
 export const TABLE_OP_PATH = "/api/mesa";
 export const TABLE_OP_FUNCTION = "outreachTableOp";
@@ -88,11 +88,28 @@ export type TableErrorKind =
   | "network"
   | "server";
 
+export interface TableWindow {
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface MarkedRow {
+  id: string;
+  fullName: string;
+  mark: TableMark;
+}
+
+function toWindow(v: unknown): TableWindow | undefined {
+  const w = v as { opensAt?: unknown; closesAt?: unknown } | null | undefined;
+  return w && typeof w.opensAt === "string" && typeof w.closesAt === "string" ? { opensAt: w.opensAt, closesAt: w.closesAt } : undefined;
+}
+
 export class TableOpError extends Error {
   constructor(
     public readonly kind: TableErrorKind,
     public readonly otherTable?: number,
     public readonly code?: string,
+    public readonly window?: TableWindow,
   ) {
     super(`table-op/${kind}`);
     this.name = "TableOpError";
@@ -110,9 +127,9 @@ type Body = { result?: unknown; error?: { status?: unknown; message?: unknown; d
 
 function kindFromError(status: number, err: NonNullable<Body["error"]> | undefined): TableOpError {
   const code = typeof err?.message === "string" ? err.message : "";
-  const details = err?.details as { otherTable?: unknown } | undefined;
+  const details = err?.details as { otherTable?: unknown; window?: unknown } | undefined;
   if (code === "outreach/link-revoked") return new TableOpError("revoked", undefined, code);
-  if (code === "outreach/link-out-of-window") return new TableOpError("outside-window", undefined, code);
+  if (code === "outreach/link-out-of-window") return new TableOpError("outside-window", undefined, code, toWindow(details?.window));
   if (code === "outreach/link-unavailable") return new TableOpError("unavailable", undefined, code);
   if (code === "outreach/rate-limited" || status === 429) return new TableOpError("rate-limited", undefined, code);
   if (code === "outreach/otra-mesa") {
@@ -179,4 +196,16 @@ export async function tableAddWalkIn(
 ): Promise<{ row: TableRow | null }> {
   const out = (await call(link, "addWalkIn", input, options)) as { row?: TableRow };
   return { row: out && out.row ? out.row : null };
+}
+
+/** «Marcadas en esta mesa»: lo que ya quedó registrado, para no perderlo al recargar. */
+export async function tableListMine(link: TableLink, options: TableOpOptions = {}): Promise<{ items: MarkedRow[]; window: TableWindow | null }> {
+  const out = (await call(link, "listMine", {}, options)) as { items?: unknown; window?: unknown };
+  if (!out || !Array.isArray(out.items)) throw new TableOpError("server");
+  const items = (out.items as Partial<MarkedRow>[]).flatMap((i) =>
+    typeof i.id === "string" && typeof i.fullName === "string" && (TABLE_MARKS as readonly string[]).includes(i.mark as string)
+      ? [{ id: i.id, fullName: i.fullName, mark: i.mark as TableMark }]
+      : [],
+  );
+  return { items, window: toWindow(out.window) ?? null };
 }

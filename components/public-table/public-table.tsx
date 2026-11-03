@@ -16,10 +16,12 @@ import {
   parseTableLink,
   tableAddWalkIn,
   tableLinkFromLocation,
+  tableListMine,
   tableMark,
   tableSearch,
   tableUnmark,
   type TableLink,
+  type TableWindow,
 } from "@/lib/outreach/table-client";
 import { TABLE_MARKS, TABLE_MARK_LABEL, type TableMark, type TableRow } from "@/lib/shared/outreach-tables";
 
@@ -45,6 +47,12 @@ export const FATAL_TEXT: Record<Fatal, { title: string; body: string }> = {
   },
 };
 
+/** «2026-11-28T16:00» → «28-11-2026 a las 16:00». */
+export function fmtLocal(v: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(v);
+  return m ? `${m[3]}-${m[2]}-${m[1]} a las ${m[4]}` : v;
+}
+
 function readSession(): string | null {
   try {
     return window.sessionStorage.getItem(TABLE_SESSION_KEY);
@@ -65,6 +73,7 @@ export function PublicTable() {
   const [ready, setReady] = useState(false);
   const [link, setLink] = useState<TableLink | null>(null);
   const [fatal, setFatal] = useState<Fatal | null>(null);
+  const [windowInfo, setWindowInfo] = useState<TableWindow | null>(null);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TableRow[]>([]);
@@ -120,6 +129,7 @@ export function PublicTable() {
         setFatal(e.kind);
         break;
       case "outside-window":
+        setWindowInfo(e.window ?? null);
         setFatal("outside-window");
         break;
       case "network":
@@ -141,6 +151,22 @@ export function PublicTable() {
         setNotice("No se pudo registrar. Revisa los datos o avisa a quien coordina.");
     }
   }, []);
+
+  // Carga de «Marcadas en esta mesa» (al abrir y tras cada marca/deshacer): sobrevive a recargas.
+  const loadMarked = useCallback(
+    async (l: TableLink) => {
+      try {
+        const out = await tableListMine(l);
+        setMarked(out.items);
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [fail],
+  );
+  useEffect(() => {
+    if (link && !fatal) void loadMarked(link);
+  }, [link, fatal, loadMarked]);
 
   // Búsqueda con debounce.
   useEffect(() => {
@@ -191,9 +217,11 @@ export function PublicTable() {
           await tableMark(link, { registrationId: action.row.id, mark: action.mark, personAgreed: true, moveHere: action.moveHere, requestId: action.requestId });
           setMarked((list) => [{ id: action.row.id, fullName: action.row.fullName, mark: action.mark }, ...list.filter((m) => m.id !== action.row.id)]);
           resetSelection();
+          void loadMarked(link);
         } else if (action.type === "unmark") {
           await tableUnmark(link, { registrationId: action.id, requestId: action.requestId });
           setMarked((list) => list.filter((m) => m.id !== action.id));
+          void loadMarked(link);
         } else {
           const out = await tableAddWalkIn(link, { fullName: action.fullName, phone: action.phone, requestId: action.requestId });
           setAdding(false);
@@ -209,7 +237,7 @@ export function PublicTable() {
         setBusy(false);
       }
     },
-    [link, fail],
+    [link, fail, loadMarked],
   );
 
   if (!ready) {
@@ -236,12 +264,14 @@ export function PublicTable() {
 
   if (fatal || !link) {
     const t = FATAL_TEXT[fatal ?? "unavailable"];
+    const exact = fatal === "outside-window" && windowInfo ? `Abre ${fmtLocal(windowInfo.opensAt)} y vence ${fmtLocal(windowInfo.closesAt)}.` : null;
     return (
       <main className="pt-root">
         {header}
         <section className="pt-card" role="alert">
           <h2 className="pt-name">{t.title}</h2>
           <p className="pt-small">{t.body}</p>
+          {exact && <p className="pt-small">{exact}</p>}
         </section>
       </main>
     );
