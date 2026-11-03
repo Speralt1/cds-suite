@@ -16,8 +16,8 @@ describe("firebase.json", () => {
   const sources = rewrites.map((r) => r.source);
 
   it("rewrites existentes intactos y el del feed; sin rewrite de enlaces en la ruta (doc 20 §5)", () => {
-    expect(sources).toEqual(["/api/sumup-sync", "/api/calendario-publico", "/c/**", "/campanas/**"]);
-    expect(rewrites[1]).toEqual({
+    expect(sources).toEqual(["/api/mesa", "/api/sumup-sync", "/api/calendario-publico", "/c/**", "/campanas/**"]);
+    expect(rewrites[2]).toEqual({
       source: "/api/calendario-publico",
       function: { functionId: "calendarPublicFeed", region: "southamerica-west1" },
     });
@@ -35,6 +35,7 @@ describe("firebase.json", () => {
       "/_next/static/**",
       "/sw.js",
       "/manifest.webmanifest",
+      "/mesa",
       "/calendario-publico",
     ]);
     for (const source of ["/calendario-publico"]) {

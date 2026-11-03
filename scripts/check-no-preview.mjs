@@ -21,6 +21,7 @@ export const REQUIRED_ROUTES = Object.freeze([
   "integrantes/consolidacion/personas.html",
   "integrantes/consolidacion/nueva.html",
   "integrantes/consolidacion/persona.html",
+  "mesa.html",
 ]);
 
 /** Texto que nunca debe aparecer en la build productiva (código o HTML). */

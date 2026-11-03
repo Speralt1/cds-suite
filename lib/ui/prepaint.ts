@@ -15,7 +15,7 @@ export const TEXT_SIZE_VALUES = ["normal", "large", "xlarge"] as const;
 export const SIDEBAR_VALUES = ["expanded", "collapsed"] as const;
 
 /** Prefijos de rutas públicas (sin shell ni preferencias de interfaz). */
-export const PUBLIC_PATH_PATTERN = /^\/(calendario-publico|ofrendar|campanas|c)(\/|$)/;
+export const PUBLIC_PATH_PATTERN = /^\/(calendario-publico|ofrendar|campanas|mesa|c)(\/|$)/;
 
 export const PREPAINT_SCRIPT = `(function(){try{var d=document.documentElement;if(${PUBLIC_PATH_PATTERN.toString()}.test(location.pathname))return;var t=localStorage.getItem(${JSON.stringify(
   TEXT_SIZE_KEY,
