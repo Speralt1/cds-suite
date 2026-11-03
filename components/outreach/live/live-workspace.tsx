@@ -13,10 +13,11 @@ import { EDITION_STATUS_LABEL } from "@/lib/outreach/model";
 import ImportView from "./import-view";
 import Panorama from "./panorama";
 import ReviewView from "./review-view";
+import TablesView from "./tables-view";
 import { ErrorNote, Loading, useLoad } from "./ui";
 import "../outreach.css";
 
-type ViewId = "panorama" | "importar" | "revision";
+type ViewId = "panorama" | "importar" | "revision" | "mesas";
 interface ViewDef {
   id: ViewId;
   label: string;
@@ -27,6 +28,7 @@ const VIEWS: ViewDef[] = [
   { id: "panorama", label: "Panorama", role: "Coordinación", perm: "coordinate" },
   { id: "importar", label: "Importar", role: "Coordinación", perm: "coordinate" },
   { id: "revision", label: "Revisión", role: "Coordinación", perm: "coordinate" },
+  { id: "mesas", label: "Mesas", role: "Coordinación", perm: "coordinate" },
 ];
 
 const PERMS = {
@@ -98,6 +100,7 @@ export default function LiveWorkspace() {
           {current.id === "panorama" && <Panorama edition={edition} onChanged={editions.reload} />}
           {current.id === "importar" && <ImportView edition={edition} />}
           {current.id === "revision" && <ReviewView edition={edition} />}
+          {current.id === "mesas" && <TablesView edition={edition} />}
           <span hidden data-uid={uid ?? ""} />
         </>
       )}
