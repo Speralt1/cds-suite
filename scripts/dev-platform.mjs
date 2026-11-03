@@ -192,6 +192,12 @@ async function main() {
     await shutdown(1);
     return;
   }
+  const outreach = run("seed-outreach", process.execPath, [path.join(ROOT, "scripts", "seed-outreach-emulator.mjs")], { ...process.env, ...SEED_ENV }, { persistent: false });
+  if ((await outreach.exited) !== 0) {
+    console.error("[dev] El seed de Ve por los tuyos falló. Deteniendo todo.");
+    await shutdown(1);
+    return;
+  }
   startNext();
   console.log("[dev] Ctrl+C detiene emuladores y Next.");
 }

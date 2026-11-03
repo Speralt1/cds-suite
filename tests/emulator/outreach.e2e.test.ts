@@ -158,6 +158,30 @@ describe("Ve por los tuyos vía Firestore emulado", () => {
     for (const id of f.ids.slice(0, 5)) expect((await db.collection(`outreachRegistrations/${id}/assignments`).get()).size).toBe(1);
   });
 
+  it("dos lotes DISTINTOS confirmados a la vez para el mismo responsable nunca superan el tope", async () => {
+    const f = await fixture(10);
+    await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });
+    await f.toEvento();
+    await f.toSeguimiento();
+    await service.teamSet("e2e-c1", { editionId: f.editionId, members: [{ uid: "e2e-lead-a", roles: ["responsable"], maxAssigned: 3 }, { uid: "e2e-lead-b", roles: ["responsable"] }] });
+    const mk = async (batchId: string, ids: string[]) =>
+      db.collection("outreachAssignmentBatches").doc(batchId).set({ editionId: f.editionId, status: "propuesto", createdBy: "e2e-c1", assignments: ids.map((registrationId) => ({ registrationId, ownerUid: "e2e-lead-a", baseRevision: 1 })), unassigned: [] });
+    const bA = `b-${rid()}`;
+    const bB = `b-${rid()}`;
+    await mk(bA, f.ids.slice(0, 3));
+    await mk(bB, f.ids.slice(3, 6));
+    const [a, b] = await Promise.all([
+      service.distributionConfirm("e2e-c1", { editionId: f.editionId, batchId: bA }),
+      service.distributionConfirm("e2e-c2", { editionId: f.editionId, batchId: bB }),
+    ]);
+    expect(a.applied + b.applied).toBe(3);
+    expect([...a.conflicts, ...b.conflicts]).toHaveLength(3);
+    expect([...a.conflicts, ...b.conflicts].every((c: { reason: string }) => c.reason === "tope")).toBe(true);
+    const owned = (await db.collection("outreachRegistrations").where("editionId", "==", f.editionId).where("ownerUid", "==", "e2e-lead-a").get()).size;
+    expect(owned).toBe(3);
+    expect((await db.collection(`outreachEditions/${f.editionId}/team`).doc("e2e-lead-a").get()).data()!.openCount).toBe(3);
+  });
+
   it("contacto registrado mientras se reasigna: el responsable se re-verifica dentro de la transacción", async () => {
     const f = await fixture(4);
     await service.importRegistrations("e2e-c1", { editionId: f.editionId, rows: f.data });
